@@ -111,7 +111,7 @@ export default function CustomersPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Users className="h-6 w-6 text-blue-600" />
@@ -121,8 +121,8 @@ export default function CustomersPage() {
             Manage your customer accounts and contacts.
           </p>
         </div>
-        <Link href="/customers/new">
-          <Button size="sm">
+        <Link href="/customers/new" className="sm:shrink-0">
+          <Button size="sm" className="w-full sm:w-auto">
             <Plus className="mr-1.5 h-4 w-4" />
             New Customer
           </Button>
@@ -142,7 +142,7 @@ export default function CustomersPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Select
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v as StatusFilter)}
@@ -222,7 +222,7 @@ export default function CustomersPage() {
                   return (
                     <TableRow
                       key={customer.id}
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-colors hover:bg-accent/60"
                       onClick={() => router.push(`/customers/${customer.id}`)}
                     >
                       <TableCell className="font-medium">

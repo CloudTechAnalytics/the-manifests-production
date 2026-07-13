@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -53,11 +54,12 @@ import {
 } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/status';
-import type { Customer, ShipmentType } from '@/types';
+import type { Customer, Quotation, ShipmentType } from '@/types';
 
 // --- Validation schema ----------------------------------------------------
 
 const lineItemSchema = z.object({
+  id: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   quantity: z.coerce.number().min(0, 'Quantity must be ≥ 0'),
   unit_price: z.coerce.number().min(0, 'Unit price must be ≥ 0'),
@@ -99,12 +101,20 @@ function computeLineTotal(quantity: number, unitPrice: number, taxRate: number):
 
 // --- Page ------------------------------------------------------------------
 
-export default function NewQuotationPage() {
+export default function EditQuotationPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useAuth();
+  const quotationId = params.id;
+
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [existingItemIds, setExistingItemIds] = useState<string[]>([]);
+  const [quotationBranchId, setQuotationBranchId] = useState<string | null>(null);
+  const [quotationNumber, setQuotationNumber] = useState<string | null>(null);
 
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -114,7 +124,7 @@ export default function NewQuotationPage() {
     control,
     handleSubmit,
     watch,
-    setValue,
+    reset,
     formState: { errors },
   } = useForm<QuotationFormValues>({
     resolver: zodResolver(quotationSchema),
@@ -126,14 +136,7 @@ export default function NewQuotationPage() {
       currency: 'NGN',
       notes: '',
       terms: '',
-      items: [
-        {
-          description: '',
-          quantity: 1,
-          unit_price: 0,
-          tax_rate: 0,
-        },
-      ],
+      items: [],
     },
   });
 
@@ -175,6 +178,69 @@ export default function NewQuotationPage() {
     loadCustomers();
   }, [loadCustomers]);
 
+  // Load existing quotation + items
+  useEffect(() => {
+    if (!quotationId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('quotations')
+          .select('*, items:quotation_items(*)')
+          .eq('id', quotationId)
+          .is('deleted_at', null)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (error || !data) {
+          setNotFound(true);
+          return;
+        }
+
+        const quotation = data as Quotation;
+        const items = (quotation.items ?? [])
+          .filter((i) => !i.deleted_at)
+          .sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+
+        setExistingItemIds(items.map((i) => i.id));
+        setQuotationBranchId(quotation.branch_id);
+        setQuotationNumber(quotation.quotation_number);
+
+        reset({
+          customer_id: quotation.customer_id,
+          shipment_type: quotation.shipment_type ?? 'air',
+          origin: quotation.origin ?? '',
+          destination: quotation.destination ?? '',
+          valid_until: quotation.valid_until
+            ? new Date(quotation.valid_until)
+            : undefined,
+          currency: quotation.currency,
+          notes: quotation.notes ?? '',
+          terms: quotation.terms ?? '',
+          items:
+            items.length > 0
+              ? items.map((i) => ({
+                  id: i.id,
+                  description: i.description,
+                  quantity: Number(i.quantity),
+                  unit_price: Number(i.unit_price),
+                  tax_rate: Number(i.tax_rate),
+                }))
+              : [{ description: '', quantity: 1, unit_price: 0, tax_rate: 0 }],
+        });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [quotationId, reset]);
+
   // Watch all items for live calculation
   const items = watch('items');
   const currency = watch('currency');
@@ -184,7 +250,7 @@ export default function NewQuotationPage() {
     let taxAmount = 0;
     let total = 0;
 
-    for (const item of items) {
+    for (const item of items ?? []) {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const taxRate = Number(item.tax_rate) || 0;
@@ -214,24 +280,18 @@ export default function NewQuotationPage() {
     });
 
   const onSubmit = async (values: QuotationFormValues) => {
-    if (!profile?.branch_id) {
-      toast.error('Your account is not assigned to a branch.');
-      return;
-    }
-    if (!profile.id) {
-      toast.error('Unable to determine current user.');
+    if (!profile?.id || !quotationBranchId) {
+      toast.error('Unable to determine quotation branch.');
       return;
     }
 
     setSubmitting(true);
     try {
-      // 1. Insert quotation (without quotation_number — auto-generated by trigger)
-      const { data: quotationData, error: quotationError } = await supabase
+      // 1. Update the quotation
+      const { error: quotationError } = await supabase
         .from('quotations')
-        .insert({
+        .update({
           customer_id: values.customer_id,
-          branch_id: profile.branch_id,
-          status: 'draft',
           shipment_type: values.shipment_type,
           origin: values.origin || null,
           destination: values.destination || null,
@@ -242,26 +302,36 @@ export default function NewQuotationPage() {
           currency: values.currency,
           notes: values.notes || null,
           terms: values.terms || null,
-          created_by: profile.id,
           updated_by: profile.id,
+          updated_at: new Date().toISOString(),
         })
-        .select('id')
-        .single();
+        .eq('id', quotationId);
 
-      if (quotationError || !quotationData) {
-        throw new Error(quotationError?.message ?? 'Failed to create quotation');
+      if (quotationError) throw quotationError;
+
+      // 2. Sync line items: soft-delete removed, update existing, insert new
+      const submittedIds = values.items
+        .map((i) => i.id)
+        .filter((id): id is string => Boolean(id));
+      const removedIds = existingItemIds.filter(
+        (id) => !submittedIds.includes(id)
+      );
+
+      if (removedIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from('quotation_items')
+          .update({ deleted_at: new Date().toISOString() })
+          .in('id', removedIds);
+        if (delErr) console.error('Item delete error:', delErr);
       }
 
-      const quotationId = quotationData.id;
-
-      // 2. Insert all line items
-      const itemsPayload = values.items.map((item) => {
+      for (const item of values.items) {
         const qty = Number(item.quantity);
         const unitPrice = Number(item.unit_price);
         const taxRate = Number(item.tax_rate);
         const lineTotal = computeLineTotal(qty, unitPrice, taxRate);
 
-        return {
+        const payload = {
           quotation_id: quotationId,
           description: item.description,
           quantity: qty,
@@ -269,26 +339,30 @@ export default function NewQuotationPage() {
           tax_rate: taxRate,
           total: Math.round(lineTotal * 100) / 100,
         };
-      });
 
-      const { error: itemsError } = await supabase
-        .from('quotation_items')
-        .insert(itemsPayload);
-
-      if (itemsError) {
-        console.error('Items insert error:', itemsError);
-        toast.warning('Quotation created, but some line items failed to save.');
+        if (item.id) {
+          const { error: upErr } = await supabase
+            .from('quotation_items')
+            .update(payload)
+            .eq('id', item.id);
+          if (upErr) console.error('Item update error:', upErr);
+        } else {
+          const { error: insErr } = await supabase
+            .from('quotation_items')
+            .insert(payload);
+          if (insErr) console.error('Item insert error:', insErr);
+        }
       }
 
       // 3. Log activity
       const customer = customers.find((c) => c.id === values.customer_id);
       const { error: activityError } = await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
-        action: 'quotation.created',
+        branch_id: quotationBranchId,
+        action: 'quotation.updated',
         entity_type: 'quotation',
         entity_id: quotationId,
-        description: `Created quotation for "${customer?.company_name ?? 'Unknown customer'}"`,
+        description: `Updated quotation ${quotationNumber ?? ''} for "${customer?.company_name ?? 'Unknown customer'}"`,
         metadata: {
           customer_id: values.customer_id,
           customer_name: customer?.company_name,
@@ -302,16 +376,52 @@ export default function NewQuotationPage() {
         console.error('Activity log error:', activityError);
       }
 
-      toast.success('Quotation created successfully');
+      toast.success('Quotation updated successfully');
       router.push(`/quotations/${quotationId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to create quotation';
+        err instanceof Error ? err.message : 'Failed to update quotation';
       toast.error(message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  // --- Loading state ---------------------------------------------------------
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6 p-6 lg:p-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // --- Not found --------------------------------------------------------------
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+          <FileText className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Quotation not found</h2>
+          <p className="text-sm text-muted-foreground">
+            This quotation may have been deleted or you don&apos;t have access.
+          </p>
+        </div>
+        <Link href="/quotations">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back to Quotations
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 lg:p-8">
@@ -325,14 +435,22 @@ export default function NewQuotationPage() {
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>New Quotation</BreadcrumbPage>
+            <BreadcrumbLink asChild>
+              <Link href={`/quotations/${quotationId}`}>
+                {quotationNumber ?? 'Quotation'}
+              </Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Edit</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/quotations">
+        <Link href={`/quotations/${quotationId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -340,10 +458,12 @@ export default function NewQuotationPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <FileText className="h-6 w-6 text-blue-600" />
-            New Quotation
+            Edit Quotation
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create a new freight quotation for a customer.
+            {quotationNumber
+              ? `Update ${quotationNumber}.`
+              : 'Update this quotation.'}
           </p>
         </div>
       </div>
@@ -519,7 +639,6 @@ export default function NewQuotationPage() {
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                           initialFocus
                         />
                       </PopoverContent>
@@ -587,7 +706,7 @@ export default function NewQuotationPage() {
               </p>
             ) : (
               itemFields.map((field, index) => {
-                const item = items[index];
+                const item = items?.[index];
                 const qty = Number(item?.quantity) || 0;
                 const unitPrice = Number(item?.unit_price) || 0;
                 const taxRate = Number(item?.tax_rate) || 0;
@@ -742,7 +861,7 @@ export default function NewQuotationPage() {
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/quotations" className="sm:shrink-0">
+          <Link href={`/quotations/${quotationId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>
@@ -751,7 +870,7 @@ export default function NewQuotationPage() {
             {submitting && (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             )}
-            Create Quotation
+            Save Changes
           </Button>
         </div>
       </form>

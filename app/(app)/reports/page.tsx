@@ -603,7 +603,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between no-print">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <BarChart3 className="h-6 w-6 text-blue-600" />
@@ -613,12 +613,12 @@ export default function ReportsPage() {
             Generate and export reports across your freight operations.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportPdf}>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportPdf} className="flex-1 sm:flex-none">
             <Printer className="mr-1.5 h-4 w-4" />
             Export PDF
           </Button>
-          <Button size="sm" onClick={handleExportCsv}>
+          <Button size="sm" onClick={handleExportCsv} className="flex-1 sm:flex-none">
             <Download className="mr-1.5 h-4 w-4" />
             Export Excel
           </Button>
@@ -828,7 +828,7 @@ export default function ReportsPage() {
                       {customers.map((c) => {
                         const meta = CUSTOMER_STATUS_META[c.status];
                         return (
-                          <TableRow key={c.id}>
+                          <TableRow key={c.id} className="transition-colors hover:bg-accent/60">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
@@ -995,7 +995,7 @@ export default function ReportsPage() {
                           ? SHIPMENT_TYPE_ICONS[s.shipment_type]
                           : null;
                         return (
-                          <TableRow key={s.id}>
+                          <TableRow key={s.id} className="transition-colors hover:bg-accent/60">
                             <TableCell className="font-medium">
                               {s.reference_number ?? '—'}
                             </TableCell>
@@ -1171,7 +1171,7 @@ export default function ReportsPage() {
                       {quotations.map((q) => {
                         const meta = QUOTATION_STATUS_META[q.status];
                         return (
-                          <TableRow key={q.id}>
+                          <TableRow key={q.id} className="transition-colors hover:bg-accent/60">
                             <TableCell className="font-medium">
                               {q.quotation_number ?? '—'}
                             </TableCell>
@@ -1309,7 +1309,7 @@ export default function ReportsPage() {
                     </TableHeader>
                     <TableBody>
                       {activities.map((a) => (
-                        <TableRow key={a.id}>
+                        <TableRow key={a.id} className="transition-colors hover:bg-accent/60">
                           <TableCell className="whitespace-nowrap text-muted-foreground">
                             {formatDateTime(a.created_at)}
                           </TableCell>

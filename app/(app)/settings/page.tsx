@@ -710,7 +710,7 @@ export default function SettingsPage() {
           ) : (
             <>
               {/* Toolbar */}
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold">Branch Management</h2>
                   <p className="text-sm text-muted-foreground">
@@ -719,6 +719,7 @@ export default function SettingsPage() {
                 </div>
                 <Button
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     setCreateForm(EMPTY_FORM);
                     setCreateFormErrors({});
@@ -812,7 +813,7 @@ export default function SettingsPage() {
                         </TableHeader>
                         <TableBody>
                           {branches.map((branch) => (
-                            <TableRow key={branch.id}>
+                            <TableRow key={branch.id} className="transition-colors hover:bg-accent/60">
                               <TableCell className="font-medium">
                                 <div className="flex items-center gap-2">
                                   <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600">

@@ -319,7 +319,7 @@ export default function UsersPage() {
         'user.created',
         'profiles',
         newUserId,
-        `Created user "${createForm.email.trim}" (${ROLE_META[createForm.role].label})`,
+        `Created user "${createForm.email.trim()}" (${ROLE_META[createForm.role].label})`,
         {
           email: createForm.email.trim(),
           full_name: createForm.full_name.trim(),
@@ -575,7 +575,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <UsersIcon className="h-6 w-6 text-blue-600" />
@@ -585,7 +585,7 @@ export default function UsersPage() {
             Manage system users, roles, and permissions across all branches.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
           <Plus className="mr-1.5 h-4 w-4" />
           Create User
         </Button>
@@ -604,7 +604,7 @@ export default function UsersPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Select
               value={roleFilter}
               onValueChange={(v) => setRoleFilter(v as RoleFilter)}
@@ -686,7 +686,7 @@ export default function UsersPage() {
                     const roleMeta = ROLE_META[user.role];
                     const isSelf = user.id === profile.id;
                     return (
-                      <TableRow key={user.id}>
+                      <TableRow key={user.id} className="transition-colors hover:bg-accent/60">
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600">

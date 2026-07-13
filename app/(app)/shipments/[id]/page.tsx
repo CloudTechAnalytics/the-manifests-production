@@ -69,6 +69,14 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -423,6 +431,21 @@ export default function ShipmentDetailPage() {
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/shipments">Shipments</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{shipment.reference_number ?? 'Shipment'}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
@@ -446,7 +469,7 @@ export default function ShipmentDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Status update dropdown */}
           {!isCancelled && shipment.status !== 'delivered' && (
             <DropdownMenu>

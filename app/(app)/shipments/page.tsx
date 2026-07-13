@@ -205,7 +205,7 @@ export default function ShipmentsPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Package className="h-6 w-6 text-blue-600" />
@@ -215,8 +215,8 @@ export default function ShipmentsPage() {
             Track and manage freight shipments across all branches.
           </p>
         </div>
-        <Link href="/shipments/new">
-          <Button size="sm">
+        <Link href="/shipments/new" className="sm:shrink-0">
+          <Button size="sm" className="w-full sm:w-auto">
             <Plus className="mr-1.5 h-4 w-4" />
             New Shipment
           </Button>
@@ -236,7 +236,7 @@ export default function ShipmentsPage() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Select
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v as StatusFilter)}
@@ -358,10 +358,10 @@ export default function ShipmentsPage() {
                   return (
                     <TableRow
                       key={s.id}
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-colors hover:bg-accent/60"
                       onClick={() => router.push(`/shipments/${s.id}`)}
                     >
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium text-primary">
                         {s.reference_number ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">

@@ -522,7 +522,7 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <FileText className="h-6 w-6 text-blue-600" />
@@ -532,7 +532,7 @@ export default function DocumentsPage() {
             Upload, manage, and download shipping and customs documents.
           </p>
         </div>
-        <Button size="sm" onClick={() => setUploadOpen(true)}>
+        <Button size="sm" onClick={() => setUploadOpen(true)} className="w-full sm:w-auto">
           <Upload className="mr-1.5 h-4 w-4" />
           Upload Documents
         </Button>
@@ -551,7 +551,7 @@ export default function DocumentsPage() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Select
               value={categoryFilter}
               onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
@@ -653,7 +653,7 @@ export default function DocumentsPage() {
                     doc.customer?.company_name ??
                     null;
                   return (
-                    <TableRow key={doc.id}>
+                    <TableRow key={doc.id} className="transition-colors hover:bg-accent/60">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
@@ -754,8 +754,8 @@ export default function DocumentsPage() {
             onClick={() => fileInputRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
               dragOver
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50 hover:bg-accent/50'
             }`}
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
@@ -764,7 +764,7 @@ export default function DocumentsPage() {
             <div>
               <p className="text-sm font-medium">
                 Drop files here, or{' '}
-                <span className="text-blue-600 underline">browse</span>
+                <span className="text-primary underline">browse</span>
               </p>
               <p className="text-xs text-muted-foreground">
                 Supports any file type. Max 50 MB per file.
@@ -787,7 +787,7 @@ export default function DocumentsPage() {
                 return (
                   <div
                     key={index}
-                    className="rounded-lg border border-gray-200 bg-gray-50/50 p-3"
+                    className="rounded-lg border border-border bg-muted/40 p-3"
                   >
                     {/* File header */}
                     <div className="flex items-start justify-between gap-2">
@@ -833,7 +833,7 @@ export default function DocumentsPage() {
                           }
                           disabled={uploading}
                         >
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -861,7 +861,7 @@ export default function DocumentsPage() {
                           }
                           disabled={uploading}
                         >
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -884,7 +884,7 @@ export default function DocumentsPage() {
                             }
                             disabled={uploading}
                           >
-                            <SelectTrigger className="h-8 bg-white text-xs">
+                            <SelectTrigger className="h-8 bg-background text-xs">
                               <SelectValue placeholder="Choose a shipment…" />
                             </SelectTrigger>
                             <SelectContent>
@@ -916,7 +916,7 @@ export default function DocumentsPage() {
                             }
                             disabled={uploading}
                           >
-                            <SelectTrigger className="h-8 bg-white text-xs">
+                            <SelectTrigger className="h-8 bg-background text-xs">
                               <SelectValue placeholder="Choose a customer…" />
                             </SelectTrigger>
                             <SelectContent>

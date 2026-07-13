@@ -37,6 +37,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import type { Customer, CustomerContact } from '@/types';
 
 // --- Validation schema ----------------------------------------------------
@@ -109,6 +117,7 @@ export default function EditCustomerPage({
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
@@ -319,6 +328,29 @@ export default function EditCustomerPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/customers">Customers</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href={`/customers/${customerId}`}>
+                {watch('company_name') || 'Customer'}
+              </Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Edit</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href={`/customers/${customerId}`}>
@@ -341,7 +373,8 @@ export default function EditCustomerPage({
         {/* Customer Details */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Building2 className="h-4 w-4 text-blue-600" />
               Customer Details
             </CardTitle>
             <CardDescription>
@@ -488,10 +521,10 @@ export default function EditCustomerPage({
 
         {/* Contacts */}
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-4 w-4 text-blue-600" />
                 Contacts
               </CardTitle>
               <CardDescription>
@@ -503,6 +536,7 @@ export default function EditCustomerPage({
               variant="outline"
               size="sm"
               onClick={addContact}
+              className="sm:shrink-0"
             >
               <Plus className="mr-1.5 h-4 w-4" />
               Add Contact
@@ -598,13 +632,13 @@ export default function EditCustomerPage({
         </Card>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3">
-          <Link href={`/customers/${customerId}`}>
-            <Button type="button" variant="outline">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <Link href={`/customers/${customerId}`} className="sm:shrink-0">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
             {submitting && (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             )}

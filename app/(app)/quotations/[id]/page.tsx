@@ -59,6 +59,14 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -225,6 +233,33 @@ export default function QuotationDetailPage() {
           quotation_number: quotation.quotation_number,
         },
       });
+
+      // Email the customer about the status change (best-effort — don't
+      // block the status update if this fails)
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData?.session;
+        if (session) {
+          const emailResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-quotation-status-email`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+              },
+              body: JSON.stringify({ quotation_id: quotationId }),
+            }
+          );
+          if (!emailResponse.ok) {
+            const result = await emailResponse.json().catch(() => ({}));
+            console.warn('Quotation email not sent:', result.error);
+          }
+        }
+      } catch (emailErr) {
+        console.warn('Quotation email request failed:', emailErr);
+      }
 
       toast.success(`Quotation marked as ${QUOTATION_STATUS_META[target].label}`);
       loadData();
@@ -405,6 +440,23 @@ export default function QuotationDetailPage() {
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <Breadcrumb className="no-print">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/quotations">Quotations</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>
+              {quotation.quotation_number ?? 'Draft Quotation'}
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="no-print flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
@@ -650,8 +702,13 @@ export default function QuotationDetailPage() {
             </CardHeader>
             <CardContent className="p-0">
               {quotation.items.length === 0 ? (
-                <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                  No line items in this quotation.
+                <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                    <Package className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    No line items in this quotation.
+                  </p>
                 </div>
               ) : (
                 <Table>
@@ -691,7 +748,7 @@ export default function QuotationDetailPage() {
           </Card>
 
           {/* Summary */}
-          <Card>
+          <Card className="border-primary/20 bg-primary/[0.03]">
             <CardHeader className="no-print">
               <CardTitle className="text-base font-semibold">
                 Summary
@@ -713,7 +770,7 @@ export default function QuotationDetailPage() {
               <Separator />
               <div className="flex justify-between text-base">
                 <span className="font-semibold">Total</span>
-                <span className="font-bold text-blue-600">
+                <span className="font-bold text-primary">
                   {formatCurrency(quotation.total, quotation.currency)}
                 </span>
               </div>

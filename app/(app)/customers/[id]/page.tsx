@@ -58,6 +58,14 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import {
   CUSTOMER_STATUS_META,
   SHIPMENT_STATUS_META,
   QUOTATION_STATUS_META,
@@ -234,6 +242,21 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/customers">Customers</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{customer.company_name}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
@@ -257,7 +280,7 @@ export default function CustomerDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href={`/customers/${customerId}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="mr-1.5 h-4 w-4" />
@@ -400,7 +423,7 @@ export default function CustomerDetailPage() {
                   {contacts.map((c) => (
                     <div
                       key={c.id}
-                      className="rounded-lg border border-border p-4"
+                      className="rounded-lg border border-border p-4 transition-colors hover:border-primary/30"
                     >
                       <div className="flex items-start justify-between">
                         <div>
@@ -483,7 +506,7 @@ export default function CustomerDetailPage() {
                           return (
                             <TableRow
                               key={s.id}
-                              className="cursor-pointer"
+                              className="cursor-pointer transition-colors hover:bg-accent/60"
                               onClick={() => router.push(`/shipments/${s.id}`)}
                             >
                               <TableCell className="font-medium">
@@ -535,7 +558,7 @@ export default function CustomerDetailPage() {
                           return (
                             <TableRow
                               key={q.id}
-                              className="cursor-pointer"
+                              className="cursor-pointer transition-colors hover:bg-accent/60"
                               onClick={() => router.push(`/quotations/${q.id}`)}
                             >
                               <TableCell className="font-medium">
@@ -654,8 +677,11 @@ function InfoRow({
 
 function EmptyTab({ text }: { text: string }) {
   return (
-    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-      {text}
+    <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+        <FolderOpen className="h-5 w-5 text-muted-foreground" />
+      </div>
+      <p className="text-sm text-muted-foreground">{text}</p>
     </div>
   );
 }

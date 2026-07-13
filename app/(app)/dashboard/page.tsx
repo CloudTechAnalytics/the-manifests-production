@@ -200,28 +200,28 @@ export default function DashboardPage() {
       value: stats?.totalCustomers ?? 0,
       icon: Users,
       href: '/customers',
-      color: 'bg-blue-50 text-blue-600',
+      color: 'bg-blue-50 text-blue-600 ring-blue-100',
     },
     {
       label: 'Pending Quotations',
       value: stats?.pendingQuotations ?? 0,
       icon: FileText,
       href: '/quotations',
-      color: 'bg-amber-50 text-amber-600',
+      color: 'bg-amber-50 text-amber-600 ring-amber-100',
     },
     {
       label: 'Active Shipments',
       value: stats?.activeShipments ?? 0,
       icon: Package,
       href: '/shipments',
-      color: 'bg-cyan-50 text-cyan-600',
+      color: 'bg-cyan-50 text-cyan-600 ring-cyan-100',
     },
     {
       label: 'Completed Shipments',
       value: stats?.completedShipments ?? 0,
       icon: PackageCheck,
       href: '/shipments',
-      color: 'bg-green-50 text-green-600',
+      color: 'bg-green-50 text-green-600 ring-green-100',
     },
   ];
 
@@ -239,14 +239,14 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/customers/new">
-            <Button variant="outline" size="sm">
+          <Link href="/customers/new" className="flex-1 sm:flex-none">
+            <Button variant="outline" size="sm" className="w-full">
               <Plus className="mr-1.5 h-4 w-4" />
               New Customer
             </Button>
           </Link>
-          <Link href="/shipments/new">
-            <Button size="sm">
+          <Link href="/shipments/new" className="flex-1 sm:flex-none">
+            <Button size="sm" className="w-full">
               <Plus className="mr-1.5 h-4 w-4" />
               New Shipment
             </Button>
@@ -268,15 +268,15 @@ export default function DashboardPage() {
               const Icon = card.icon;
               return (
                 <Link key={card.label} href={card.href}>
-                  <Card className="transition-shadow hover:shadow-md">
+                  <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="flex items-center gap-4 p-6">
                       <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg ${card.color}`}
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 ${card.color}`}
                       >
                         <Icon className="h-6 w-6" />
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-muted-foreground">
                           {card.label}
                         </p>
                         <p className="text-2xl font-bold tracking-tight">
@@ -302,8 +302,11 @@ export default function DashboardPage() {
             {loading ? (
               <Skeleton className="h-48 w-full" />
             ) : shipmentStatusData.length === 0 ? (
-              <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                No shipments yet
+              <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No shipments yet</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -351,14 +354,17 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : recentActivities.length === 0 ? (
-              <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                No recent activity
+              <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <ActivityIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No recent activity</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="relative space-y-4 before:absolute before:left-[3px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-border">
                 {recentActivities.map((act) => (
-                  <div key={act.id} className="flex gap-3">
-                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                  <div key={act.id} className="relative flex gap-3 pl-5">
+                    <div className="absolute left-0 top-1.5 h-[7px] w-[7px] shrink-0 rounded-full bg-primary ring-4 ring-card" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
                         {act.description}
@@ -398,8 +404,11 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : recentShipments.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                No shipments yet
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No shipments yet</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -409,7 +418,7 @@ export default function DashboardPage() {
                     <Link
                       key={ship.id}
                       href={`/shipments/${ship.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-accent"
+                      className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:border-primary/30 hover:bg-accent"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
@@ -455,8 +464,11 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : pendingQuotations.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                No pending quotations
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No pending quotations</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -466,7 +478,7 @@ export default function DashboardPage() {
                     <Link
                       key={quot.id}
                       href={`/quotations/${quot.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-accent"
+                      className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:border-primary/30 hover:bg-accent"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
@@ -505,8 +517,11 @@ export default function DashboardPage() {
             {loading ? (
               <Skeleton className="h-32 w-full" />
             ) : branchStats.length === 0 ? (
-              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                No branches found
+              <div className="flex h-32 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                  <Building2 className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No branches found</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -531,12 +546,12 @@ export default function DashboardPage() {
                     {branchStats.map((b) => (
                       <tr
                         key={b.branch_id}
-                        className="border-b border-border last:border-0"
+                        className="border-b border-border transition-colors last:border-0 hover:bg-accent/50"
                       >
                         <td className="py-3 font-medium">{b.branch_name}</td>
-                        <td className="py-3 text-right">{b.customers}</td>
-                        <td className="py-3 text-right">{b.shipments}</td>
-                        <td className="py-3 text-right">{b.quotations}</td>
+                        <td className="py-3 text-right tabular-nums">{b.customers}</td>
+                        <td className="py-3 text-right tabular-nums">{b.shipments}</td>
+                        <td className="py-3 text-right tabular-nums">{b.quotations}</td>
                       </tr>
                     ))}
                   </tbody>

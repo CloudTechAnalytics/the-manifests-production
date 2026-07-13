@@ -16,6 +16,8 @@ import {
   Truck,
   Train,
   Waypoints,
+  CalendarClock,
+  Boxes,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -37,6 +39,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import type {
   Customer,
   Profile,
@@ -289,6 +299,21 @@ export default function NewShipmentPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/shipments">Shipments</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>New Shipment</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/shipments">
@@ -311,7 +336,8 @@ export default function NewShipmentPage() {
         {/* Shipment Details */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Package className="h-4 w-4 text-blue-600" />
               Shipment Details
             </CardTitle>
             <CardDescription>
@@ -523,7 +549,8 @@ export default function NewShipmentPage() {
         {/* Dates */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CalendarClock className="h-4 w-4 text-blue-600" />
               Schedule
             </CardTitle>
             <CardDescription>
@@ -567,7 +594,8 @@ export default function NewShipmentPage() {
         {/* Carrier & Cargo */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Boxes className="h-4 w-4 text-blue-600" />
               Carrier &amp; Cargo
             </CardTitle>
             <CardDescription>
@@ -633,13 +661,13 @@ export default function NewShipmentPage() {
         </Card>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3">
-          <Link href="/shipments">
-            <Button type="button" variant="outline">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <Link href="/shipments" className="sm:shrink-0">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
             {submitting && (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             )}
