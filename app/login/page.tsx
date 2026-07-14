@@ -36,6 +36,55 @@ const highlights = [
   },
 ];
 
+// A hub node on the route illustration — position is percentage-based so it
+// lines up with the SVG path endpoints regardless of container size.
+const routeHubs = [
+  { icon: Ship, left: '15%', top: '78%' },
+  { icon: Plane, left: '85%', top: '20%' },
+  { icon: Package, left: '85%', top: '58%' },
+];
+
+function RouteIllustration() {
+  return (
+    <div className="relative mx-auto aspect-[400/260] w-full max-w-sm">
+      <svg
+        viewBox="0 0 400 260"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+      >
+        <path
+          d="M60 203 C 130 100, 230 100, 340 52"
+          stroke="white"
+          strokeOpacity="0.3"
+          strokeWidth="1.5"
+          strokeDasharray="5 7"
+          fill="none"
+        />
+        <path
+          d="M60 203 C 120 235, 260 235, 340 151"
+          stroke="white"
+          strokeOpacity="0.18"
+          strokeWidth="1.5"
+          strokeDasharray="5 7"
+          fill="none"
+        />
+      </svg>
+      {routeHubs.map(({ icon: Icon, left, top }, i) => (
+        <div
+          key={i}
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          style={{ left, top }}
+        >
+          <span className="absolute inset-0 animate-ping rounded-full bg-white/25" />
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm">
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const { user, profile, loading, signIn } = useAuth();
   const router = useRouter();
@@ -70,7 +119,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel (lg+) */}
-      <div className="relative hidden w-[44%] flex-col justify-between overflow-hidden bg-gradient-to-br from-blue-700 via-blue-800 to-slate-900 px-12 py-12 text-white lg:flex">
+      <div className="relative hidden w-[44%] flex-col justify-between overflow-hidden bg-gradient-to-br from-[hsl(var(--primary))] via-indigo-800 to-slate-950 px-12 py-12 text-white lg:flex">
         {/* Decorative background */}
         <div
           aria-hidden
@@ -81,26 +130,24 @@ export default function LoginPage() {
             backgroundSize: '48px 48px, 64px 64px',
           }}
         />
-        <Plane
-          aria-hidden
-          className="pointer-events-none absolute -right-10 top-24 h-56 w-56 -rotate-12 text-white/[0.06]"
-        />
 
         <div className="relative flex items-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20">
             <Ship className="h-5 w-5" />
           </div>
-          <span className="text-lg font-bold tracking-tight">FreightOps</span>
+          <span className="text-lg font-bold tracking-tight">Manifest</span>
         </div>
 
-        <div className="relative space-y-10">
+        <div className="relative space-y-8">
+          <RouteIllustration />
+
           <div className="space-y-3">
             <h1 className="text-3xl font-bold leading-tight tracking-tight">
               Freight operations,
               <br />
-              under control.
+              made manifest.
             </h1>
-            <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">
+            <p className="max-w-sm text-sm leading-relaxed text-white/75">
               One platform for quotations, bookings, and shipment tracking
               across every branch you operate.
             </p>
@@ -114,7 +161,7 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{h.title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-blue-100/70">
+                  <p className="mt-0.5 text-xs leading-relaxed text-white/65">
                     {h.description}
                   </p>
                 </div>
@@ -123,8 +170,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="relative text-xs text-blue-100/50">
-          &copy; {new Date().getFullYear()} FreightOps. All rights reserved.
+        <p className="relative text-xs text-white/50">
+          &copy; {new Date().getFullYear()} Manifest. All rights reserved.
         </p>
       </div>
 
@@ -137,7 +184,7 @@ export default function LoginPage() {
               <Ship className="h-7 w-7 text-primary-foreground" />
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight">FreightOps</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Manifest</h1>
               <p className="text-sm text-muted-foreground">
                 Freight Operations Management Platform
               </p>

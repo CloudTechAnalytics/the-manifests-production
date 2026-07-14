@@ -627,7 +627,7 @@ export default function ReportsPage() {
 
       {/* Print-only header (visible only when printing) */}
       <div className="hidden print-only">
-        <h1 className="text-xl font-bold">FreightOps — Reports</h1>
+        <h1 className="text-xl font-bold">Manifest — Reports</h1>
         <p className="text-sm text-gray-600">
           {TAB_META[activeTab].label} · Generated{' '}
           {formatDateTime(new Date().toISOString())}

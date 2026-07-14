@@ -2,6 +2,11 @@ import type {
   ShipmentStatus,
   QuotationStatus,
   CustomerStatus,
+  InvoiceStatus,
+  PaymentMethod,
+  ExpenseCategory,
+  ExpenseStatus,
+  Invoice,
 } from '@/types';
 
 export const SHIPMENT_STATUS_META: Record<
@@ -26,6 +31,26 @@ export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
   'delivered',
 ];
 
+/**
+ * Visual pipeline stages for the Operations Center. Maps the existing
+ * shipment_status enum onto customer-facing freight-forwarding language
+ * (e.g. "processing" reads as "Customs" in a freight context) without
+ * touching the underlying enum. "Quotation" is not a shipment status —
+ * it represents approved quotations that haven't become a shipment yet.
+ */
+export const PIPELINE_STAGES: {
+  key: string;
+  label: string;
+  statuses: ShipmentStatus[];
+}[] = [
+  { key: 'quotation', label: 'Quotation', statuses: [] },
+  { key: 'booking', label: 'Booking', statuses: ['booking_received'] },
+  { key: 'documentation', label: 'Documentation', statuses: ['documentation'] },
+  { key: 'customs', label: 'Customs', statuses: ['processing'] },
+  { key: 'in_transit', label: 'In Transit', statuses: ['in_transit', 'arrived'] },
+  { key: 'delivered', label: 'Delivered', statuses: ['delivered'] },
+];
+
 export const QUOTATION_STATUS_META: Record<
   QuotationStatus,
   { label: string; color: string }
@@ -44,6 +69,55 @@ export const CUSTOMER_STATUS_META: Record<
   active: { label: 'Active', color: 'bg-green-100 text-green-700' },
   inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-700' },
   blacklisted: { label: 'Blacklisted', color: 'bg-red-100 text-red-700' },
+};
+
+export const INVOICE_STATUS_META: Record<
+  InvoiceStatus,
+  { label: string; color: string }
+> = {
+  draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700' },
+  sent: { label: 'Unpaid', color: 'bg-blue-100 text-blue-700' },
+  partial: { label: 'Partial', color: 'bg-amber-100 text-amber-700' },
+  paid: { label: 'Paid', color: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
+};
+
+/**
+ * "Overdue" is not a stored status (see migration notes) — it's derived
+ * here the same way shipment delays are: due date in the past and still
+ * unpaid. Flipping a stored enum value at midnight would need a
+ * scheduled job this project doesn't have.
+ */
+export function isInvoiceOverdue(invoice: Pick<Invoice, 'status' | 'due_date'>): boolean {
+  if (invoice.status !== 'sent' && invoice.status !== 'partial') return false;
+  if (!invoice.due_date) return false;
+  return invoice.due_date < new Date().toISOString().split('T')[0];
+}
+
+export const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string }> = {
+  bank_transfer: { label: 'Bank Transfer' },
+  cheque: { label: 'Cheque' },
+  cash: { label: 'Cash' },
+  card: { label: 'Card' },
+  other: { label: 'Other' },
+};
+
+export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, { label: string }> = {
+  transport: { label: 'Transport' },
+  customs: { label: 'Customs' },
+  rent: { label: 'Rent' },
+  salaries_benefits: { label: 'Salaries & Benefits' },
+  utilities: { label: 'Utilities' },
+  other: { label: 'Other' },
+};
+
+export const EXPENSE_STATUS_META: Record<
+  ExpenseStatus,
+  { label: string; color: string }
+> = {
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
+  approved: { label: 'Approved', color: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
 };
 
 export function formatDate(date: string | null): string {
@@ -72,6 +146,21 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
     currency,
     minimumFractionDigits: 2,
   }).format(amount);
+}
+
+/**
+ * Given a map of currency -> total, picks the currency with the highest
+ * total to use as the "primary" one for single-number aggregates (avoids
+ * silently blending incompatible currencies into one misleading figure).
+ */
+export function pickPrimaryCurrency(
+  totalsByCurrency: Record<string, number>
+): string | null {
+  const currencies = Object.keys(totalsByCurrency);
+  if (currencies.length === 0) return null;
+  return currencies.reduce((a, b) =>
+    totalsByCurrency[a] >= totalsByCurrency[b] ? a : b
+  );
 }
 
 export function formatRelativeTime(date: string): string {

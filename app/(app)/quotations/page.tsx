@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Plus, Search, Filter, Plane, Ship, Truck, Train, Waypoints } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -59,15 +59,29 @@ type QuotationRow = Quotation & {
   branch?: { id: string; name: string } | null;
 };
 
+const VALID_QUOTATION_STATUSES = new Set<string>([
+  'draft',
+  'sent',
+  'approved',
+  'rejected',
+  'expired',
+]);
+
 export default function QuotationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { profile } = useAuth();
 
   const [quotations, setQuotations] = useState<QuotationRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && VALID_QUOTATION_STATUSES.has(fromUrl)
+      ? (fromUrl as StatusFilter)
+      : 'all';
+  });
   const [shipmentFilter, setShipmentFilter] = useState<ShipmentFilter>('all');
   const [branchIdFilter, setBranchIdFilter] = useState<string>('all');
 

@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
           }
         </table>
         <p style="margin-top: 24px; color: #999; font-size: 12px;">
-          This is an automated message from FreightOps. Please do not reply directly to this email.
+          This is an automated message from Manifest. Please do not reply directly to this email.
         </p>
       </div>
     `;
@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: Deno.env.get("EMAIL_FROM") ?? "FreightOps <onboarding@resend.dev>",
+        from: Deno.env.get("EMAIL_FROM") ?? "Manifest <onboarding@resend.dev>",
         to: customer.email,
         subject: copy.subject,
         html,

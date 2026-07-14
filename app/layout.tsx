@@ -8,7 +8,7 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'FreightOps — Freight Operations Management',
+  title: 'Manifest — Freight Operations Management',
   description:
     'Cloud-based freight operations platform for forwarding companies. Manage customers, quotations, shipments, and documents.',
 };

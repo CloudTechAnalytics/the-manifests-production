@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Package,
   Plus,
@@ -82,15 +82,31 @@ type ShipmentRow = Shipment & {
   branch?: { id: string; name: string } | null;
 };
 
+const VALID_SHIPMENT_STATUSES = new Set<string>([
+  'booking_received',
+  'documentation',
+  'processing',
+  'in_transit',
+  'arrived',
+  'delivered',
+  'cancelled',
+]);
+
 export default function ShipmentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { profile } = useAuth();
 
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && VALID_SHIPMENT_STATUSES.has(fromUrl)
+      ? (fromUrl as StatusFilter)
+      : 'all';
+  });
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [branchIdFilter, setBranchIdFilter] = useState<string>('all');
 

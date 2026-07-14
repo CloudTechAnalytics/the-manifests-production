@@ -222,3 +222,103 @@ export interface Activity {
   created_at: string;
   user?: Profile | null;
 }
+
+// --- Finance ----------------------------------------------------------------
+
+export type InvoiceStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'cancelled';
+
+export type PaymentMethod = 'bank_transfer' | 'cheque' | 'cash' | 'card' | 'other';
+
+export type ExpenseCategory =
+  | 'transport'
+  | 'customs'
+  | 'rent'
+  | 'salaries_benefits'
+  | 'utilities'
+  | 'other';
+
+export type ExpenseStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Invoice {
+  id: string;
+  invoice_number: string | null;
+  customer_id: string;
+  shipment_id: string | null;
+  quotation_id: string | null;
+  branch_id: string;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string | null;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  amount_paid: number;
+  currency: string;
+  notes: string | null;
+  terms: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  customer?: Customer | null;
+  shipment?: Shipment | null;
+  branch?: Branch | null;
+}
+
+export interface Payment {
+  id: string;
+  payment_number: string | null;
+  customer_id: string;
+  branch_id: string;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  amount: number;
+  allocated_amount: number;
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  customer?: Customer | null;
+  branch?: Branch | null;
+  allocations?: PaymentAllocation[];
+}
+
+export interface PaymentAllocation {
+  id: string;
+  payment_id: string;
+  invoice_id: string;
+  amount: number;
+  created_by: string | null;
+  created_at: string;
+  invoice?: Invoice | null;
+  payment?: Payment | null;
+}
+
+export interface Expense {
+  id: string;
+  expense_number: string | null;
+  description: string;
+  category: ExpenseCategory;
+  shipment_id: string | null;
+  branch_id: string;
+  amount: number;
+  currency: string;
+  expense_date: string;
+  status: ExpenseStatus;
+  paid_by: string | null;
+  approved_by: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: Shipment | null;
+  branch?: Branch | null;
+  paid_by_user?: Profile | null;
+  approved_by_user?: Profile | null;
+}

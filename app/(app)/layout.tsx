@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import { SearchProvider } from '@/contexts/search-context';
 import { Sidebar, MobileTopBar } from '@/components/layout/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -42,14 +43,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <MobileTopBar />
-        <main className="flex-1 overflow-y-auto scrollbar-thin">
-          {children}
-        </main>
+    <SearchProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <MobileTopBar />
+          <main className="flex-1 overflow-y-auto scrollbar-thin">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SearchProvider>
   );
 }

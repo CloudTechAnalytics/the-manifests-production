@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   FileText,
   Upload,
@@ -121,18 +122,22 @@ interface PendingFile {
 
 export default function DocumentsPage() {
   const { profile } = useAuth();
+  const searchParams = useSearchParams();
 
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shipments, setShipments] = useState<{ id: string; reference_number: string | null }[]>([]);
   const [customers, setCustomers] = useState<{ id: string; company_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [branchIdFilter, setBranchIdFilter] = useState<string>('all');
 
-  // Upload dialog state
-  const [uploadOpen, setUploadOpen] = useState(false);
+  // Upload dialog state — opens automatically when linked to via
+  // /documents?upload=1 (e.g. the "Upload Documents" quick action).
+  const [uploadOpen, setUploadOpen] = useState(
+    () => searchParams.get('upload') === '1'
+  );
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);

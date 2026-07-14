@@ -572,7 +572,7 @@ export default function SettingsPage() {
                   <Label className="text-xs text-muted-foreground">
                     Platform Name
                   </Label>
-                  <p className="text-sm font-semibold">FreightOps</p>
+                  <p className="text-sm font-semibold">Manifest</p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">
@@ -586,7 +586,7 @@ export default function SettingsPage() {
                   Description
                 </Label>
                 <p className="text-sm text-muted-foreground">
-                  FreightOps is a comprehensive freight forwarding ERP platform
+                  Manifest is a comprehensive freight forwarding ERP platform
                   that streamlines shipment management, quotations, customer
                   relationships, and document workflows across all your
                   branches.

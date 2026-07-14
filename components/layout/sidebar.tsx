@@ -17,8 +17,15 @@ import {
   LogOut,
   ChevronDown,
   Menu,
+  Search,
+  Radar,
+  CalendarDays,
+  Receipt,
+  Wallet,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { useSearchContext } from '@/contexts/search-context';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -37,17 +44,54 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 
-const mainNavItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/customers', label: 'Customers', icon: Users },
-  { href: '/quotations', label: 'Quotations', icon: FileText },
-  { href: '/sales', label: 'Sales', icon: TrendingUp },
-  { href: '/shipments', label: 'Shipments', icon: Package },
-  { href: '/documents', label: 'Documents', icon: FolderOpen },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+};
+
+// Professionally grouped navigation. Only real, existing routes are
+// included — dead-end links are never added.
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'Operations',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/shipments', label: 'Shipments', icon: Package },
+      { href: '/tracking', label: 'Tracking', icon: Radar },
+      { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+    ],
+  },
+  {
+    label: 'Sales',
+    items: [
+      { href: '/quotations', label: 'Quotations', icon: FileText },
+      { href: '/sales', label: 'Sales', icon: TrendingUp },
+    ],
+  },
+  {
+    label: 'Customers',
+    items: [{ href: '/customers', label: 'Customers', icon: Users }],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { href: '/invoices', label: 'Invoices', icon: Receipt },
+      { href: '/payments', label: 'Payments', icon: Wallet },
+      { href: '/expenses', label: 'Expenses', icon: CreditCard },
+    ],
+  },
+  {
+    label: 'Operations Support',
+    items: [
+      { href: '/documents', label: 'Documents', icon: FolderOpen },
+      { href: '/reports', label: 'Reports', icon: BarChart3 },
+    ],
+  },
 ];
 
-const otherNavItems = [
+const administrationItems: NavItem[] = [
   { href: '/users', label: 'Users', icon: UserCog, adminOnly: true },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -59,7 +103,7 @@ function Logo() {
         <Ship className="h-5 w-5 text-primary-foreground" />
       </div>
       <div className="flex flex-col">
-        <span className="text-sm font-bold tracking-tight">FreightOps</span>
+        <span className="text-sm font-bold tracking-tight">Manifest</span>
         <span className="text-[10px] text-muted-foreground">
           Operations Platform
         </span>
@@ -76,7 +120,7 @@ function NavGroup({
   onNavigate,
 }: {
   label: string;
-  items: typeof mainNavItems;
+  items: NavItem[];
   pathname: string;
   role?: string;
   onNavigate?: () => void;
@@ -119,17 +163,22 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-1 flex-col overflow-y-auto scrollbar-thin px-3 py-4">
-      <NavGroup
-        label="Main"
-        items={mainNavItems}
-        pathname={pathname}
-        onNavigate={onNavigate}
-      />
-      {/* Flexible spacer pushes "Others" down toward the bottom of the sidebar */}
+      <div className="space-y-5">
+        {navGroups.map((group) => (
+          <NavGroup
+            key={group.label}
+            label={group.label}
+            items={group.items}
+            pathname={pathname}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+      {/* Flexible spacer pushes "Administration" down toward the bottom */}
       <div className="min-h-8 flex-1" />
       <NavGroup
-        label="Others"
-        items={otherNavItems}
+        label="Administration"
+        items={administrationItems}
         pathname={pathname}
         role={profile?.role}
         onNavigate={onNavigate}
@@ -215,6 +264,7 @@ export function Sidebar() {
 /** Mobile top bar with hamburger-triggered drawer nav (below lg). */
 export function MobileTopBar() {
   const [open, setOpen] = useState(false);
+  const { openSearch } = useSearchContext();
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:hidden">
@@ -232,12 +282,20 @@ export function MobileTopBar() {
           <UserMenu />
         </SheetContent>
       </Sheet>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center gap-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
           <Ship className="h-4 w-4 text-primary-foreground" />
         </div>
-        <span className="text-sm font-bold tracking-tight">FreightOps</span>
+        <span className="text-sm font-bold tracking-tight">Manifest</span>
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={openSearch}
+        aria-label="Search"
+      >
+        <Search className="h-5 w-5" />
+      </Button>
     </header>
   );
 }
