@@ -239,7 +239,7 @@ export default function NewPlanPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
             <ClipboardList className="h-6 w-6 text-blue-600" />
             New Plan
           </h1>

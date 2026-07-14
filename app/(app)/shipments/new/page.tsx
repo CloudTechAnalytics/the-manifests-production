@@ -322,7 +322,7 @@ export default function NewShipmentPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
             <Package className="h-6 w-6 text-blue-600" />
             New Shipment
           </h1>

@@ -182,7 +182,7 @@ export default function WarehouseLocationsPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
               <WarehouseIcon className="h-6 w-6 text-primary" />
               Warehouses
             </h1>

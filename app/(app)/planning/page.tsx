@@ -129,7 +129,7 @@ export default function PlanningPage() {
     <div className="space-y-6 p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
             <ClipboardList className="h-6 w-6 text-blue-600" />
             Planning
           </h1>

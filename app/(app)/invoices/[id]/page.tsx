@@ -236,7 +236,7 @@ export default function InvoiceDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="font-serif text-2xl font-medium tracking-tight">
                 {invoice.invoice_number ?? 'Invoice'}
               </h1>
               <Badge variant="secondary" className={overdue ? 'bg-red-100 text-red-700' : statusMeta.color}>

@@ -300,7 +300,7 @@ export default function PlanDetailPage() {
           </Link>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">{plan.plan_number}</h1>
+              <h1 className="font-serif text-2xl font-medium tracking-tight">{plan.plan_number}</h1>
               <Badge variant="secondary" className={statusMeta.color}>
                 {statusMeta.label}
               </Badge>

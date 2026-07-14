@@ -456,7 +456,7 @@ export default function ShipmentDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="font-serif text-2xl font-medium tracking-tight">
                 {shipment.reference_number ?? 'Shipment'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>

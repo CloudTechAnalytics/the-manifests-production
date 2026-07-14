@@ -308,7 +308,7 @@ export default function PaymentDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="font-serif text-2xl font-medium tracking-tight">
               {payment.payment_number ?? 'Payment'}
             </h1>
             <p className="text-sm text-muted-foreground">
