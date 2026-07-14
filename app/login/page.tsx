@@ -11,6 +11,9 @@ import {
   Package,
   Globe2,
   ShieldCheck,
+  Mail,
+  Lock,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -54,16 +57,16 @@ function RouteIllustration() {
       >
         <path
           d="M60 203 C 130 100, 230 100, 340 52"
-          stroke="white"
-          strokeOpacity="0.3"
+          stroke="hsl(var(--brand-gold-soft))"
+          strokeOpacity="0.35"
           strokeWidth="1.5"
           strokeDasharray="5 7"
           fill="none"
         />
         <path
           d="M60 203 C 120 235, 260 235, 340 151"
-          stroke="white"
-          strokeOpacity="0.18"
+          stroke="hsl(var(--brand-gold-soft))"
+          strokeOpacity="0.2"
           strokeWidth="1.5"
           strokeDasharray="5 7"
           fill="none"
@@ -75,9 +78,9 @@ function RouteIllustration() {
           className="absolute -translate-x-1/2 -translate-y-1/2"
           style={{ left, top }}
         >
-          <span className="absolute inset-0 animate-ping rounded-full bg-white/25" />
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm">
-            <Icon className="h-4 w-4 text-white" />
+          <span className="absolute inset-0 animate-ping rounded-full bg-brand-gold/20" />
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-brand-gold/10 ring-1 ring-brand-gold/30 backdrop-blur-sm">
+            <Icon className="h-4 w-4 text-brand-gold-soft" />
           </div>
         </div>
       ))}
@@ -119,11 +122,11 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel (lg+) */}
-      <div className="relative hidden w-[44%] flex-col justify-between overflow-hidden bg-gradient-to-br from-[hsl(var(--primary))] via-indigo-800 to-slate-950 px-12 py-12 text-white lg:flex">
+      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-brand-dark px-12 py-12 text-brand-dark-foreground lg:flex">
         {/* Decorative background */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
               'radial-gradient(circle at 20% 20%, white 1px, transparent 1px), radial-gradient(circle at 60% 70%, white 1px, transparent 1px)',
@@ -132,36 +135,44 @@ export default function LoginPage() {
         />
 
         <div className="relative flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20">
-            <Ship className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gold">
+            <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
           </div>
-          <span className="text-lg font-bold tracking-tight">Manifest</span>
+          <div className="flex flex-col">
+            <span className="font-serif text-lg font-semibold leading-none tracking-tight">
+              The Manifest
+            </span>
+            <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
+              Est. 2026 &middot; Nigeria
+            </span>
+          </div>
         </div>
 
         <div className="relative space-y-8">
           <RouteIllustration />
 
           <div className="space-y-3">
-            <h1 className="text-3xl font-bold leading-tight tracking-tight">
-              Freight operations,
+            <h1 className="font-serif text-4xl font-medium leading-tight tracking-tight">
+              Where every shipment
               <br />
-              made manifest.
+              becomes <em className="font-serif text-brand-gold-soft">manifest.</em>
             </h1>
-            <p className="max-w-sm text-sm leading-relaxed text-white/75">
-              One platform for quotations, bookings, and shipment tracking
-              across every branch you operate.
+            <p className="max-w-sm text-sm leading-relaxed text-brand-dark-muted">
+              A single, refined workspace for the modern freight forwarder —
+              quotations, bookings, tracking, and documents, brought into one
+              quiet command of operations.
             </p>
           </div>
 
           <div className="space-y-5">
             {highlights.map((h) => (
               <div key={h.title} className="flex items-start gap-3.5">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
-                  <h.icon className="h-4.5 w-4.5" />
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gold/10 ring-1 ring-brand-gold/20">
+                  <h.icon className="h-4 w-4 text-brand-gold-soft" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{h.title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-white/65">
+                  <p className="mt-0.5 text-xs leading-relaxed text-brand-dark-muted">
                     {h.description}
                   </p>
                 </div>
@@ -170,8 +181,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="relative text-xs text-white/50">
-          &copy; {new Date().getFullYear()} Manifest. All rights reserved.
+        <p className="relative text-xs text-brand-dark-muted/70">
+          &copy; {new Date().getFullYear()} The Manifest. All rights reserved.
         </p>
       </div>
 
@@ -180,39 +191,46 @@ export default function LoginPage() {
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo (brand panel hidden below lg) */}
           <div className="flex flex-col items-center gap-3 lg:hidden">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
-              <Ship className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-gold shadow-lg shadow-brand-gold/20">
+              <Ship className="h-7 w-7 text-brand-dark" strokeWidth={2.25} />
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight">Manifest</h1>
+              <h1 className="font-serif text-2xl font-semibold tracking-tight">The Manifest</h1>
               <p className="text-sm text-muted-foreground">
-                Freight Operations Management Platform
+                Freight Operations Management
               </p>
             </div>
           </div>
 
           <div className="space-y-1.5 text-center lg:text-left">
-            <h2 className="text-xl font-semibold tracking-tight">
-              Sign in to your account
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+              Welcome back
+            </p>
+            <h2 className="font-serif text-3xl font-medium tracking-tight">
+              Sign in to your operations
             </h2>
             <p className="text-sm text-muted-foreground">
-              Enter your credentials to access the platform
+              Enter your credentials to access the workspace.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                autoFocus
-              />
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  autoFocus
+                  className="pl-10"
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -220,6 +238,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
               </div>
               <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -228,7 +247,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="pr-10"
+                  className="pl-10 pr-10"
                 />
                 <button
                   type="button"
@@ -245,14 +264,21 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button
+              type="submit"
+              className="w-full bg-brand-dark text-brand-dark-foreground hover:bg-brand-dark-elevated"
+              disabled={submitting}
+            >
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...
                 </>
               ) : (
-                'Sign in'
+                <>
+                  Sign in
+                  <ArrowRight className="ml-1.5 h-4 w-4" />
+                </>
               )}
             </Button>
           </form>

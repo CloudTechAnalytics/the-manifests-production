@@ -82,16 +82,31 @@ export default function DashboardPage() {
     },
   ];
 
+  const now = new Date();
+  const dateLabel = now
+    .toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      weekday: 'long',
+    })
+    .toUpperCase()
+    .replace(/, (\w+)$/, ' · $1');
+  const hour = now.getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+
   return (
     <div className="space-y-4 p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Operations Center
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+            {dateLabel}
+          </p>
+          <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight">
+            Good {timeOfDay}, {profile?.full_name?.split(' ')[0] ?? 'there'}.
           </h1>
-          <p className="text-xs text-muted-foreground/80 sm:text-sm">
-            Welcome back, {profile?.full_name?.split(' ')[0] ?? 'User'}.
+          <p className="mt-1 text-xs text-muted-foreground/80 sm:text-sm">
             Here&apos;s a live overview of today&apos;s freight operations.
           </p>
         </div>

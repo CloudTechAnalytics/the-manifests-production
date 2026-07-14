@@ -182,6 +182,7 @@ export interface DocumentRecord {
   id: string;
   shipment_id: string | null;
   customer_id: string | null;
+  plan_id: string | null;
   name: string;
   category: DocumentCategory;
   file_path: string;
@@ -321,4 +322,171 @@ export interface Expense {
   branch?: Branch | null;
   paid_by_user?: Profile | null;
   approved_by_user?: Profile | null;
+}
+
+export type StockMovementType =
+  | 'inbound'
+  | 'outbound'
+  | 'adjustment_increase'
+  | 'adjustment_decrease'
+  | 'transfer';
+
+export interface Warehouse {
+  id: string;
+  branch_id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  branch?: Branch | null;
+}
+
+export interface StockItem {
+  id: string;
+  branch_id: string;
+  sku: string;
+  name: string;
+  category: string | null;
+  unit: string;
+  unit_cost: number;
+  reorder_point: number;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  branch?: Branch | null;
+}
+
+export interface WarehouseStock {
+  id: string;
+  branch_id: string;
+  warehouse_id: string;
+  item_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+  item?: StockItem | null;
+  warehouse?: Warehouse | null;
+}
+
+export interface StockMovement {
+  id: string;
+  branch_id: string;
+  item_id: string;
+  warehouse_id: string;
+  to_warehouse_id: string | null;
+  movement_type: StockMovementType;
+  quantity: number;
+  movement_date: string;
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  item?: StockItem | null;
+  warehouse?: Warehouse | null;
+  to_warehouse?: Warehouse | null;
+  created_by_user?: Profile | null;
+}
+
+export type PlanStatus = 'planned' | 'approved' | 'in_progress' | 'completed' | 'cancelled';
+
+export type PriorityLevel = 'low' | 'medium' | 'high';
+
+export type PlanTaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+
+export interface ShipmentPlan {
+  id: string;
+  plan_number: string | null;
+  customer_id: string;
+  quotation_id: string | null;
+  branch_id: string;
+  status: PlanStatus;
+  priority: PriorityLevel;
+
+  shipment_type: ShipmentType | null;
+  origin: string | null;
+  destination: string | null;
+  incoterm: string | null;
+  commodity: string | null;
+  goods_value: number | null;
+  goods_value_currency: string;
+  insurance_required: boolean;
+  special_instructions: string | null;
+  total_packages: number | null;
+  total_weight: number | null;
+  total_volume: number | null;
+  hs_code: string | null;
+  cargo_description: string | null;
+
+  container_type: string | null;
+  container_quantity: number | null;
+  equipment_supplier: string | null;
+  container_pickup_date: string | null;
+  container_return_date: string | null;
+
+  carrier_line: string | null;
+  vessel_name: string | null;
+  voyage_number: string | null;
+  port_of_loading: string | null;
+  port_of_discharge: string | null;
+  service_route: string | null;
+
+  pre_carriage_mode: string | null;
+  transport_carrier: string | null;
+  truck_number: string | null;
+  estimated_transport_time: string | null;
+
+  booking_confirmed_date: string | null;
+  documentation_date: string | null;
+  cargo_ready_date: string | null;
+  planned_etd: string | null;
+  planned_eta: string | null;
+  delivery_date: string | null;
+
+  estimated_cost: number | null;
+  estimated_revenue: number | null;
+  risk_level: PriorityLevel | null;
+
+  planned_by: string | null;
+  assigned_to: string | null;
+
+  converted_shipment_id: string | null;
+  converted_at: string | null;
+
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+
+  customer?: Customer | null;
+  quotation?: Quotation | null;
+  branch?: Branch | null;
+  planned_by_user?: Profile | null;
+  assigned_user?: Profile | null;
+  converted_shipment?: Shipment | null;
+  tasks?: PlanTask[];
+}
+
+export interface PlanTask {
+  id: string;
+  plan_id: string;
+  branch_id: string;
+  title: string;
+  assigned_to: string | null;
+  due_date: string | null;
+  status: PlanTaskStatus;
+  priority: PriorityLevel;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_user?: Profile | null;
 }

@@ -23,6 +23,8 @@ import {
   Receipt,
   Wallet,
   CreditCard,
+  Warehouse,
+  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -59,6 +61,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/shipments', label: 'Shipments', icon: Package },
+      { href: '/planning', label: 'Planning', icon: ClipboardList },
       { href: '/tracking', label: 'Tracking', icon: Radar },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays },
     ],
@@ -86,6 +89,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Operations Support',
     items: [
       { href: '/documents', label: 'Documents', icon: FolderOpen },
+      { href: '/warehouse', label: 'Warehouse', icon: Warehouse },
       { href: '/reports', label: 'Reports', icon: BarChart3 },
     ],
   },
@@ -98,14 +102,16 @@ const administrationItems: NavItem[] = [
 
 function Logo() {
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-6">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm shadow-primary/30">
-        <Ship className="h-5 w-5 text-primary-foreground" />
+    <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border px-6">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
+        <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
       </div>
       <div className="flex flex-col">
-        <span className="text-sm font-bold tracking-tight">Manifest</span>
-        <span className="text-[10px] text-muted-foreground">
-          Operations Platform
+        <span className="font-serif text-base font-semibold leading-none tracking-tight text-brand-dark-foreground">
+          The Manifest
+        </span>
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-brand-dark-muted">
+          Freight Management
         </span>
       </div>
     </div>
@@ -127,7 +133,7 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      <p className="px-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-widest text-brand-dark-muted/80">
         {label}
       </p>
       <div className="space-y-0.5">
@@ -141,12 +147,15 @@ function NavGroup({
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+                'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  ? 'bg-brand-dark-elevated text-brand-gold-soft'
+                  : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
               )}
             >
+              {active && (
+                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
+              )}
               <Icon className="h-4 w-4 shrink-0" />
               {item.label}
             </Link>
@@ -201,15 +210,15 @@ function UserMenu() {
   const roleLabel = profile?.role?.replace('_', ' ') ?? '';
 
   return (
-    <div className="border-t border-border p-3">
+    <div className="border-t border-brand-dark-border p-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 px-2 py-2"
+            className="w-full justify-start gap-3 px-2 py-2 text-brand-dark-foreground hover:bg-brand-dark-elevated hover:text-brand-dark-foreground"
           >
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+              <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -217,11 +226,11 @@ function UserMenu() {
               <span className="w-full truncate text-sm font-medium leading-none text-left">
                 {profile?.full_name}
               </span>
-              <span className="text-xs capitalize text-muted-foreground">
+              <span className="text-xs capitalize text-brand-dark-muted">
                 {roleLabel}
               </span>
             </div>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-brand-dark-muted" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
@@ -250,10 +259,11 @@ function UserMenu() {
   );
 }
 
-/** Desktop, always-visible sidebar (lg and up). */
+/** Desktop, always-visible sidebar (lg and up). Permanently dark, regardless
+ *  of the app's light/dark theme setting — a fixed brand identity element. */
 export function Sidebar() {
   return (
-    <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
+    <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
       <Logo />
       <NavLinks />
       <UserMenu />
@@ -275,7 +285,7 @@ export function MobileTopBar() {
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex w-72 flex-col p-0">
+        <SheetContent side="left" className="flex w-72 flex-col bg-brand-dark p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Logo />
           <NavLinks onNavigate={() => setOpen(false)} />
@@ -283,10 +293,10 @@ export function MobileTopBar() {
         </SheetContent>
       </Sheet>
       <div className="flex flex-1 items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-          <Ship className="h-4 w-4 text-primary-foreground" />
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold">
+          <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
         </div>
-        <span className="text-sm font-bold tracking-tight">Manifest</span>
+        <span className="font-serif text-sm font-semibold tracking-tight">The Manifest</span>
       </div>
       <Button
         variant="ghost"

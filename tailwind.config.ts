@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+      },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic':
@@ -67,6 +70,15 @@ const config: Config = {
         warning: {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
+        },
+        brand: {
+          dark: 'hsl(var(--brand-dark))',
+          'dark-elevated': 'hsl(var(--brand-dark-elevated))',
+          'dark-border': 'hsl(var(--brand-dark-border))',
+          'dark-foreground': 'hsl(var(--brand-dark-foreground))',
+          'dark-muted': 'hsl(var(--brand-dark-muted))',
+          gold: 'hsl(var(--brand-gold))',
+          'gold-soft': 'hsl(var(--brand-gold-soft))',
         },
       },
       keyframes: {

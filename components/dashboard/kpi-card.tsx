@@ -38,33 +38,33 @@ export function KpiCard({
     <Link href={href} className="block h-full">
       <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
         <CardContent className="p-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${color}`}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${color}`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-[18px] w-[18px]" />
             </div>
-            <p className="truncate text-xs font-medium text-muted-foreground">
-              {label}
-            </p>
+            {trend && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10.5px] font-medium ${
+                  trend.direction === 'up'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-red-50 text-red-700'
+                }`}
+              >
+                {trend.direction === 'up' ? (
+                  <ArrowUpRight className="h-3 w-3" />
+                ) : (
+                  <ArrowDownRight className="h-3 w-3" />
+                )}
+                {trend.label}
+              </span>
+            )}
           </div>
-          <p className="mt-2.5 text-[26px] font-bold leading-none tracking-tight">
+          <p className="mt-3.5 font-serif text-[28px] font-medium leading-none tracking-tight">
             {value}
           </p>
-          {trend && (
-            <div
-              className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${
-                trend.direction === 'up' ? 'text-emerald-600' : 'text-red-600'
-              }`}
-            >
-              {trend.direction === 'up' ? (
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              ) : (
-                <ArrowDownRight className="h-3.5 w-3.5" />
-              )}
-              {trend.label}
-            </div>
-          )}
+          <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p>
         </CardContent>
       </Card>
     </Link>

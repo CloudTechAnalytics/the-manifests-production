@@ -7,6 +7,10 @@ import type {
   ExpenseCategory,
   ExpenseStatus,
   Invoice,
+  StockMovementType,
+  PlanStatus,
+  PriorityLevel,
+  PlanTaskStatus,
 } from '@/types';
 
 export const SHIPMENT_STATUS_META: Record<
@@ -118,6 +122,61 @@ export const EXPENSE_STATUS_META: Record<
   pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
   approved: { label: 'Approved', color: 'bg-green-100 text-green-700' },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+};
+
+export type StockStatus = 'available' | 'low_stock' | 'out_of_stock';
+
+/**
+ * Derived, not stored — same reasoning as "Overdue" invoices. A quantity
+ * is only ever known relative to an item's reorder_point at read time.
+ */
+export function getStockStatus(quantity: number, reorderPoint: number): StockStatus {
+  if (quantity <= 0) return 'out_of_stock';
+  if (quantity <= reorderPoint) return 'low_stock';
+  return 'available';
+}
+
+export const STOCK_STATUS_META: Record<StockStatus, { label: string; color: string }> = {
+  available: { label: 'Available', color: 'bg-green-100 text-green-700' },
+  low_stock: { label: 'Low Stock', color: 'bg-amber-100 text-amber-700' },
+  out_of_stock: { label: 'Out of Stock', color: 'bg-red-100 text-red-700' },
+};
+
+export const STOCK_MOVEMENT_TYPE_META: Record<
+  StockMovementType,
+  { label: string; color: string }
+> = {
+  inbound: { label: 'Inbound', color: 'bg-green-100 text-green-700' },
+  outbound: { label: 'Outbound', color: 'bg-blue-100 text-blue-700' },
+  adjustment_increase: { label: 'Adjustment (+)', color: 'bg-purple-100 text-purple-700' },
+  adjustment_decrease: { label: 'Adjustment (-)', color: 'bg-purple-100 text-purple-700' },
+  transfer: { label: 'Transfer', color: 'bg-cyan-100 text-cyan-700' },
+};
+
+export const PLAN_STATUS_META: Record<
+  PlanStatus,
+  { label: string; color: string; step: number }
+> = {
+  planned: { label: 'Planned', color: 'bg-blue-100 text-blue-700', step: 0 },
+  approved: { label: 'Approved', color: 'bg-indigo-100 text-indigo-700', step: 1 },
+  in_progress: { label: 'In Progress', color: 'bg-amber-100 text-amber-700', step: 2 },
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-700', step: 3 },
+  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', step: -1 },
+};
+
+export const PLAN_STATUS_FLOW: PlanStatus[] = ['planned', 'approved', 'in_progress', 'completed'];
+
+export const PRIORITY_META: Record<PriorityLevel, { label: string; color: string }> = {
+  low: { label: 'Low', color: 'bg-slate-100 text-slate-700' },
+  medium: { label: 'Medium', color: 'bg-amber-100 text-amber-700' },
+  high: { label: 'High', color: 'bg-red-100 text-red-700' },
+};
+
+export const PLAN_TASK_STATUS_META: Record<PlanTaskStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
+  done: { label: 'Done', color: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700' },
 };
 
 export function formatDate(date: string | null): string {
