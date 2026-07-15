@@ -129,26 +129,88 @@ export function useDashboardData(): DashboardData {
       try {
         const today = new Date().toISOString().split('T')[0];
 
-        // --- All customers (id + branch_id) --------------------------------
-        // Powers: Total Customers KPI and, for admins, per-branch customer
-        // counts in the branch summary.
+        // --- Build every query up front, then fire them all in parallel ----
+        // None of these queries depends on another's result (only on
+        // branchFilter/isAdmin, both already known), so there's no reason
+        // to pay their network round-trips one after another. Sequentially
+        // awaiting 8 queries at ~300-900ms each was adding several seconds
+        // to every dashboard load; Promise.all bounds total wait time to
+        // the single slowest query instead of their sum.
+
         let custQuery = supabase
           .from('customers')
           .select('id, branch_id')
           .is('deleted_at', null);
         if (branchFilter) custQuery = custQuery.eq('branch_id', branchFilter);
-        const { data: custRows } = await custQuery;
 
-        // --- All quotations (status + total + currency + branch_id) --------
-        // Powers: Pending Quotations KPI, Revenue KPI, Quotation stage of
-        // the pipeline, Quotation Conversion Rate, the "pending approval"
-        // alert, and per-branch quotation counts.
         let quotAggQuery = supabase
           .from('quotations')
           .select('status, total, currency, branch_id, updated_at')
           .is('deleted_at', null);
         if (branchFilter) quotAggQuery = quotAggQuery.eq('branch_id', branchFilter);
-        const { data: quotAgg } = await quotAggQuery;
+
+        let paymentsQuery = supabase
+          .from('payments')
+          .select('amount, currency, payment_date, branch_id')
+          .is('deleted_at', null);
+        if (branchFilter) paymentsQuery = paymentsQuery.eq('branch_id', branchFilter);
+
+        let shipAggQuery = supabase
+          .from('shipments')
+          .select(
+            'id, reference_number, status, estimated_arrival, actual_arrival, updated_at, customer_id, branch_id, customer:customers(company_name)'
+          )
+          .is('deleted_at', null);
+        if (branchFilter) shipAggQuery = shipAggQuery.eq('branch_id', branchFilter);
+
+        let docQuery = supabase
+          .from('documents')
+          .select('shipment_id')
+          .is('deleted_at', null)
+          .not('shipment_id', 'is', null);
+        if (branchFilter) docQuery = docQuery.eq('branch_id', branchFilter);
+
+        let recentShipQuery = supabase
+          .from('shipments')
+          .select(
+            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name)'
+          )
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (branchFilter) recentShipQuery = recentShipQuery.eq('branch_id', branchFilter);
+
+        let recentQuotQuery = supabase
+          .from('quotations')
+          .select('*, customer:customers(*)')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (branchFilter) recentQuotQuery = recentQuotQuery.eq('branch_id', branchFilter);
+
+        const branchesQuery = isAdmin
+          ? supabase.from('branches').select('id, name').is('deleted_at', null)
+          : null;
+
+        const [
+          { data: custRows },
+          { data: quotAgg },
+          { data: paymentRows },
+          { data: shipAgg },
+          { data: docRows },
+          { data: recentShips },
+          { data: recentQuots },
+          branchesResult,
+        ] = await Promise.all([
+          custQuery,
+          quotAggQuery,
+          paymentsQuery,
+          shipAggQuery,
+          docQuery,
+          recentShipQuery,
+          recentQuotQuery,
+          branchesQuery ?? Promise.resolve({ data: null }),
+        ]);
 
         let pendingQuotations = 0;
         let sentCount = 0;
@@ -207,17 +269,10 @@ export function useDashboardData(): DashboardData {
           });
         }
 
-        // --- All payments (amount + currency + date + branch_id) -----------
+        // --- Payments aggregation -------------------------------------------
         // Powers: Revenue Collected — actual cash received via the Finance
         // module, kept distinct from "Pipeline Value Won" above (which is
         // approved-quotation value, not money in hand).
-        let paymentsQuery = supabase
-          .from('payments')
-          .select('amount, currency, payment_date, branch_id')
-          .is('deleted_at', null);
-        if (branchFilter) paymentsQuery = paymentsQuery.eq('branch_id', branchFilter);
-        const { data: paymentRows } = await paymentsQuery;
-
         const collected: Record<string, number> = {};
         (paymentRows ?? []).forEach((p) => {
           collected[p.currency] = (collected[p.currency] ?? 0) + Number(p.amount);
@@ -233,19 +288,10 @@ export function useDashboardData(): DashboardData {
           }
         });
 
-        // --- All shipments (status + dates + customer + branch_id) ---------
+        // --- Shipments aggregation -------------------------------------------
         // Powers: Active/Delivered/Delayed KPIs, pipeline stages, top
         // customers by volume, recent deliveries, the "missing documents"
         // alert, and per-branch shipment counts.
-        let shipAggQuery = supabase
-          .from('shipments')
-          .select(
-            'id, reference_number, status, estimated_arrival, actual_arrival, updated_at, customer_id, branch_id, customer:customers(company_name)'
-          )
-          .is('deleted_at', null);
-        if (branchFilter) shipAggQuery = shipAggQuery.eq('branch_id', branchFilter);
-        const { data: shipAgg } = await shipAggQuery;
-
         type ShipAggRow = {
           id: string;
           reference_number: string | null;
@@ -331,13 +377,6 @@ export function useDashboardData(): DashboardData {
           }));
 
         // --- Documents with a shipment link (for "missing documents" alert) --
-        let docQuery = supabase
-          .from('documents')
-          .select('shipment_id')
-          .is('deleted_at', null)
-          .not('shipment_id', 'is', null);
-        if (branchFilter) docQuery = docQuery.eq('branch_id', branchFilter);
-        const { data: docRows } = await docQuery;
         const shipmentsWithDocs = new Set(
           (docRows ?? []).map((d) => d.shipment_id as string)
         );
@@ -346,35 +385,10 @@ export function useDashboardData(): DashboardData {
           if (!shipmentsWithDocs.has(id)) missingDocsCount++;
         });
 
-        // --- Recent shipments (rich, for the table) ---------------------------
-        let recentShipQuery = supabase
-          .from('shipments')
-          .select(
-            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name)'
-          )
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        if (branchFilter) recentShipQuery = recentShipQuery.eq('branch_id', branchFilter);
-        const { data: recentShips } = await recentShipQuery;
-
-        // --- Recent quotations (any status, for the table) --------------------
-        let recentQuotQuery = supabase
-          .from('quotations')
-          .select('*, customer:customers(*)')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        if (branchFilter) recentQuotQuery = recentQuotQuery.eq('branch_id', branchFilter);
-        const { data: recentQuots } = await recentQuotQuery;
-
         // --- Branch summary (admin only), derived from data already fetched --
         let bStats: BranchStat[] = [];
         if (isAdmin) {
-          const { data: branches } = await supabase
-            .from('branches')
-            .select('id, name')
-            .is('deleted_at', null);
+          const branches = branchesResult.data;
 
           const customersByBranch = new Map<string, number>();
           (custRows ?? []).forEach((c) => {
