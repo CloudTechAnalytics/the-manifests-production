@@ -51,6 +51,61 @@ export interface RevenueTrendPoint {
   cumulative: number;
 }
 
+/**
+ * Receivables position, derived from `invoices`. "Outstanding" is any
+ * non-cancelled invoice that has been issued but not settled (status
+ * `sent` or `partial`), valued at total - amount_paid so a partially
+ * paid invoice only counts for the balance still owed.
+ */
+export interface FinanceSummaryData {
+  invoicedByCurrency: Record<string, number>;
+  outstandingByCurrency: Record<string, number>;
+  collectedByCurrency: Record<string, number>;
+  expensesByCurrency: Record<string, number>;
+  primaryCurrency: string | null;
+  outstandingCount: number;
+  overdueCount: number;
+}
+
+/** Live counts by `shipment_plans.status`, plus high-priority workload. */
+export interface PlanningOverviewData {
+  total: number;
+  planned: number;
+  approved: number;
+  inProgress: number;
+  completed: number;
+  highPriority: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  description: string;
+  created_at: string;
+  userName: string;
+}
+
+export type ScheduleEventType =
+  | 'booking'
+  | 'est_departure'
+  | 'est_arrival'
+  | 'actual_departure'
+  | 'actual_arrival';
+
+/**
+ * A single dated milestone falling on today, expanded from the date
+ * columns already on `shipments` — the same fields the Calendar page
+ * derives its events from, so the dashboard preview and the calendar
+ * can never disagree.
+ */
+export interface ScheduleEvent {
+  id: string;
+  shipmentId: string;
+  type: ScheduleEventType;
+  reference: string | null;
+  customerName: string;
+}
+
 export interface DashboardData {
   loading: boolean;
   stats: DashboardStats;
@@ -74,8 +129,31 @@ export interface DashboardData {
   recentDeliveries: RecentDelivery[];
   topCustomersByVolume: TopCustomerByVolume[];
   branchStats: BranchStat[];
+  finance: FinanceSummaryData;
+  planning: PlanningOverviewData;
+  todaySchedule: ScheduleEvent[];
+  recentActivity: ActivityItem[];
   isAdmin: boolean;
 }
+
+const EMPTY_FINANCE: FinanceSummaryData = {
+  invoicedByCurrency: {},
+  outstandingByCurrency: {},
+  collectedByCurrency: {},
+  expensesByCurrency: {},
+  primaryCurrency: null,
+  outstandingCount: 0,
+  overdueCount: 0,
+};
+
+const EMPTY_PLANNING: PlanningOverviewData = {
+  total: 0,
+  planned: 0,
+  approved: 0,
+  inProgress: 0,
+  completed: 0,
+  highPriority: 0,
+};
 
 const EMPTY_STATS: DashboardStats = {
   totalCustomers: 0,
@@ -120,6 +198,10 @@ export function useDashboardData(): DashboardData {
   const [recentDeliveries, setRecentDeliveries] = useState<RecentDelivery[]>([]);
   const [topCustomersByVolume, setTopCustomersByVolume] = useState<TopCustomerByVolume[]>([]);
   const [branchStats, setBranchStats] = useState<BranchStat[]>([]);
+  const [finance, setFinance] = useState<FinanceSummaryData>(EMPTY_FINANCE);
+  const [planning, setPlanning] = useState<PlanningOverviewData>(EMPTY_PLANNING);
+  const [todaySchedule, setTodaySchedule] = useState<ScheduleEvent[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -129,18 +211,24 @@ export function useDashboardData(): DashboardData {
       try {
         const today = new Date().toISOString().split('T')[0];
 
-        // --- All customers (id + branch_id) --------------------------------
-        // Powers: Total Customers KPI and, for admins, per-branch customer
-        // counts in the branch summary.
+        // ------------------------------------------------------------------
+        // Every read below is independent of the others, so they are built
+        // first and then issued as ONE concurrent batch. Awaiting them in
+        // sequence cost a full network round-trip each — on a high-latency
+        // link that serialised delay, not query time, dominated how long the
+        // dashboard took to paint. Only the activity-actor lookup further
+        // down genuinely depends on an earlier result, so it stays after.
+        // ------------------------------------------------------------------
+
+        // Customers (id + branch_id): Total Customers KPI and, for admins,
+        // per-branch customer counts in the branch summary.
         let custQuery = supabase
           .from('customers')
           .select('id, branch_id')
           .is('deleted_at', null);
         if (branchFilter) custQuery = custQuery.eq('branch_id', branchFilter);
-        const { data: custRows } = await custQuery;
 
-        // --- All quotations (status + total + currency + branch_id) --------
-        // Powers: Pending Quotations KPI, Revenue KPI, Quotation stage of
+        // Quotations: Pending Quotations KPI, Revenue KPI, Quotation stage of
         // the pipeline, Quotation Conversion Rate, the "pending approval"
         // alert, and per-branch quotation counts.
         let quotAggQuery = supabase
@@ -148,7 +236,117 @@ export function useDashboardData(): DashboardData {
           .select('status, total, currency, branch_id, updated_at')
           .is('deleted_at', null);
         if (branchFilter) quotAggQuery = quotAggQuery.eq('branch_id', branchFilter);
-        const { data: quotAgg } = await quotAggQuery;
+
+        // Payments: Revenue Collected — actual cash received via the Finance
+        // module, kept distinct from "Pipeline Value Won" (approved-quotation
+        // value, not money in hand).
+        let paymentsQuery = supabase
+          .from('payments')
+          .select('amount, currency, payment_date, branch_id')
+          .is('deleted_at', null);
+        if (branchFilter) paymentsQuery = paymentsQuery.eq('branch_id', branchFilter);
+
+        // Shipments: Active/Delivered/Delayed KPIs, pipeline stages, top
+        // customers by volume, recent deliveries, today's schedule, the
+        // "missing documents" alert, and per-branch shipment counts.
+        let shipAggQuery = supabase
+          .from('shipments')
+          .select(
+            'id, reference_number, status, booking_date, estimated_departure, actual_departure, estimated_arrival, actual_arrival, updated_at, customer_id, branch_id, customer:customers(company_name)'
+          )
+          .is('deleted_at', null);
+        if (branchFilter) shipAggQuery = shipAggQuery.eq('branch_id', branchFilter);
+
+        // Documents with a shipment link (for the "missing documents" alert).
+        let docQuery = supabase
+          .from('documents')
+          .select('shipment_id')
+          .is('deleted_at', null)
+          .not('shipment_id', 'is', null);
+        if (branchFilter) docQuery = docQuery.eq('branch_id', branchFilter);
+
+        // Recent shipments (rich, for the table).
+        let recentShipQuery = supabase
+          .from('shipments')
+          .select(
+            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name)'
+          )
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (branchFilter) recentShipQuery = recentShipQuery.eq('branch_id', branchFilter);
+
+        // Recent quotations (any status, for the table).
+        let recentQuotQuery = supabase
+          .from('quotations')
+          .select('*, customer:customers(*)')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (branchFilter) recentQuotQuery = recentQuotQuery.eq('branch_id', branchFilter);
+
+        // Invoices: Outstanding Invoices KPI and the Finance Summary card.
+        let invQuery = supabase
+          .from('invoices')
+          .select('status, total, amount_paid, currency, due_date')
+          .is('deleted_at', null);
+        if (branchFilter) invQuery = invQuery.eq('branch_id', branchFilter);
+
+        // Expenses: approved spend, for the Finance Summary.
+        let expQuery = supabase
+          .from('expenses')
+          .select('amount, currency, status')
+          .is('deleted_at', null);
+        if (branchFilter) expQuery = expQuery.eq('branch_id', branchFilter);
+
+        // Shipment plans: Planning Overview.
+        let planQuery = supabase
+          .from('shipment_plans')
+          .select('status, priority')
+          .is('deleted_at', null);
+        if (branchFilter) planQuery = planQuery.eq('branch_id', branchFilter);
+
+        // Recent activity feed.
+        let actQuery = supabase
+          .from('activities')
+          .select('id, action, description, created_at, user_id')
+          .order('created_at', { ascending: false })
+          .limit(6);
+        if (branchFilter) actQuery = actQuery.eq('branch_id', branchFilter);
+
+        // Branches (admin only) — resolved to an empty set for everyone else
+        // so it can still join the same concurrent batch.
+        const branchesQuery = isAdmin
+          ? supabase.from('branches').select('id, name').is('deleted_at', null)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] });
+
+        const [
+          { data: custRows },
+          { data: quotAgg },
+          { data: paymentRows },
+          { data: shipAgg },
+          { data: docRows },
+          { data: recentShips },
+          { data: recentQuots },
+          { data: invRows },
+          { data: expRows },
+          { data: planRows },
+          { data: actRows },
+          { data: branches },
+        ] = await Promise.all([
+          custQuery,
+          quotAggQuery,
+          paymentsQuery,
+          shipAggQuery,
+          docQuery,
+          recentShipQuery,
+          recentQuotQuery,
+          invQuery,
+          expQuery,
+          planQuery,
+          actQuery,
+          branchesQuery,
+        ]);
 
         let pendingQuotations = 0;
         let sentCount = 0;
@@ -207,17 +405,6 @@ export function useDashboardData(): DashboardData {
           });
         }
 
-        // --- All payments (amount + currency + date + branch_id) -----------
-        // Powers: Revenue Collected — actual cash received via the Finance
-        // module, kept distinct from "Pipeline Value Won" above (which is
-        // approved-quotation value, not money in hand).
-        let paymentsQuery = supabase
-          .from('payments')
-          .select('amount, currency, payment_date, branch_id')
-          .is('deleted_at', null);
-        if (branchFilter) paymentsQuery = paymentsQuery.eq('branch_id', branchFilter);
-        const { data: paymentRows } = await paymentsQuery;
-
         const collected: Record<string, number> = {};
         (paymentRows ?? []).forEach((p) => {
           collected[p.currency] = (collected[p.currency] ?? 0) + Number(p.amount);
@@ -233,23 +420,13 @@ export function useDashboardData(): DashboardData {
           }
         });
 
-        // --- All shipments (status + dates + customer + branch_id) ---------
-        // Powers: Active/Delivered/Delayed KPIs, pipeline stages, top
-        // customers by volume, recent deliveries, the "missing documents"
-        // alert, and per-branch shipment counts.
-        let shipAggQuery = supabase
-          .from('shipments')
-          .select(
-            'id, reference_number, status, estimated_arrival, actual_arrival, updated_at, customer_id, branch_id, customer:customers(company_name)'
-          )
-          .is('deleted_at', null);
-        if (branchFilter) shipAggQuery = shipAggQuery.eq('branch_id', branchFilter);
-        const { data: shipAgg } = await shipAggQuery;
-
         type ShipAggRow = {
           id: string;
           reference_number: string | null;
           status: ShipmentStatus;
+          booking_date: string | null;
+          estimated_departure: string | null;
+          actual_departure: string | null;
           estimated_arrival: string | null;
           actual_arrival: string | null;
           updated_at: string;
@@ -330,14 +507,6 @@ export function useDashboardData(): DashboardData {
             deliveredOn: s.actual_arrival ?? s.updated_at,
           }));
 
-        // --- Documents with a shipment link (for "missing documents" alert) --
-        let docQuery = supabase
-          .from('documents')
-          .select('shipment_id')
-          .is('deleted_at', null)
-          .not('shipment_id', 'is', null);
-        if (branchFilter) docQuery = docQuery.eq('branch_id', branchFilter);
-        const { data: docRows } = await docQuery;
         const shipmentsWithDocs = new Set(
           (docRows ?? []).map((d) => d.shipment_id as string)
         );
@@ -346,36 +515,9 @@ export function useDashboardData(): DashboardData {
           if (!shipmentsWithDocs.has(id)) missingDocsCount++;
         });
 
-        // --- Recent shipments (rich, for the table) ---------------------------
-        let recentShipQuery = supabase
-          .from('shipments')
-          .select(
-            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name)'
-          )
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        if (branchFilter) recentShipQuery = recentShipQuery.eq('branch_id', branchFilter);
-        const { data: recentShips } = await recentShipQuery;
-
-        // --- Recent quotations (any status, for the table) --------------------
-        let recentQuotQuery = supabase
-          .from('quotations')
-          .select('*, customer:customers(*)')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        if (branchFilter) recentQuotQuery = recentQuotQuery.eq('branch_id', branchFilter);
-        const { data: recentQuots } = await recentQuotQuery;
-
         // --- Branch summary (admin only), derived from data already fetched --
         let bStats: BranchStat[] = [];
         if (isAdmin) {
-          const { data: branches } = await supabase
-            .from('branches')
-            .select('id, name')
-            .is('deleted_at', null);
-
           const customersByBranch = new Map<string, number>();
           (custRows ?? []).forEach((c) => {
             customersByBranch.set(
@@ -392,6 +534,123 @@ export function useDashboardData(): DashboardData {
             quotations: quotationsByBranch.get(b.id) ?? 0,
           }));
         }
+
+        // --- Receivables position, from the invoices already fetched --------
+        // "Outstanding" = issued but unsettled (sent/partial), valued at the
+        // remaining balance (total - amount_paid) rather than face value.
+        const invoicedByCurrency: Record<string, number> = {};
+        const outstandingByCurrency: Record<string, number> = {};
+        let outstandingCount = 0;
+        let overdueCount = 0;
+
+        (invRows ?? []).forEach((inv) => {
+          if (inv.status === 'cancelled' || inv.status === 'draft') return;
+          invoicedByCurrency[inv.currency] =
+            (invoicedByCurrency[inv.currency] ?? 0) + Number(inv.total);
+
+          if (inv.status === 'sent' || inv.status === 'partial') {
+            const balance = Number(inv.total) - Number(inv.amount_paid);
+            if (balance > 0) {
+              outstandingByCurrency[inv.currency] =
+                (outstandingByCurrency[inv.currency] ?? 0) + balance;
+              outstandingCount++;
+              if (inv.due_date && inv.due_date < today) overdueCount++;
+            }
+          }
+        });
+
+        const expensesByCurrency: Record<string, number> = {};
+        (expRows ?? []).forEach((e) => {
+          if (e.status !== 'approved') return;
+          expensesByCurrency[e.currency] =
+            (expensesByCurrency[e.currency] ?? 0) + Number(e.amount);
+        });
+
+        const planningData: PlanningOverviewData = {
+          total: (planRows ?? []).length,
+          planned: 0,
+          approved: 0,
+          inProgress: 0,
+          completed: 0,
+          highPriority: 0,
+        };
+        (planRows ?? []).forEach((p) => {
+          if (p.status === 'planned') planningData.planned++;
+          if (p.status === 'approved') planningData.approved++;
+          if (p.status === 'in_progress') planningData.inProgress++;
+          if (p.status === 'completed') planningData.completed++;
+          if (
+            p.priority === 'high' &&
+            p.status !== 'completed' &&
+            p.status !== 'cancelled'
+          ) {
+            planningData.highPriority++;
+          }
+        });
+
+        // --- Today's schedule, expanded from shipment date columns ----------
+        // Same source fields the Calendar page uses, filtered to today only.
+        const scheduleFields: [keyof ShipAggRow, ScheduleEventType][] = [
+          ['booking_date', 'booking'],
+          ['estimated_departure', 'est_departure'],
+          ['actual_departure', 'actual_departure'],
+          ['estimated_arrival', 'est_arrival'],
+          ['actual_arrival', 'actual_arrival'],
+        ];
+        const schedule: ScheduleEvent[] = [];
+        shipRows.forEach((s) => {
+          scheduleFields.forEach(([field, type]) => {
+            if (s[field] === today) {
+              schedule.push({
+                id: `${s.id}-${type}`,
+                shipmentId: s.id,
+                type,
+                reference: s.reference_number,
+                customerName: s.customer?.company_name ?? 'Unknown',
+              });
+            }
+          });
+        });
+
+        // --- Recent activity actors -------------------------------------------
+        // NOTE: activities.user_id is a FK to auth.users, not profiles, so a
+        // PostgREST embed (profiles!activities_user_id_fkey) does not exist and
+        // would fail the whole query. Names are mapped in memory instead. This
+        // is the one read that must follow the batch — it needs the ids above.
+        const actorIds = Array.from(
+          new Set((actRows ?? []).map((a) => a.user_id).filter(Boolean))
+        ) as string[];
+        const actorNames = new Map<string, string>();
+        if (actorIds.length > 0) {
+          const { data: actorRows } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', actorIds);
+          (actorRows ?? []).forEach((p) => actorNames.set(p.id, p.full_name));
+        }
+
+        const activityItems: ActivityItem[] = (actRows ?? []).map((a) => ({
+          id: a.id,
+          action: a.action,
+          description: a.description,
+          created_at: a.created_at,
+          userName: a.user_id
+            ? actorNames.get(a.user_id) ?? 'Unknown user'
+            : 'System',
+        }));
+
+        setFinance({
+          invoicedByCurrency,
+          outstandingByCurrency,
+          collectedByCurrency: collected,
+          expensesByCurrency,
+          primaryCurrency: pickPrimaryCurrency(invoicedByCurrency),
+          outstandingCount,
+          overdueCount,
+        });
+        setPlanning(planningData);
+        setTodaySchedule(schedule);
+        setRecentActivity(activityItems);
 
         setStats({
           totalCustomers: (custRows ?? []).length,
@@ -445,6 +704,10 @@ export function useDashboardData(): DashboardData {
     recentDeliveries,
     topCustomersByVolume,
     branchStats,
+    finance,
+    planning,
+    todaySchedule,
+    recentActivity,
     isAdmin,
   };
 }
