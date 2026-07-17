@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerProfile, error: profileError } = await supabaseClient
       .from("profiles")
-      .select("role, is_active")
+      .select("role, is_active, organization_id")
       .eq("id", callerId)
       .maybeSingle();
 
@@ -58,7 +58,12 @@ Deno.serve(async (req: Request) => {
       return jsonError(403, "Profile not found");
     }
 
-    if (!callerProfile.is_active || callerProfile.role !== "admin") {
+    const callerIsPlatformAdmin = callerProfile.role === "platform_admin";
+
+    if (
+      !callerProfile.is_active ||
+      (callerProfile.role !== "admin" && !callerIsPlatformAdmin)
+    ) {
       return jsonError(403, "Only active admins can create users");
     }
 
@@ -105,6 +110,32 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    /*
+     * Tenancy check. The new user's organization is taken from the branch
+     * they are being placed in, and — for an org admin — that branch must
+     * live in the caller's own organization. Without this an admin could
+     * post any branch_id and plant a user inside another tenant. The
+     * lookup runs on the service-role client so the decision is made
+     * against the real row rather than an RLS-filtered view of it.
+     */
+    const { data: targetBranch } = await supabaseAdmin
+      .from("branches")
+      .select("id, organization_id")
+      .eq("id", body.branch_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (!targetBranch) {
+      return jsonError(400, "Invalid branch_id");
+    }
+
+    if (
+      !callerIsPlatformAdmin &&
+      targetBranch.organization_id !== callerProfile.organization_id
+    ) {
+      return jsonError(403, "That branch belongs to another organization");
+    }
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin
       .createUser({
         email: body.email,
@@ -126,6 +157,7 @@ Deno.serve(async (req: Request) => {
         email: body.email,
         full_name: body.full_name,
         role: body.role,
+        organization_id: targetBranch.organization_id,
         branch_id: body.branch_id,
         is_active: true,
         must_change_password: true,
