@@ -137,7 +137,7 @@ export default function PaymentsPage() {
     <div className="space-y-4 p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
             <Wallet className="h-6 w-6 text-blue-600" />
             Payments
           </h1>
@@ -327,7 +327,7 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
     <Card>
       <CardContent className="p-4">
         <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={`mt-1.5 font-serif text-xl font-medium tracking-tight ${tone ?? ''}`}>{value}</p>
+        <p className={`mt-1.5 font-serif text-xl font-normal tracking-tight ${tone ?? ''}`}>{value}</p>
       </CardContent>
     </Card>
   );

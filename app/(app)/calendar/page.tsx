@@ -198,7 +198,7 @@ export default function CalendarPage() {
     <div className="space-y-4 p-6 lg:p-8">
       {/* Header */}
       <div>
-        <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
+        <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
           <CalendarDays className="h-6 w-6 text-blue-600" />
           Calendar
         </h1>

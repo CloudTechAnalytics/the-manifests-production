@@ -107,7 +107,7 @@ function Logo() {
         <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
       </div>
       <div className="flex flex-col">
-        <span className="font-serif text-base font-semibold leading-none tracking-tight text-brand-dark-foreground">
+        <span className="font-serif text-base font-normal leading-none tracking-tight text-brand-dark-foreground">
           The Manifest
         </span>
         <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-brand-dark-muted">
@@ -296,7 +296,7 @@ export function MobileTopBar() {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold">
           <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
         </div>
-        <span className="font-serif text-sm font-semibold tracking-tight">The Manifest</span>
+        <span className="font-serif text-sm font-normal tracking-tight">The Manifest</span>
       </div>
       <Button
         variant="ghost"

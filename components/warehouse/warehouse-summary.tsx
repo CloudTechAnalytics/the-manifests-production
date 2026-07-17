@@ -74,7 +74,7 @@ export function WarehouseSummary({
                 </ResponsiveContainer>
               </div>
               <div className="min-w-0 flex-1 space-y-1.5">
-                <p className="font-serif text-2xl font-medium leading-none tracking-tight">{total}</p>
+                <p className="font-serif text-2xl font-normal leading-none tracking-tight">{total}</p>
                 <p className="text-xs text-muted-foreground">Total Items</p>
                 <div className="mt-2 space-y-1.5">
                   {data.map((d) => (

@@ -4,26 +4,29 @@
 
 @layer base {
   :root {
-    --background: 40 33% 97%;
+    /* Palette anchors (hex -> hsl):
+       background #F8F6F2 warm ivory · foreground #231F1B charcoal
+       primary    #C89B3C manifest gold · brand-dark #1A1714 charcoal */
+    --background: 40 30% 96%;
     --foreground: 30 15% 12%;
     --card: 0 0% 100%;
     --card-foreground: 30 15% 12%;
     --popover: 0 0% 100%;
     --popover-foreground: 30 15% 12%;
-    --primary: 38 55% 52%;
+    --primary: 41 56% 51%;
     --primary-foreground: 30 25% 12%;
     --secondary: 40 25% 94%;
     --secondary-foreground: 30 15% 12%;
     --muted: 40 20% 95%;
     --muted-foreground: 30 8% 42%;
     --accent: 38 45% 92%;
-    --accent-foreground: 38 60% 30%;
+    --accent-foreground: 41 60% 30%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 34 20% 88%;
     --input: 34 20% 88%;
-    --ring: 38 55% 52%;
-    --chart-1: 38 55% 52%;
+    --ring: 41 56% 51%;
+    --chart-1: 41 56% 51%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
@@ -37,13 +40,13 @@
     /* Brand tokens — constant regardless of light/dark mode. Used for the
        always-dark sidebar and the login page's brand panel so they read as
        one consistent identity, independent of the app theme toggle. */
-    --brand-dark: 30 10% 8%;
-    --brand-dark-elevated: 30 9% 14%;
-    --brand-dark-border: 30 10% 20%;
+    --brand-dark: 30 13% 9%;
+    --brand-dark-elevated: 30 12% 14%;
+    --brand-dark-border: 30 12% 20%;
     --brand-dark-foreground: 40 20% 96%;
     --brand-dark-muted: 30 8% 65%;
-    --brand-gold: 38 55% 52%;
-    --brand-gold-soft: 38 45% 70%;
+    --brand-gold: 41 56% 51%;
+    --brand-gold-soft: 41 45% 70%;
   }
   .dark {
     --background: 30 12% 7%;
@@ -52,20 +55,22 @@
     --card-foreground: 40 20% 96%;
     --popover: 30 10% 11%;
     --popover-foreground: 40 20% 96%;
-    --primary: 38 60% 58%;
+    /* Dark theme keeps the same gold hue (41) but lifts lightness so the
+       accent still clears contrast against near-black surfaces. */
+    --primary: 41 60% 58%;
     --primary-foreground: 30 25% 10%;
     --secondary: 30 9% 16%;
     --secondary-foreground: 40 20% 96%;
     --muted: 30 9% 16%;
     --muted-foreground: 30 8% 65%;
     --accent: 30 9% 18%;
-    --accent-foreground: 38 60% 70%;
+    --accent-foreground: 41 60% 70%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 40 20% 96%;
     --border: 30 9% 20%;
     --input: 30 9% 20%;
-    --ring: 38 60% 58%;
-    --chart-1: 38 60% 58%;
+    --ring: 41 60% 58%;
+    --chart-1: 41 60% 58%;
     --chart-2: 173 58% 45%;
     --chart-3: 197 37% 40%;
     --chart-4: 43 74% 66%;
@@ -75,13 +80,13 @@
     --warning: 38 92% 50%;
     --warning-foreground: 30 25% 10%;
 
-    --brand-dark: 30 10% 8%;
-    --brand-dark-elevated: 30 9% 14%;
-    --brand-dark-border: 30 10% 20%;
+    --brand-dark: 30 13% 9%;
+    --brand-dark-elevated: 30 12% 14%;
+    --brand-dark-border: 30 12% 20%;
     --brand-dark-foreground: 40 20% 96%;
     --brand-dark-muted: 30 8% 65%;
-    --brand-gold: 38 60% 58%;
-    --brand-gold-soft: 38 45% 70%;
+    --brand-gold: 41 60% 58%;
+    --brand-gold-soft: 41 45% 70%;
   }
 }
 

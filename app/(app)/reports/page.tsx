@@ -204,7 +204,7 @@ function SummaryCard({ label, value, icon: Icon, color }: SummaryCardProps) {
           <p className="truncate text-xs font-medium text-muted-foreground">
             {label}
           </p>
-          <p className="font-serif text-xl font-medium tracking-tight">{value}</p>
+          <p className="font-serif text-xl font-normal tracking-tight">{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -605,7 +605,7 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
             <BarChart3 className="h-6 w-6 text-blue-600" />
             Reports
           </h1>

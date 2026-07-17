@@ -217,7 +217,7 @@ export default function ExpenseDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-xl font-medium tracking-tight">
+              <h1 className="font-serif text-xl font-normal tracking-tight">
                 {expense.expense_number ?? 'Expense'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>

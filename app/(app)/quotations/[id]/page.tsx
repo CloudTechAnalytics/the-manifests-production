@@ -467,7 +467,7 @@ export default function QuotationDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-medium tracking-tight">
+              <h1 className="font-serif text-2xl font-normal tracking-tight">
                 {quotation.quotation_number ?? 'Draft Quotation'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>

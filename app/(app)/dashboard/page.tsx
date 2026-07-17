@@ -123,7 +123,7 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">
             {dateLabel}
           </p>
-          <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight">
+          <h1 className="mt-1 font-serif text-3xl font-normal tracking-tight">
             Good {timeOfDay}, {profile?.full_name?.split(' ')[0] ?? 'there'}.
           </h1>
         </div>

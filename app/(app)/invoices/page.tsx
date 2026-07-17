@@ -164,7 +164,7 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-medium tracking-tight">
+          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
             <Receipt className="h-6 w-6 text-blue-600" />
             Invoices
           </h1>
@@ -364,7 +364,7 @@ function StatTile({
     <Card>
       <CardContent className="p-4">
         <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={cn('mt-1.5 font-serif text-xl font-medium tracking-tight', tone)}>{value}</p>
+        <p className={cn('mt-1.5 font-serif text-xl font-normal tracking-tight', tone)}>{value}</p>
       </CardContent>
     </Card>
   );

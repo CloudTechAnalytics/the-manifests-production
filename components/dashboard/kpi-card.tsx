@@ -61,7 +61,7 @@ export function KpiCard({
               </span>
             )}
           </div>
-          <p className="mt-3.5 font-serif text-[28px] font-medium leading-none tracking-tight">
+          <p className="mt-3.5 font-serif text-[28px] font-normal leading-none tracking-tight">
             {value}
           </p>
           <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p>

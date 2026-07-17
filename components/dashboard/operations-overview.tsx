@@ -48,7 +48,7 @@ function RateCard({
               </div>
             </div>
             <div className="mt-3">
-              <p className="font-serif text-2xl font-medium tracking-tight">
+              <p className="font-serif text-2xl font-normal tracking-tight">
                 {value === null ? '—' : `${value.toFixed(0)}%`}
               </p>
               {value !== null && (
@@ -103,7 +103,7 @@ function StatCard({
               </div>
             </div>
             <div className="mt-3">
-              <p className="font-serif text-2xl font-medium tracking-tight">{value}</p>
+              <p className="font-serif text-2xl font-normal tracking-tight">{value}</p>
               {subValue && (
                 <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>
               )}

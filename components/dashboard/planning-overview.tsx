@@ -87,7 +87,7 @@ export function PlanningOverview({ planning, loading }: PlanningOverviewProps) {
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">
                     {s.label}
                   </span>
-                  <span className="shrink-0 font-serif text-sm font-medium">
+                  <span className="shrink-0 font-serif text-sm font-normal">
                     {s.count}
                   </span>
                 </div>

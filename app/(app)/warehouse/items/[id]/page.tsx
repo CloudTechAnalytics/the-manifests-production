@@ -217,7 +217,7 @@ export default function StockItemDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="font-serif text-2xl font-medium tracking-tight">{item.name}</h1>
+            <h1 className="font-serif text-2xl font-normal tracking-tight">{item.name}</h1>
             <p className="text-sm text-muted-foreground">
               {item.sku} {item.category && `• ${item.category}`}
             </p>

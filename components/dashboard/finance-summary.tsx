@@ -93,7 +93,7 @@ export function FinanceSummary({ finance, loading }: FinanceSummaryProps) {
                     {row.label}
                   </p>
                   <p
-                    className={`mt-1.5 truncate font-serif text-lg font-medium tracking-tight ${row.tone}`}
+                    className={`mt-1.5 truncate font-serif text-lg font-normal tracking-tight ${row.tone}`}
                   >
                     {formatCurrency(row.value, currency)}
                   </p>
