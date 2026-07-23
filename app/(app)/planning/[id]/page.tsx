@@ -300,7 +300,7 @@ export default function PlanDetailPage() {
           </Link>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">{plan.plan_number}</h1>
+              <h1 className="page-title">{plan.plan_number}</h1>
               <Badge variant="secondary" className={statusMeta.color}>
                 {statusMeta.label}
               </Badge>
@@ -379,7 +379,7 @@ export default function PlanDetailPage() {
             <div className="space-y-4">
               <Card>
                 <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                  <CardTitle className="text-base font-semibold">Plan Overview</CardTitle>
+                  <CardTitle className="text-lg font-semibold">Plan Overview</CardTitle>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOverviewEditOpen(true)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
@@ -500,7 +500,7 @@ export default function PlanDetailPage() {
           {activeTab === 'financials' && (
             <Card>
               <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                <CardTitle className="text-base font-semibold">Financials</CardTitle>
+                <CardTitle className="text-lg font-semibold">Financials</CardTitle>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFinancialsEditOpen(true)}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -561,7 +561,7 @@ export default function PlanDetailPage() {
           {activeTab === 'notes' && (
             <Card>
               <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                <CardTitle className="text-base font-semibold">Notes</CardTitle>
+                <CardTitle className="text-lg font-semibold">Notes</CardTitle>
                 {!editingNotes && (
                   <Button
                     variant="ghost"

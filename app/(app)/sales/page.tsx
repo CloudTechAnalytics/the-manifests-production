@@ -274,7 +274,7 @@ export default function SalesPage() {
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
       <div>
-        <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+        <h1 className="flex items-center gap-2 page-title">
           <TrendingUp className="h-6 w-6 text-blue-600" />
           Sales
         </h1>
@@ -358,9 +358,9 @@ export default function SalesPage() {
                     Approved Revenue
                   </p>
                   {Object.keys(revenueByCurrency).length === 0 ? (
-                    <p className="font-serif text-2xl font-normal tracking-tight">—</p>
+                    <p className="text-2xl font-bold tracking-tight">—</p>
                   ) : (
-                    <p className="font-serif text-xl font-normal tracking-tight">
+                    <p className="text-xl font-bold tracking-tight">
                       {formatCurrency(
                         revenueByCurrency[primaryCurrency!],
                         primaryCurrency!
@@ -377,7 +377,7 @@ export default function SalesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Win Rate</p>
-                  <p className="font-serif text-2xl font-normal tracking-tight">
+                  <p className="text-2xl font-bold tracking-tight">
                     {winRate === null ? '—' : `${winRate.toFixed(0)}%`}
                   </p>
                 </div>
@@ -392,7 +392,7 @@ export default function SalesPage() {
                   <p className="text-sm text-muted-foreground">
                     Avg. Deal Size
                   </p>
-                  <p className="font-serif text-2xl font-normal tracking-tight">
+                  <p className="text-2xl font-bold tracking-tight">
                     {avgDealSize === null
                       ? '—'
                       : formatCurrency(avgDealSize, primaryCurrency!)}
@@ -409,7 +409,7 @@ export default function SalesPage() {
                   <p className="text-sm text-muted-foreground">
                     Approved Deals
                   </p>
-                  <p className="font-serif text-2xl font-normal tracking-tight">
+                  <p className="text-2xl font-bold tracking-tight">
                     {approved.length}
                   </p>
                 </div>
@@ -432,7 +432,7 @@ export default function SalesPage() {
         {/* Monthly trend chart */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="text-lg font-semibold">
               Monthly Revenue Trend
             </CardTitle>
             <CardDescription>
@@ -489,7 +489,7 @@ export default function SalesPage() {
         {/* Quotation funnel */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="text-lg font-semibold">
               Quotation Funnel
             </CardTitle>
             <CardDescription>All quotations in the selected range.</CardDescription>
@@ -530,7 +530,7 @@ export default function SalesPage() {
       >
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="text-lg font-semibold">
               Top Customers
             </CardTitle>
             <CardDescription>
@@ -581,7 +581,7 @@ export default function SalesPage() {
         {isAdmin && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Sales by Branch
               </CardTitle>
               <CardDescription>

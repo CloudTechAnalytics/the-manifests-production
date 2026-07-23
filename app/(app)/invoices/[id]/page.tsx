@@ -236,7 +236,7 @@ export default function InvoiceDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">
+              <h1 className="page-title">
                 {invoice.invoice_number ?? 'Invoice'}
               </h1>
               <Badge variant="secondary" className={overdue ? 'bg-red-100 text-red-700' : statusMeta.color}>
@@ -307,7 +307,7 @@ export default function InvoiceDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <User className="h-4 w-4 text-blue-600" />
                 Customer
               </CardTitle>
@@ -321,7 +321,7 @@ export default function InvoiceDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Calendar className="h-4 w-4 text-blue-600" />
                 Dates
               </CardTitle>
@@ -348,7 +348,7 @@ export default function InvoiceDetailPage() {
           {(invoice.shipment || invoice.quotation) && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                   <Package className="h-4 w-4 text-blue-600" />
                   References
                 </CardTitle>
@@ -383,7 +383,7 @@ export default function InvoiceDetailPage() {
           {invoice.notes && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Notes</CardTitle>
+                <CardTitle className="text-lg font-semibold">Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -398,7 +398,7 @@ export default function InvoiceDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card className="border-primary/20 bg-primary/[0.03]">
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Amount Summary</CardTitle>
+              <CardTitle className="text-lg font-semibold">Amount Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -432,7 +432,7 @@ export default function InvoiceDetailPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">Payment History</CardTitle>
+                <CardTitle className="text-lg font-semibold">Payment History</CardTitle>
                 <CardDescription>Payments applied to this invoice.</CardDescription>
               </div>
               {canRecordPayment && (

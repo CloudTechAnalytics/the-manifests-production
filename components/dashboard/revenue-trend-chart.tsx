@@ -30,7 +30,7 @@ export function RevenueTrendChart({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Pipeline Value Won
         </CardTitle>
         <span className="text-xs text-muted-foreground">This Month</span>

@@ -200,7 +200,7 @@ export default function EditStockItemPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Boxes className="h-6 w-6 text-primary" />
             Edit Item
           </h1>
@@ -211,7 +211,7 @@ export default function EditStockItemPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Item Details</CardTitle>
+            <CardTitle className="text-lg font-semibold">Item Details</CardTitle>
             <CardDescription>
               Stock quantity isn&apos;t edited here — use Receive, Issue, Adjust, or Transfer on
               the item&apos;s page to change quantities.

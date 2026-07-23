@@ -129,7 +129,7 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
     <>
       <Card>
         <CardHeader className="px-4 py-3">
-          <CardTitle className="text-base font-semibold">Planning Summary</CardTitle>
+          <CardTitle className="text-lg font-semibold">Planning Summary</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 px-4 pb-4 pt-0">
           {!hasFinancials ? (
@@ -181,7 +181,7 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
 
       <Card>
         <CardHeader className="px-4 py-3">
-          <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
+          <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 px-4 pb-4 pt-0">
           <Button

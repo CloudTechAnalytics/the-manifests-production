@@ -61,10 +61,10 @@ export function KpiCard({
               </span>
             )}
           </div>
-          <p className="mt-3.5 font-serif text-[28px] font-normal leading-none tracking-tight">
+          <p className="mt-3.5 text-[32px] font-bold leading-none tracking-tight">
             {value}
           </p>
-          <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p>
+          <p className="mt-1.5 truncate text-sm font-medium text-muted-foreground">{label}</p>
         </CardContent>
       </Card>
     </Link>

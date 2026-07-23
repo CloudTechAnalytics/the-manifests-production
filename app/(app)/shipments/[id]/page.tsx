@@ -456,7 +456,7 @@ export default function ShipmentDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">
+              <h1 className="page-title">
                 {shipment.reference_number ?? 'Shipment'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>
@@ -577,7 +577,7 @@ export default function ShipmentDetailPage() {
       {/* Status Workflow Visualizer */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <Package className="h-4 w-4 text-blue-600" />
             Shipment Progress
           </CardTitle>
@@ -679,7 +679,7 @@ export default function ShipmentDetailPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                     <Package className="h-4 w-4 text-blue-600" />
                     Shipment Information
                   </CardTitle>
@@ -744,7 +744,7 @@ export default function ShipmentDetailPage() {
               {/* Assigned Staff */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                     <User className="h-4 w-4 text-blue-600" />
                     Assigned Staff
                   </CardTitle>
@@ -777,7 +777,7 @@ export default function ShipmentDetailPage() {
             <div className="space-y-6 lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold">
+                  <CardTitle className="text-lg font-semibold">
                     Shipment Details
                   </CardTitle>
                   <CardDescription>
@@ -836,7 +836,7 @@ export default function ShipmentDetailPage() {
               {/* Notes */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold">
+                  <CardTitle className="text-lg font-semibold">
                     Notes
                   </CardTitle>
                 </CardHeader>
@@ -861,7 +861,7 @@ export default function ShipmentDetailPage() {
           {/* Add Timeline Entry Form */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Plus className="h-4 w-4 text-blue-600" />
                 Add Timeline Entry
               </CardTitle>
@@ -921,7 +921,7 @@ export default function ShipmentDetailPage() {
           {/* Timeline List */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Clock className="h-4 w-4 text-blue-600" />
                 Status History
               </CardTitle>
@@ -979,7 +979,7 @@ export default function ShipmentDetailPage() {
         <TabsContent value="documents">
           <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Shipment Documents
               </CardTitle>
             </CardHeader>

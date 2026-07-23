@@ -14,7 +14,7 @@ export function InventoryByWarehouse({ rows, loading }: InventoryByWarehouseProp
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">Inventory by Warehouse</CardTitle>
+        <CardTitle className="text-lg font-semibold">Inventory by Warehouse</CardTitle>
         <Link href="/warehouse/locations" className="text-xs font-medium text-primary hover:underline">
           View all warehouses
         </Link>

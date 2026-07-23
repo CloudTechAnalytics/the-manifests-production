@@ -54,7 +54,7 @@ export function FinanceSummary({ finance, loading }: FinanceSummaryProps) {
     <Card className="flex h-full flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0 px-4 pb-3 pt-4">
         <div className="space-y-0.5">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             Finance Summary
           </CardTitle>
           {hasData && (
@@ -93,7 +93,7 @@ export function FinanceSummary({ finance, loading }: FinanceSummaryProps) {
                     {row.label}
                   </p>
                   <p
-                    className={`mt-1.5 truncate font-serif text-lg font-normal tracking-tight ${row.tone}`}
+                    className={`mt-1.5 truncate text-lg font-bold tracking-tight ${row.tone}`}
                   >
                     {formatCurrency(row.value, currency)}
                   </p>

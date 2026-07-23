@@ -144,7 +144,7 @@ export function PlanTasksPanel({ planId, branchId, staff }: PlanTasksPanelProps)
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">Tasks & Next Steps</CardTitle>
+        <CardTitle className="text-lg font-semibold">Tasks & Next Steps</CardTitle>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline">

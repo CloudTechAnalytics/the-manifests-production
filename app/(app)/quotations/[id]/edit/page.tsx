@@ -456,7 +456,7 @@ export default function EditQuotationPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <FileText className="h-6 w-6 text-blue-600" />
             Edit Quotation
           </h1>
@@ -472,7 +472,7 @@ export default function EditQuotationPage() {
         {/* Quotation Details */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <FileText className="h-4 w-4 text-blue-600" />
               Quotation Details
             </CardTitle>
@@ -681,7 +681,7 @@ export default function EditQuotationPage() {
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Line Items
               </CardTitle>
               <CardDescription>
@@ -832,7 +832,7 @@ export default function EditQuotationPage() {
         {/* Summary */}
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="text-lg font-semibold">
               Summary
             </CardTitle>
           </CardHeader>

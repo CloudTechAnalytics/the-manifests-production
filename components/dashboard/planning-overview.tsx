@@ -34,7 +34,7 @@ export function PlanningOverview({ planning, loading }: PlanningOverviewProps) {
     <Card className="flex h-full flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0 px-4 pb-3 pt-4">
         <div className="space-y-0.5">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             Planning Overview
           </CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -87,7 +87,7 @@ export function PlanningOverview({ planning, loading }: PlanningOverviewProps) {
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">
                     {s.label}
                   </span>
-                  <span className="shrink-0 font-serif text-sm font-normal">
+                  <span className="shrink-0 text-sm font-semibold">
                     {s.count}
                   </span>
                 </div>

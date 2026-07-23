@@ -80,7 +80,7 @@ export default function ChangePasswordPage() {
             <Ship className="h-7 w-7 text-primary-foreground" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Change Password</h1>
+            <h1 className="page-title">Change Password</h1>
             <p className="text-sm text-muted-foreground">
               You must change your password before continuing
             </p>

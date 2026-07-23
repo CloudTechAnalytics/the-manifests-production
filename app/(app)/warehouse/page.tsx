@@ -65,49 +65,49 @@ export default function WarehousePage() {
       value: data.stats.totalItems,
       icon: Boxes,
       href: '/warehouse?tab=items',
-      color: 'bg-primary/10 text-primary ring-primary/20',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Total Value',
       value: formatCurrency(data.stats.totalValue),
       icon: DollarSign,
       href: '/warehouse?tab=items',
-      color: 'bg-blue-50 text-blue-600 ring-blue-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Available Stock',
       value: data.stats.availableCount,
       icon: PackageCheck,
       href: '/warehouse?tab=items&status=available',
-      color: 'bg-green-50 text-green-600 ring-green-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Low Stock Items',
       value: data.stats.lowStockCount,
       icon: AlertTriangle,
       href: '/warehouse?tab=items&status=low_stock',
-      color: 'bg-amber-50 text-amber-600 ring-amber-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Out of Stock',
       value: data.stats.outOfStockCount,
       icon: PackageX,
       href: '/warehouse?tab=items&status=out_of_stock',
-      color: 'bg-red-50 text-red-600 ring-red-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Inbound Today',
       value: data.stats.inboundTodayQty,
       icon: ArrowDownToLine,
       href: '/warehouse?tab=inbound',
-      color: 'bg-cyan-50 text-cyan-600 ring-cyan-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Outbound Today',
       value: data.stats.outboundTodayQty,
       icon: ArrowUpFromLine,
       href: '/warehouse?tab=outbound',
-      color: 'bg-purple-50 text-purple-600 ring-purple-100',
+      color: 'bg-primary/10 text-primary',
     },
   ];
 
@@ -115,7 +115,7 @@ export default function WarehousePage() {
     <div className="space-y-4 p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Boxes className="h-6 w-6 text-primary" />
             Warehouse
           </h1>

@@ -48,7 +48,7 @@ function RateCard({
               </div>
             </div>
             <div className="mt-3">
-              <p className="font-serif text-2xl font-normal tracking-tight">
+              <p className="text-2xl font-bold tracking-tight">
                 {value === null ? '—' : `${value.toFixed(0)}%`}
               </p>
               {value !== null && (
@@ -103,7 +103,7 @@ function StatCard({
               </div>
             </div>
             <div className="mt-3">
-              <p className="font-serif text-2xl font-normal tracking-tight">{value}</p>
+              <p className="text-2xl font-bold tracking-tight">{value}</p>
               {subValue && (
                 <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>
               )}
@@ -206,7 +206,7 @@ export function OperationsOverview({
         {/* Top Customers by shipment volume */}
         <Card>
           <CardHeader className="px-4 py-3">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Users className="h-4 w-4 text-primary" />
               Top Customers
             </CardTitle>
@@ -249,7 +249,7 @@ export function OperationsOverview({
         {/* Recent Deliveries */}
         <Card>
           <CardHeader className="px-4 py-3">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <PackageCheck className="h-4 w-4 text-green-600" />
               Recent Deliveries
             </CardTitle>
@@ -299,7 +299,7 @@ export function OperationsOverview({
       {isAdmin && (
         <Card>
           <CardHeader className="px-4 py-3">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Building2 className="h-4 w-4 text-primary" />
               Branch Performance
             </CardTitle>

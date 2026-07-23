@@ -401,7 +401,7 @@ export default function EditShipmentPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Package className="h-6 w-6 text-blue-600" />
             Edit Shipment
           </h1>
@@ -417,7 +417,7 @@ export default function EditShipmentPage() {
         {/* Shipment Details */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Package className="h-4 w-4 text-blue-600" />
               Shipment Details
             </CardTitle>
@@ -630,7 +630,7 @@ export default function EditShipmentPage() {
         {/* Dates */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <CalendarClock className="h-4 w-4 text-blue-600" />
               Schedule
             </CardTitle>
@@ -675,7 +675,7 @@ export default function EditShipmentPage() {
         {/* Carrier & Cargo */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Boxes className="h-4 w-4 text-blue-600" />
               Carrier &amp; Cargo
             </CardTitle>

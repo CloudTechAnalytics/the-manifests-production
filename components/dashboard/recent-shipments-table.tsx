@@ -28,7 +28,7 @@ export function RecentShipmentsTable({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Recent Shipments
         </CardTitle>
         <Link href="/shipments">

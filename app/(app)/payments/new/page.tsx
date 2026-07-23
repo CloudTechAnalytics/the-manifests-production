@@ -271,7 +271,7 @@ export default function NewPaymentPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Wallet className="h-6 w-6 text-blue-600" />
             Record Payment
           </h1>
@@ -284,7 +284,7 @@ export default function NewPaymentPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Wallet className="h-4 w-4 text-blue-600" />
               Payment Details
             </CardTitle>
@@ -378,7 +378,7 @@ export default function NewPaymentPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Apply to Invoices</CardTitle>
+            <CardTitle className="text-lg font-semibold">Apply to Invoices</CardTitle>
             <CardDescription>
               {selectedCustomerId
                 ? 'Choose which outstanding invoices this payment covers. Any leftover is kept as unallocated credit.'

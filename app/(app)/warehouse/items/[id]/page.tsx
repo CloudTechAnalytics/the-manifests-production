@@ -217,7 +217,7 @@ export default function StockItemDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="font-serif text-2xl font-normal tracking-tight">{item.name}</h1>
+            <h1 className="page-title">{item.name}</h1>
             <p className="text-sm text-muted-foreground">
               {item.sku} {item.category && `• ${item.category}`}
             </p>
@@ -283,7 +283,7 @@ export default function StockItemDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Item Details</CardTitle>
+              <CardTitle className="text-lg font-semibold">Item Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
@@ -313,7 +313,7 @@ export default function StockItemDetailPage() {
           {item.notes && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Notes</CardTitle>
+                <CardTitle className="text-lg font-semibold">Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">{item.notes}</p>
@@ -325,7 +325,7 @@ export default function StockItemDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Stock by Warehouse</CardTitle>
+              <CardTitle className="text-lg font-semibold">Stock by Warehouse</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {stockRows.length === 0 ? (
@@ -365,7 +365,7 @@ export default function StockItemDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Movement History</CardTitle>
+              <CardTitle className="text-lg font-semibold">Movement History</CardTitle>
               <CardDescription>Most recent 100 movements for this item.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">

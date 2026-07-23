@@ -137,7 +137,7 @@ export default function ExpensesPage() {
     <div className="space-y-4 p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <CreditCard className="h-6 w-6 text-blue-600" />
             Expenses
           </h1>
@@ -236,7 +236,7 @@ export default function ExpensesPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between px-4 py-3">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             All Expenses
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -328,7 +328,7 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
     <Card>
       <CardContent className="p-4">
         <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={`mt-1.5 font-serif text-xl font-normal tracking-tight ${tone ?? ''}`}>{value}</p>
+        <p className={`mt-1.5 text-xl font-bold tracking-tight ${tone ?? ''}`}>{value}</p>
       </CardContent>
     </Card>
   );

@@ -28,7 +28,7 @@ export function RecentQuotationsTable({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Recent Quotations
         </CardTitle>
         <Link href="/quotations">

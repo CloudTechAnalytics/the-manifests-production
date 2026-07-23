@@ -35,7 +35,7 @@ export function OperationsPipeline({ pipeline, loading }: OperationsPipelineProp
   return (
     <Card>
       <CardHeader className="px-4 pt-4 pb-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Operations Pipeline
         </CardTitle>
         <CardDescription>

@@ -241,7 +241,7 @@ export default function EditExpensePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <CreditCard className="h-6 w-6 text-blue-600" />
             Edit Expense
           </h1>
@@ -252,7 +252,7 @@ export default function EditExpensePage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <CreditCard className="h-4 w-4 text-blue-600" />
               Expense Details
             </CardTitle>

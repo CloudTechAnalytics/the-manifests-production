@@ -59,7 +59,7 @@ export function TodaySchedule({ events, loading }: TodayScheduleProps) {
     <Card className="flex h-full flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0 px-4 pb-3 pt-4">
         <div className="space-y-0.5">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             Today&apos;s Schedule
           </CardTitle>
           <p className="text-xs text-muted-foreground">

@@ -32,7 +32,7 @@ export function PlanMilestones({ plan, quotation, onEdit }: PlanMilestonesProps)
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">Timeline & Milestones</CardTitle>
+        <CardTitle className="text-lg font-semibold">Timeline & Milestones</CardTitle>
         {onEdit && (
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" />

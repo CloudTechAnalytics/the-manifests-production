@@ -324,7 +324,7 @@ export default function EditPlanPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <ClipboardList className="h-6 w-6 text-blue-600" />
             Edit Plan
           </h1>
@@ -335,7 +335,7 @@ export default function EditPlanPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Overview</CardTitle>
+            <CardTitle className="text-lg font-semibold">Overview</CardTitle>
             <CardDescription>Customer and linked quotation can&apos;t be changed after creation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -488,7 +488,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Container Plan</CardTitle>
+            <CardTitle className="text-lg font-semibold">Container Plan</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -521,7 +521,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Vessel & Routing</CardTitle>
+            <CardTitle className="text-lg font-semibold">Vessel & Routing</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -553,7 +553,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Transport Plan</CardTitle>
+            <CardTitle className="text-lg font-semibold">Transport Plan</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -577,7 +577,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Milestones</CardTitle>
+            <CardTitle className="text-lg font-semibold">Milestones</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
@@ -609,7 +609,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Financials & Assignment</CardTitle>
+            <CardTitle className="text-lg font-semibold">Financials & Assignment</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -677,7 +677,7 @@ export default function EditPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Notes</CardTitle>
+            <CardTitle className="text-lg font-semibold">Notes</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea rows={3} {...control.register('notes')} />

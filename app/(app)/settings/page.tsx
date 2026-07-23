@@ -519,7 +519,7 @@ export default function SettingsPage() {
     <div className="space-y-6 p-6 lg:p-8">
       {/* Header */}
       <div>
-        <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+        <h1 className="flex items-center gap-2 page-title">
           <SettingsIcon className="h-6 w-6 text-blue-600" />
           Settings
         </h1>
@@ -757,7 +757,7 @@ export default function SettingsPage() {
               {/* Table */}
               <Card>
                 <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle className="text-base font-semibold">
+                  <CardTitle className="text-lg font-semibold">
                     All Branches
                     {!branchesLoading && (
                       <span className="ml-2 text-sm font-normal text-muted-foreground">

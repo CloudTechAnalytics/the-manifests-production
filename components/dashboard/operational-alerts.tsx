@@ -66,7 +66,7 @@ export function OperationalAlerts({ alerts, loading }: OperationalAlertsProps) {
   return (
     <Card>
       <CardHeader className="px-4 pt-4 pb-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Operational Alerts
         </CardTitle>
       </CardHeader>

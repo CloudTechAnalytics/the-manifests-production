@@ -113,7 +113,7 @@ export default function CustomersPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Users className="h-6 w-6 text-blue-600" />
             Customers
           </h1>
@@ -165,7 +165,7 @@ export default function CustomersPage() {
       {/* Table */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             All Customers
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">

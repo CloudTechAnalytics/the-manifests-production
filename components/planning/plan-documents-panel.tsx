@@ -124,7 +124,7 @@ export function PlanDocumentsPanel({ planId, branchId }: PlanDocumentsPanelProps
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">Documents</CardTitle>
+        <CardTitle className="text-lg font-semibold">Documents</CardTitle>
         <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
           {uploading ? (
             <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />

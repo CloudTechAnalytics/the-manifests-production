@@ -308,7 +308,7 @@ export default function PaymentDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="font-serif text-2xl font-normal tracking-tight">
+            <h1 className="page-title">
               {payment.payment_number ?? 'Payment'}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -462,7 +462,7 @@ export default function PaymentDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <User className="h-4 w-4 text-blue-600" />
                 Customer
               </CardTitle>
@@ -475,7 +475,7 @@ export default function PaymentDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Payment Info</CardTitle>
+              <CardTitle className="text-lg font-semibold">Payment Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
@@ -513,7 +513,7 @@ export default function PaymentDetailPage() {
           {payment.notes && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Notes</CardTitle>
+                <CardTitle className="text-lg font-semibold">Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -527,7 +527,7 @@ export default function PaymentDetailPage() {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">Applied To</CardTitle>
+              <CardTitle className="text-lg font-semibold">Applied To</CardTitle>
               <CardDescription>Invoices this payment was allocated against.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">

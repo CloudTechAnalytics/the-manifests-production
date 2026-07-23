@@ -38,7 +38,7 @@ export function ShipmentStatusDonut({
   return (
     <Card>
       <CardHeader className="px-4 py-3">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Shipment Status Distribution
         </CardTitle>
       </CardHeader>

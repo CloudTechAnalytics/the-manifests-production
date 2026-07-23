@@ -239,7 +239,7 @@ export default function NewPlanPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <ClipboardList className="h-6 w-6 text-blue-600" />
             New Plan
           </h1>
@@ -253,7 +253,7 @@ export default function NewPlanPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Overview</CardTitle>
+            <CardTitle className="text-lg font-semibold">Overview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -476,7 +476,7 @@ export default function NewPlanPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Notes</CardTitle>
+            <CardTitle className="text-lg font-semibold">Notes</CardTitle>
             <CardDescription>
               Container, vessel/routing, transport, milestones, and cost estimate can all be
               filled in from the plan&apos;s page once you have them.

@@ -251,7 +251,7 @@ export default function NewCustomerPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Building2 className="h-6 w-6 text-blue-600" />
             New Customer
           </h1>
@@ -265,7 +265,7 @@ export default function NewCustomerPage() {
         {/* Customer Details */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Building2 className="h-4 w-4 text-blue-600" />
               Customer Details
             </CardTitle>
@@ -419,7 +419,7 @@ export default function NewCustomerPage() {
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <UserPlus className="h-4 w-4 text-blue-600" />
                 Contacts
               </CardTitle>

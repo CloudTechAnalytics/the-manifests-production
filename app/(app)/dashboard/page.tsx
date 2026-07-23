@@ -49,56 +49,56 @@ export default function DashboardPage() {
       value: data.stats.activeShipments,
       icon: Package,
       href: '/shipments',
-      color: 'bg-cyan-50 text-cyan-600 ring-cyan-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Awaiting Documentation',
       value: stageCount('documentation'),
       icon: FileClock,
       href: '/shipments?status=documentation',
-      color: 'bg-amber-50 text-amber-600 ring-amber-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Awaiting Customs',
       value: stageCount('customs'),
       icon: Landmark,
       href: '/shipments?status=processing',
-      color: 'bg-purple-50 text-purple-600 ring-purple-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'In Transit',
       value: stageCount('in_transit'),
       icon: Truck,
       href: '/shipments?status=in_transit',
-      color: 'bg-blue-50 text-blue-600 ring-blue-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Pending Quotations',
       value: data.stats.pendingQuotations,
       icon: FileText,
       href: '/quotations',
-      color: 'bg-indigo-50 text-indigo-600 ring-indigo-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Outstanding Invoices',
       value: data.finance.outstandingCount,
       icon: Receipt,
       href: '/invoices',
-      color: 'bg-primary/10 text-primary ring-primary/20',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Warehouse Inventory',
       value: warehouse.stats.totalItems,
       icon: Boxes,
       href: '/warehouse',
-      color: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
+      color: 'bg-primary/10 text-primary',
     },
     {
       label: 'Delayed Shipments',
       value: data.stats.delayedShipments,
       icon: Clock,
       href: '/shipments',
-      color: 'bg-red-50 text-red-600 ring-red-100',
+      color: 'bg-primary/10 text-primary',
     },
   ];
 
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">
             {dateLabel}
           </p>
-          <h1 className="mt-1 font-serif text-3xl font-normal tracking-tight">
+          <h1 className="mt-1 welcome-heading">
             Good {timeOfDay}, {profile?.full_name?.split(' ')[0] ?? 'there'}.
           </h1>
         </div>

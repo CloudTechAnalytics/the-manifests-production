@@ -467,7 +467,7 @@ export default function QuotationDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">
+              <h1 className="page-title">
                 {quotation.quotation_number ?? 'Draft Quotation'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>
@@ -593,7 +593,7 @@ export default function QuotationDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <FileText className="h-4 w-4 text-blue-600" />
                 Quotation Information
               </CardTitle>
@@ -650,7 +650,7 @@ export default function QuotationDetailPage() {
           {/* Notes */}
           <Card className="no-print">
             <CardHeader>
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Notes
               </CardTitle>
             </CardHeader>
@@ -670,7 +670,7 @@ export default function QuotationDetailPage() {
           {/* Terms */}
           <Card className="no-print">
             <CardHeader>
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Terms &amp; Conditions
               </CardTitle>
             </CardHeader>
@@ -692,7 +692,7 @@ export default function QuotationDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Package className="h-4 w-4 text-blue-600" />
                 Line Items
               </CardTitle>
@@ -750,7 +750,7 @@ export default function QuotationDetailPage() {
           {/* Summary */}
           <Card className="border-primary/20 bg-primary/[0.03]">
             <CardHeader className="no-print">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Summary
               </CardTitle>
             </CardHeader>

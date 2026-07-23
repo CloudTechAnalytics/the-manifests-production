@@ -237,7 +237,7 @@ export default function NewInvoicePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Receipt className="h-6 w-6 text-blue-600" />
             New Invoice
           </h1>
@@ -250,7 +250,7 @@ export default function NewInvoicePage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <Receipt className="h-4 w-4 text-blue-600" />
               Invoice Details
             </CardTitle>
@@ -371,7 +371,7 @@ export default function NewInvoicePage() {
 
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Amount</CardTitle>
+            <CardTitle className="text-lg font-semibold">Amount</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

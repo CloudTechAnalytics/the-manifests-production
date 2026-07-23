@@ -217,7 +217,7 @@ export default function ExpenseDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-xl font-normal tracking-tight">
+              <h1 className="page-title">
                 {expense.expense_number ?? 'Expense'}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>
@@ -287,7 +287,7 @@ export default function ExpenseDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-semibold">Expense Details</CardTitle>
+          <CardTitle className="text-lg font-semibold">Expense Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between">
@@ -330,7 +330,7 @@ export default function ExpenseDetailPage() {
       {expense.notes && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Notes</CardTitle>
+            <CardTitle className="text-lg font-semibold">Notes</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">{expense.notes}</p>

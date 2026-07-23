@@ -44,7 +44,7 @@ export function RecentWarehouseActivities({
   return (
     <Card className="h-full">
       <CardHeader className="px-4 py-3">
-        <CardTitle className="text-base font-semibold">Recent Warehouse Activities</CardTitle>
+        <CardTitle className="text-lg font-semibold">Recent Warehouse Activities</CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
         {loading ? (

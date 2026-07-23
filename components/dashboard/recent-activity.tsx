@@ -25,7 +25,7 @@ export function RecentActivity({ activity, loading }: RecentActivityProps) {
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="px-4 pb-3 pt-4">
-        <CardTitle className="text-base font-semibold">
+        <CardTitle className="text-lg font-semibold">
           Recent Activity
         </CardTitle>
         <p className="text-xs text-muted-foreground">

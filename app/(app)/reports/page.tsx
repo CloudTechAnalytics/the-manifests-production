@@ -204,7 +204,7 @@ function SummaryCard({ label, value, icon: Icon, color }: SummaryCardProps) {
           <p className="truncate text-xs font-medium text-muted-foreground">
             {label}
           </p>
-          <p className="font-serif text-xl font-normal tracking-tight">{value}</p>
+          <p className="text-xl font-bold tracking-tight">{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -605,7 +605,7 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between no-print">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <BarChart3 className="h-6 w-6 text-blue-600" />
             Reports
           </h1>
@@ -642,7 +642,7 @@ export default function ReportsPage() {
       {/* Filters */}
       <Card className="no-print">
         <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <Filter className="h-4 w-4 text-blue-600" />
             Filters
           </CardTitle>
@@ -790,7 +790,7 @@ export default function ReportsPage() {
           {/* Table */}
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Customer Report
                 {!loading && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -954,7 +954,7 @@ export default function ReportsPage() {
           {/* Table */}
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Shipment Report
                 {!loading && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -1135,7 +1135,7 @@ export default function ReportsPage() {
           {/* Table */}
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Quotation Report
                 {!loading && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -1278,7 +1278,7 @@ export default function ReportsPage() {
           {/* Table */}
           <Card>
             <CardHeader className="no-print">
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Operations Report
                 {!loading && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">

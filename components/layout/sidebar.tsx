@@ -107,10 +107,10 @@ function Logo() {
         <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
       </div>
       <div className="flex flex-col">
-        <span className="font-serif text-base font-normal leading-none tracking-tight text-brand-dark-foreground">
+        <span className="text-xl font-bold leading-none tracking-tight text-brand-dark-foreground">
           The Manifest
         </span>
-        <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-brand-dark-muted">
+        <span className="mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
           Freight Management
         </span>
       </div>
@@ -133,7 +133,7 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-widest text-brand-dark-muted/80">
+      <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
         {label}
       </p>
       <div className="space-y-0.5">
@@ -296,7 +296,7 @@ export function MobileTopBar() {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold">
           <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
         </div>
-        <span className="font-serif text-sm font-normal tracking-tight">The Manifest</span>
+        <span className="text-base font-bold tracking-tight">The Manifest</span>
       </div>
       <Button
         variant="ghost"

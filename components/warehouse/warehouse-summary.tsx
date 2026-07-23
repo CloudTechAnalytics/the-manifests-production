@@ -31,7 +31,7 @@ export function WarehouseSummary({
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
-        <CardTitle className="text-base font-semibold">Warehouse Summary</CardTitle>
+        <CardTitle className="text-lg font-semibold">Warehouse Summary</CardTitle>
         <span className="text-xs text-muted-foreground">This Month</span>
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
@@ -74,7 +74,7 @@ export function WarehouseSummary({
                 </ResponsiveContainer>
               </div>
               <div className="min-w-0 flex-1 space-y-1.5">
-                <p className="font-serif text-2xl font-normal leading-none tracking-tight">{total}</p>
+                <p className="text-2xl font-bold leading-none tracking-tight">{total}</p>
                 <p className="text-xs text-muted-foreground">Total Items</p>
                 <div className="mt-2 space-y-1.5">
                   {data.map((d) => (

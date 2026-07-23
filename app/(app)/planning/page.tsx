@@ -129,7 +129,7 @@ export default function PlanningPage() {
     <div className="space-y-6 p-6 lg:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <ClipboardList className="h-6 w-6 text-blue-600" />
             Planning
           </h1>
@@ -204,7 +204,7 @@ export default function PlanningPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">
+          <CardTitle className="text-lg font-semibold">
             All Plans
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">

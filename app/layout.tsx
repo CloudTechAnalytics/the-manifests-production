@@ -1,20 +1,13 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter, Instrument_Serif } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
 import { Toaster } from '@/components/ui/sonner';
 
+// One typeface, throughout — Inter. Titles and the dashboard greeting are
+// just bold Inter, not a separate display face.
 const inter = Inter({ subsets: ['latin'] });
-
-// Instrument Serif ships a single weight (400). Heading classes therefore
-// use font-normal — requesting 500/600 would only trigger the browser's
-// synthetic bolding, which smears this face badly at display sizes.
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  variable: '--font-serif',
-});
 
 export const metadata: Metadata = {
   title: 'The Manifest — Freight Operations Management',
@@ -29,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} ${instrumentSerif.variable}`}>
+      <body className={inter.className}>
         <AuthProvider><ThemeProvider>{children}</ThemeProvider></AuthProvider>
         <Toaster />
       </body>

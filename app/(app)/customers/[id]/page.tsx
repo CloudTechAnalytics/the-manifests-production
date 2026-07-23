@@ -267,7 +267,7 @@ export default function CustomerDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">
+              <h1 className="page-title">
                 {customer.company_name}
               </h1>
               <Badge variant="secondary" className={statusMeta.color}>
@@ -332,7 +332,7 @@ export default function CustomerDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Building2 className="h-4 w-4 text-blue-600" />
                 Customer Information
               </CardTitle>
@@ -382,7 +382,7 @@ export default function CustomerDetailPage() {
           {/* Notes */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <StickyNote className="h-4 w-4 text-amber-500" />
                 Notes
               </CardTitle>
@@ -406,7 +406,7 @@ export default function CustomerDetailPage() {
           {/* Contacts */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">
+              <CardTitle className="text-lg font-semibold">
                 Contacts
               </CardTitle>
               <CardDescription>

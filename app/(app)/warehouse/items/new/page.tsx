@@ -173,7 +173,7 @@ export default function NewStockItemPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="flex items-center gap-2 font-serif text-2xl font-normal tracking-tight">
+          <h1 className="flex items-center gap-2 page-title">
             <Boxes className="h-6 w-6 text-primary" />
             New Item
           </h1>
@@ -184,7 +184,7 @@ export default function NewStockItemPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Item Details</CardTitle>
+            <CardTitle className="text-lg font-semibold">Item Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -255,7 +255,7 @@ export default function NewStockItemPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Initial Stock (optional)</CardTitle>
+            <CardTitle className="text-lg font-semibold">Initial Stock (optional)</CardTitle>
             <CardDescription>
               Stock this item into a warehouse right away, or leave blank and receive stock later.
             </CardDescription>

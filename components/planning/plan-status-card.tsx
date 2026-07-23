@@ -62,7 +62,7 @@ export function PlanStatusCard({ plan, onUpdated }: PlanStatusCardProps) {
   return (
     <Card>
       <CardHeader className="px-4 py-3">
-        <CardTitle className="text-base font-semibold">Plan Status</CardTitle>
+        <CardTitle className="text-lg font-semibold">Plan Status</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 px-4 pb-4 pt-0">
         <div className="space-y-3">

@@ -139,7 +139,7 @@ export default function LoginPage() {
             <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
           </div>
           <div className="flex flex-col">
-            <span className="font-serif text-lg font-normal leading-none tracking-tight">
+            <span className="text-xl font-bold leading-none tracking-tight">
               The Manifest
             </span>
             <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
@@ -152,10 +152,10 @@ export default function LoginPage() {
           <RouteIllustration />
 
           <div className="space-y-3">
-            <h1 className="font-serif text-4xl font-normal leading-tight tracking-tight">
+            <h1 className="text-3xl font-bold leading-tight tracking-tight">
               Where every shipment
               <br />
-              becomes <em className="font-serif text-brand-gold-soft">manifest.</em>
+              becomes <span className="text-brand-gold-soft">manifest.</span>
             </h1>
             <p className="max-w-sm text-sm leading-relaxed text-brand-dark-muted">
               A single, refined workspace for the modern freight forwarder —
@@ -195,7 +195,7 @@ export default function LoginPage() {
               <Ship className="h-7 w-7 text-brand-dark" strokeWidth={2.25} />
             </div>
             <div className="text-center">
-              <h1 className="font-serif text-2xl font-normal tracking-tight">The Manifest</h1>
+              <h1 className="text-xl font-bold tracking-tight">The Manifest</h1>
               <p className="text-sm text-muted-foreground">
                 Freight Operations Management
               </p>
@@ -206,7 +206,7 @@ export default function LoginPage() {
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">
               Welcome back
             </p>
-            <h2 className="font-serif text-3xl font-normal tracking-tight">
+            <h2 className="text-2xl font-bold tracking-tight">
               Sign in to your operations
             </h2>
             <p className="text-sm text-muted-foreground">
