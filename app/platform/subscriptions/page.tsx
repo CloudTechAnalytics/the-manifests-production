@@ -81,12 +81,19 @@ export default function SubscriptionsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [orgsRes, plansRes] = await Promise.all([
+      // Load subscriptions with their own query keyed by organization_id
+      // rather than embedding them under the organizations query. The
+      // parent→child embed was returning empty for orgs that do have a
+      // subscription, which made the page offer "Assign Plan" for an org
+      // that already had one — and the assign then collided with the
+      // unique constraint on organization_id.
+      const [orgsRes, subsRes, plansRes] = await Promise.all([
         supabase
           .from('organizations')
-          .select('id, name, slug, org_subscriptions(*, plan:plans(*))')
+          .select('id, name, slug')
           .is('deleted_at', null)
           .order('name', { ascending: true }),
+        supabase.from('org_subscriptions').select('*, plan:plans(*)'),
         supabase
           .from('plans')
           .select('*')
@@ -96,18 +103,21 @@ export default function SubscriptionsPage() {
       ]);
 
       if (orgsRes.error) throw orgsRes.error;
+      if (subsRes.error) throw subsRes.error;
       if (plansRes.error) throw plansRes.error;
 
-      const mapped: OrgRow[] = (orgsRes.data as unknown as {
-        id: string;
-        name: string;
-        slug: string;
-        org_subscriptions: (OrgSubscription & { plan: Plan })[];
-      }[]).map((o) => ({
+      const subsByOrg = new Map<string, OrgSubscription & { plan: Plan }>();
+      for (const s of (subsRes.data as (OrgSubscription & { plan: Plan })[]) ?? []) {
+        subsByOrg.set(s.organization_id, s);
+      }
+
+      const mapped: OrgRow[] = (
+        orgsRes.data as { id: string; name: string; slug: string }[]
+      ).map((o) => ({
         id: o.id,
         name: o.name,
         slug: o.slug,
-        subscription: o.org_subscriptions?.[0] ?? null,
+        subscription: subsByOrg.get(o.id) ?? null,
       }));
 
       setOrgs(mapped);
@@ -147,14 +157,20 @@ export default function SubscriptionsPage() {
     if (!assignTarget || !profile || !assignPlanId) return;
     setAssigning(true);
     try {
-      const { error } = await supabase.from('org_subscriptions').insert({
-        organization_id: assignTarget.id,
-        plan_id: assignPlanId,
-        status: assignStatus,
-        billing_cycle: assignCycle,
-        seats: Number(assignSeats) || 1,
-        updated_by: profile.id,
-      });
+      // Upsert on organization_id: one subscription per org (the column is
+      // UNIQUE), so assigning to an org that somehow already has one
+      // updates it rather than colliding with the constraint.
+      const { error } = await supabase.from('org_subscriptions').upsert(
+        {
+          organization_id: assignTarget.id,
+          plan_id: assignPlanId,
+          status: assignStatus,
+          billing_cycle: assignCycle,
+          seats: Number(assignSeats) || 1,
+          updated_by: profile.id,
+        },
+        { onConflict: 'organization_id' }
+      );
       if (error) throw error;
       toast.success(`${assignTarget.name} assigned to a plan`);
       setAssignTarget(null);

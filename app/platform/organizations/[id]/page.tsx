@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   X,
   Copy,
   Check,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -90,6 +91,9 @@ export default function OrganizationDetailPage() {
   const [createAdminErrors, setCreateAdminErrors] = useState<{ email?: string; full_name?: string }>({});
   const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -288,6 +292,48 @@ export default function OrganizationDetailPage() {
     }
   };
 
+  const handleLogoFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (PNG, JPG or SVG)');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo must be 2 MB or smaller');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+      // One object per org, overwritten on replace, so we never accumulate
+      // orphaned files as the logo changes.
+      const path = `${orgId}/logo.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('org-logos')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+
+      const { data: pub } = supabase.storage.from('org-logos').getPublicUrl(path);
+      // Cache-bust so a replaced logo shows immediately rather than serving
+      // the browser's cached copy of the same path.
+      const url = `${pub.publicUrl}?v=${Date.now()}`;
+
+      const { error: updErr } = await supabase
+        .from('organizations')
+        .update({ logo_url: url })
+        .eq('id', orgId);
+      if (updErr) throw updErr;
+
+      toast.success('Logo updated');
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload logo'));
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
   if (loading || !org) {
     return (
       <div className="space-y-4">
@@ -299,6 +345,13 @@ export default function OrganizationDetailPage() {
   }
 
   const hasAdmin = members.some((m) => m.role === 'admin');
+  const orgMonogram =
+    org.name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('') || '?';
 
   return (
     <div className="space-y-6">
@@ -306,6 +359,42 @@ export default function OrganizationDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => router.push('/platform/organizations')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml,image/webp"
+          className="hidden"
+          onChange={(e) => handleLogoFile(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          onClick={() => logoInputRef.current?.click()}
+          disabled={uploadingLogo}
+          title={org.logo_url ? 'Change logo' : 'Upload logo'}
+          className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted"
+        >
+          {org.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={org.logo_url}
+              alt={`${org.name} logo`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="font-serif text-lg font-bold text-muted-foreground">
+              {orgMonogram}
+            </span>
+          )}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+            {uploadingLogo ? (
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
+            ) : (
+              <Upload className="h-4 w-4 text-white" />
+            )}
+          </span>
+        </button>
+
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="page-title">{org.name}</h1>
@@ -317,7 +406,9 @@ export default function OrganizationDetailPage() {
               {org.is_active ? 'Active' : 'Suspended'}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{org.slug}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {org.slug} · {org.logo_url ? 'Click the logo to change it' : 'Click the logo to upload one'}
+          </p>
         </div>
         {!hasAdmin && (
           <div className="flex gap-2">
@@ -359,7 +450,7 @@ export default function OrganizationDetailPage() {
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Building2 className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                No members yet. Create or invite this organization's first admin above.
+                No members yet. Create or invite this organization&apos;s first admin above.
               </p>
             </div>
           ) : (
@@ -460,7 +551,7 @@ export default function OrganizationDetailPage() {
           <DialogHeader>
             <DialogTitle>Invite Organization Admin</DialogTitle>
             <DialogDescription>
-              We'll email a join link to set up {org.name}'s first administrator
+              We&apos;ll email a join link to set up {org.name}&apos;s first administrator
               account. The link expires in 7 days.
             </DialogDescription>
           </DialogHeader>
@@ -512,9 +603,9 @@ export default function OrganizationDetailPage() {
           <DialogHeader>
             <DialogTitle>Create Organization Admin</DialogTitle>
             <DialogDescription>
-              Sets up {org.name}'s first administrator with a temporary
-              password. They'll be required to change it on first sign-in —
-              share it with them directly, this won't be shown again.
+              Sets up {org.name}&apos;s first administrator with a temporary
+              password. They&apos;ll be required to change it on first sign-in —
+              share it with them directly, this won&apos;t be shown again.
             </DialogDescription>
           </DialogHeader>
 

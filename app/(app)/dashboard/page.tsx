@@ -10,13 +10,11 @@ import {
   Receipt,
   Boxes,
   Clock,
-  Search,
   UserPlus,
   Plus,
   FilePlus,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { useSearchContext } from '@/contexts/search-context';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useWarehouseData } from '@/hooks/use-warehouse-data';
 import { Button } from '@/components/ui/button';
@@ -33,7 +31,6 @@ import { RecentActivity } from '@/components/dashboard/recent-activity';
 
 export default function DashboardPage() {
   const { profile } = useAuth();
-  const { openSearch } = useSearchContext();
   const data = useDashboardData();
   const warehouse = useWarehouseData();
 
@@ -117,7 +114,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 p-6 lg:p-8">
-      {/* Greeting + global search + quick actions, all on one row */}
+      {/* Greeting + quick actions. Global search now lives in the top bar. */}
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-6">
         <div className="shrink-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">
@@ -128,23 +125,9 @@ export default function DashboardPage() {
           </h1>
         </div>
 
-        <button
-          type="button"
-          onClick={openSearch}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-border bg-muted/50 px-3.5 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent"
-        >
-          <Search className="h-4 w-4 shrink-0" />
-          <span className="flex-1 truncate text-left">
-            Search shipments, customers, quotations, invoices…
-          </span>
-          <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] font-medium sm:inline-flex">
-            Ctrl K
-          </kbd>
-        </button>
-
         {/* asChild renders the Button *as* the link — nesting a <button>
             inside an <a> is invalid HTML and swallows the navigation. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:ml-auto">
           <Button asChild size="sm">
             <Link href="/shipments/new">
               <Plus className="mr-1.5 h-4 w-4" />

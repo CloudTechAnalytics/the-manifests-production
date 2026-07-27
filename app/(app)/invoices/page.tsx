@@ -34,6 +34,8 @@ import {
   formatDate,
   pickPrimaryCurrency,
 } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Invoice, InvoiceStatus, Branch } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +43,22 @@ type InvoiceRow = Invoice & {
   customer?: { id: string; company_name: string } | null;
   shipment?: { id: string; reference_number: string | null } | null;
 };
+
+const INVOICE_EXPORT_COLUMNS: ExportColumn<InvoiceRow>[] = [
+  { header: 'Number', value: (i) => i.invoice_number },
+  { header: 'Customer', value: (i) => i.customer?.company_name ?? '' },
+  { header: 'Shipment', value: (i) => i.shipment?.reference_number ?? '' },
+  { header: 'Status', value: (i) => i.status },
+  { header: 'Issue Date', value: (i) => i.issue_date },
+  { header: 'Due Date', value: (i) => i.due_date },
+  { header: 'Subtotal', value: (i) => i.subtotal },
+  { header: 'Tax', value: (i) => i.tax_amount },
+  { header: 'Total', value: (i) => i.total },
+  { header: 'Amount Paid', value: (i) => i.amount_paid },
+  { header: 'Balance', value: (i) => i.total - i.amount_paid },
+  { header: 'Currency', value: (i) => i.currency },
+  { header: 'Created', value: (i) => i.created_at },
+];
 
 type StatusTab = 'all' | InvoiceStatus | 'overdue';
 
@@ -172,12 +190,19 @@ export default function InvoicesPage() {
             Manage and track all customer invoices.
           </p>
         </div>
-        <Link href="/invoices/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Invoice
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={invoices}
+            columns={INVOICE_EXPORT_COLUMNS}
+            filename="invoices"
+          />
+          <Link href="/invoices/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Invoice
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stat cards */}

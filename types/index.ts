@@ -67,6 +67,7 @@ export interface Profile {
   updated_at: string;
   deleted_at: string | null;
   branch?: Branch | null;
+  organization?: Organization | null;
 }
 
 export interface Organization {
@@ -78,6 +79,7 @@ export interface Organization {
   country: string | null;
   phone: string | null;
   email: string | null;
+  logo_url: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -98,6 +100,7 @@ export interface Plan {
   currency: string;
   max_users: number | null;
   storage_gb: number | null;
+  support_level: string | null;
   features: string[];
   is_active: boolean;
   sort_order: number;

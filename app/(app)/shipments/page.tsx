@@ -46,6 +46,8 @@ import {
   SHIPMENT_STATUS_FLOW,
   formatDate,
 } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type {
   Shipment,
   ShipmentStatus,
@@ -81,6 +83,30 @@ type ShipmentRow = Shipment & {
   assigned_user?: { id: string; full_name: string } | null;
   branch?: { id: string; name: string } | null;
 };
+
+// Columns for the Excel/CSV export — flattened to plain values (joined
+// names, not nested objects) so the file is analysis-ready.
+const SHIPMENT_EXPORT_COLUMNS: ExportColumn<ShipmentRow>[] = [
+  { header: 'Reference', value: (s) => s.reference_number },
+  { header: 'Customer', value: (s) => s.customer?.company_name ?? '' },
+  { header: 'Type', value: (s) => s.shipment_type ?? '' },
+  { header: 'Status', value: (s) => s.status },
+  { header: 'Origin', value: (s) => s.origin },
+  { header: 'Destination', value: (s) => s.destination },
+  { header: 'Carrier', value: (s) => s.carrier },
+  { header: 'Tracking Number', value: (s) => s.tracking_number },
+  { header: 'Container Number', value: (s) => s.container_number },
+  { header: 'Weight', value: (s) => s.weight },
+  { header: 'Volume', value: (s) => s.volume },
+  { header: 'Branch', value: (s) => s.branch?.name ?? '' },
+  { header: 'Assigned To', value: (s) => s.assigned_user?.full_name ?? '' },
+  { header: 'Booking Date', value: (s) => s.booking_date },
+  { header: 'Estimated Departure', value: (s) => s.estimated_departure },
+  { header: 'Estimated Arrival', value: (s) => s.estimated_arrival },
+  { header: 'Actual Departure', value: (s) => s.actual_departure },
+  { header: 'Actual Arrival', value: (s) => s.actual_arrival },
+  { header: 'Created', value: (s) => s.created_at },
+];
 
 const VALID_SHIPMENT_STATUSES = new Set<string>([
   'booking_received',
@@ -231,12 +257,19 @@ export default function ShipmentsPage() {
             Track and manage freight shipments across all branches.
           </p>
         </div>
-        <Link href="/shipments/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Shipment
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={shipments}
+            columns={SHIPMENT_EXPORT_COLUMNS}
+            filename="shipments"
+          />
+          <Link href="/shipments/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Shipment
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

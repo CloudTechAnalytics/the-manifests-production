@@ -33,12 +33,27 @@ import {
   formatCurrency,
   formatDate,
 } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Expense, ExpenseCategory, ExpenseStatus, Branch } from '@/types';
 
 type ExpenseRow = Expense & {
   branch?: { id: string; name: string } | null;
   paid_by_user?: { id: string; full_name: string } | null;
 };
+
+const EXPENSE_EXPORT_COLUMNS: ExportColumn<ExpenseRow>[] = [
+  { header: 'Number', value: (e) => e.expense_number },
+  { header: 'Description', value: (e) => e.description },
+  { header: 'Category', value: (e) => e.category },
+  { header: 'Amount', value: (e) => e.amount },
+  { header: 'Currency', value: (e) => e.currency },
+  { header: 'Date', value: (e) => e.expense_date },
+  { header: 'Status', value: (e) => e.status },
+  { header: 'Branch', value: (e) => e.branch?.name ?? '' },
+  { header: 'Paid By', value: (e) => e.paid_by_user?.full_name ?? '' },
+  { header: 'Created', value: (e) => e.created_at },
+];
 
 export default function ExpensesPage() {
   const router = useRouter();
@@ -145,12 +160,19 @@ export default function ExpensesPage() {
             Track and manage company expenses.
           </p>
         </div>
-        <Link href="/expenses/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Expense
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={expenses}
+            columns={EXPENSE_EXPORT_COLUMNS}
+            filename="expenses"
+          />
+          <Link href="/expenses/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Expense
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

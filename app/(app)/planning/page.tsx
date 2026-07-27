@@ -33,6 +33,8 @@ import {
   PRIORITY_META,
   formatDate,
 } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { ShipmentPlan, PlanStatus, PriorityLevel, Branch } from '@/types';
 
 type StatusFilter = 'all' | PlanStatus;
@@ -42,6 +44,23 @@ type PlanRow = ShipmentPlan & {
   customer?: { id: string; company_name: string } | null;
   branch?: { id: string; name: string } | null;
 };
+
+const PLAN_EXPORT_COLUMNS: ExportColumn<PlanRow>[] = [
+  { header: 'Plan Number', value: (p) => p.plan_number },
+  { header: 'Customer', value: (p) => p.customer?.company_name ?? '' },
+  { header: 'Status', value: (p) => p.status },
+  { header: 'Priority', value: (p) => p.priority },
+  { header: 'Type', value: (p) => p.shipment_type ?? '' },
+  { header: 'Origin', value: (p) => p.origin },
+  { header: 'Destination', value: (p) => p.destination },
+  { header: 'Commodity', value: (p) => p.commodity },
+  { header: 'Planned ETD', value: (p) => p.planned_etd },
+  { header: 'Planned ETA', value: (p) => p.planned_eta },
+  { header: 'Est. Cost', value: (p) => p.estimated_cost },
+  { header: 'Est. Revenue', value: (p) => p.estimated_revenue },
+  { header: 'Branch', value: (p) => p.branch?.name ?? '' },
+  { header: 'Created', value: (p) => p.created_at },
+];
 
 const VALID_STATUSES = new Set<string>([...PLAN_STATUS_FLOW, 'cancelled']);
 
@@ -137,12 +156,15 @@ export default function PlanningPage() {
             Draft and prepare shipments before booking.
           </p>
         </div>
-        <Link href="/planning/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Plan
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton data={plans} columns={PLAN_EXPORT_COLUMNS} filename="plans" />
+          <Link href="/planning/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Plan
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

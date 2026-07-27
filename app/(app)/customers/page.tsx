@@ -32,7 +32,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CUSTOMER_STATUS_META, formatDate } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Customer, CustomerStatus } from '@/types';
+
+const CUSTOMER_EXPORT_COLUMNS: ExportColumn<Customer>[] = [
+  { header: 'Company', value: (c) => c.company_name },
+  { header: 'Type', value: (c) => c.type },
+  { header: 'Status', value: (c) => c.status },
+  { header: 'Email', value: (c) => c.email },
+  { header: 'Phone', value: (c) => c.phone },
+  { header: 'City', value: (c) => c.city },
+  { header: 'Country', value: (c) => c.country },
+  { header: 'Website', value: (c) => c.website },
+  { header: 'Created', value: (c) => c.created_at },
+];
 
 type StatusFilter = 'all' | CustomerStatus;
 
@@ -121,12 +135,19 @@ export default function CustomersPage() {
             Manage your customer accounts and contacts.
           </p>
         </div>
-        <Link href="/customers/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Customer
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={customers}
+            columns={CUSTOMER_EXPORT_COLUMNS}
+            filename="customers"
+          />
+          <Link href="/customers/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Customer
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { getErrorMessage, cn } from '@/lib/utils';
-import { formatDate } from '@/lib/utils/status';
+import { formatDate, formatCurrency } from '@/lib/utils/status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Organization } from '@/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { Organization, Plan, BillingCycle } from '@/types';
+
+// A new org starts on a 14-day trial, matching how the Subscriptions page
+// treats a fresh assignment.
+const TRIAL_DAYS = 14;
+
+// Sentinel for the "Free trial — 14 days" choice: the org is created with
+// no paid plan assigned (plan_id is NOT NULL, so no subscription row is
+// written at all — a plan gets assigned later on Subscriptions).
+const TRIAL_ONLY = 'trial';
 
 interface OrgForm {
   name: string;
@@ -76,10 +92,14 @@ export default function PlatformOrganizationsPage() {
   const [trashedCount, setTrashedCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const [plans, setPlans] = useState<Plan[]>([]);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
   const [slugTouched, setSlugTouched] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof OrgForm, string>>>({});
+  const [createPlanId, setCreatePlanId] = useState('');
+  const [createCycle, setCreateCycle] = useState<BillingCycle>('monthly');
   const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<Organization | null>(null);
@@ -97,7 +117,7 @@ export default function PlatformOrganizationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [activeRes, trashedRes] = await Promise.all([
+      const [activeRes, trashedRes, plansRes] = await Promise.all([
         supabase
           .from('organizations')
           .select('*')
@@ -107,10 +127,18 @@ export default function PlatformOrganizationsPage() {
           .from('organizations')
           .select('id', { count: 'exact', head: true })
           .not('deleted_at', 'is', null),
+        supabase
+          .from('plans')
+          .select('*')
+          .is('deleted_at', null)
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true }),
       ]);
       if (activeRes.error) throw activeRes.error;
+      if (plansRes.error) throw plansRes.error;
       setOrgs((activeRes.data as Organization[]) ?? []);
       setTrashedCount(trashedRes.count ?? 0);
+      setPlans((plansRes.data as Plan[]) ?? []);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load organizations'));
     } finally {
@@ -160,8 +188,38 @@ export default function PlatformOrganizationsPage() {
         .single();
 
       if (error) throw error;
+      const newOrg = data as Organization;
 
-      toast.success(`${(data as Organization).name} created`);
+      if (createPlanId === TRIAL_ONLY) {
+        // Free trial with no paid plan chosen yet — nothing to assign.
+        toast.success(`${newOrg.name} created on a ${TRIAL_DAYS}-day free trial`);
+      } else {
+        // Put the org on its chosen plan as a trial straight away. If this
+        // fails the org still exists, so report it as a partial result and
+        // point at where to finish — don't pretend the whole thing failed.
+        const trialEnds = new Date(
+          Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+        ).toISOString();
+        const { error: subError } = await supabase.from('org_subscriptions').insert({
+          organization_id: newOrg.id,
+          plan_id: createPlanId,
+          status: 'trial',
+          billing_cycle: createCycle,
+          seats: 1,
+          trial_ends_at: trialEnds,
+          updated_by: profile.id,
+        });
+
+        if (subError) {
+          toast.warning(
+            `${newOrg.name} created, but assigning the plan failed. Set it on Subscriptions.`
+          );
+        } else {
+          const planName = plans.find((p) => p.id === createPlanId)?.name ?? 'plan';
+          toast.success(`${newOrg.name} created on the ${planName} plan (trial)`);
+        }
+      }
+
       setCreateOpen(false);
       setForm(EMPTY_FORM);
       setSlugTouched(false);
@@ -275,7 +333,14 @@ export default function PlatformOrganizationsPage() {
               Trash{trashedCount > 0 ? ` (${trashedCount})` : ''}
             </Link>
           </Button>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => {
+              // Default to the free trial, matching the dropdown's first item.
+              setCreatePlanId(TRIAL_ONLY);
+              setCreateCycle('monthly');
+              setCreateOpen(true);
+            }}
+          >
             <Plus className="mr-1.5 h-4 w-4" />
             Create Organization
           </Button>
@@ -406,8 +471,8 @@ export default function PlatformOrganizationsPage() {
           <DialogHeader>
             <DialogTitle>New Organization</DialogTitle>
             <DialogDescription>
-              Add a new tenant to the platform. You can invite its first admin
-              from the organization's detail page next.
+              Provision a tenant workspace and its plan. You can invite its
+              first admin from the organization&apos;s detail page next.
             </DialogDescription>
           </DialogHeader>
 
@@ -482,6 +547,60 @@ export default function PlatformOrganizationsPage() {
                 {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </div>
             </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <p className="text-sm font-medium">Plan</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="org-plan">Subscription</Label>
+                  <Select value={createPlanId} onValueChange={setCreatePlanId}>
+                    <SelectTrigger id="org-plan">
+                      <SelectValue placeholder="Select a plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TRIAL_ONLY}>
+                        Free trial — {TRIAL_DAYS} days
+                      </SelectItem>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} — {formatCurrency(p.monthly_price, p.currency)}/mo
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="org-cycle">Billing cycle</Label>
+                  <Select
+                    value={createCycle}
+                    onValueChange={(v) => setCreateCycle(v as BillingCycle)}
+                    disabled={createPlanId === TRIAL_ONLY}
+                  >
+                    <SelectTrigger id="org-cycle">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {createPlanId === TRIAL_ONLY
+                  ? `Starts on a ${TRIAL_DAYS}-day free trial with no plan assigned yet — pick one any time on Subscriptions. Trials are billed after conversion.`
+                  : `Starts on a ${TRIAL_DAYS}-day trial of this plan. The billing cycle applies once the trial converts.`}
+              </p>
+              {plans.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No paid plans defined yet. Add tiers on{' '}
+                  <Link href="/platform/plans-pricing" className="font-medium underline">
+                    Plans &amp; Pricing
+                  </Link>{' '}
+                  to offer them here.
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -501,7 +620,7 @@ export default function PlatformOrganizationsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Organization</DialogTitle>
-            <DialogDescription>Update {editTarget?.name}'s details.</DialogDescription>
+            <DialogDescription>Update {editTarget?.name}&apos;s details.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">

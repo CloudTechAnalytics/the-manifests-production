@@ -25,7 +25,20 @@ import { RecentWarehouseActivities } from '@/components/warehouse/recent-warehou
 import { WarehouseInventoryTabs } from '@/components/warehouse/warehouse-inventory-tabs';
 import { MovementDialog, type MovementMode } from '@/components/warehouse/movement-dialog';
 import { formatCurrency } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { StockItem } from '@/types';
+
+const STOCK_EXPORT_COLUMNS: ExportColumn<StockItem>[] = [
+  { header: 'SKU', value: (i) => i.sku },
+  { header: 'Name', value: (i) => i.name },
+  { header: 'Category', value: (i) => i.category },
+  { header: 'Unit', value: (i) => i.unit },
+  { header: 'Unit Cost', value: (i) => i.unit_cost },
+  { header: 'Reorder Point', value: (i) => i.reorder_point },
+  { header: 'Branch', value: (i) => i.branch?.name ?? '' },
+  { header: 'Created', value: (i) => i.created_at },
+];
 
 export default function WarehousePage() {
   const { profile } = useAuth();
@@ -124,6 +137,7 @@ export default function WarehousePage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ExportButton data={items} columns={STOCK_EXPORT_COLUMNS} filename="warehouse-stock" />
           <Link href="/warehouse/locations">
             <Button variant="outline" size="sm">
               <Settings2 className="mr-1.5 h-4 w-4" />

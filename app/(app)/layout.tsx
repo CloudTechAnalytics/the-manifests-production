@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { SearchProvider } from '@/contexts/search-context';
-import { Sidebar, MobileTopBar } from '@/components/layout/sidebar';
+import { Sidebar, MobileTopBar, TopBar } from '@/components/layout/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -57,6 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <MobileTopBar />
+          <TopBar />
           <main className="flex-1 overflow-y-auto scrollbar-thin">
             {children}
           </main>

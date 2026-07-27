@@ -1,19 +1,36 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Pencil, Check, Tag, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Check,
+  Tag,
+  Loader2,
+  Trash2,
+  Users,
+  Database,
+  LifeBuoy,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
-import { getErrorMessage } from '@/lib/utils';
+import { getErrorMessage, cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/status';
+import { FEATURE_CATALOG, FEATURE_LABELS, SUPPORT_LEVELS } from '@/lib/plans';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +41,14 @@ import {
 } from '@/components/ui/dialog';
 import type { Plan } from '@/types';
 
+// A plan carries how many organizations are subscribed to it, so the UI
+// can block deleting one that is in use (org_subscriptions.plan_id is
+// ON DELETE RESTRICT — a hard delete would fail anyway; this makes the
+// reason legible instead of surfacing a raw FK error).
+interface PlanWithUsage extends Plan {
+  subscription_count: number;
+}
+
 interface PlanForm {
   name: string;
   slug: string;
@@ -32,7 +57,8 @@ interface PlanForm {
   annual_price: string;
   max_users: string;
   storage_gb: string;
-  features: string;
+  support_level: string;
+  features: string[];
   is_active: boolean;
 }
 
@@ -44,7 +70,8 @@ const EMPTY_FORM: PlanForm = {
   annual_price: '',
   max_users: '',
   storage_gb: '',
-  features: '',
+  support_level: '',
+  features: [],
   is_active: true,
 };
 
@@ -52,9 +79,16 @@ function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// Whole terabytes read as "N TB"; anything else stays in GB. null = ∞.
+function formatStorage(gb: number | null): string {
+  if (gb == null) return '∞';
+  if (gb >= 1024 && gb % 1024 === 0) return `${gb / 1024} TB`;
+  return `${gb} GB`;
+}
+
 export default function PlansPricingPage() {
   const { profile } = useAuth();
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plans, setPlans] = useState<PlanWithUsage[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -64,16 +98,29 @@ export default function PlansPricingPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof PlanForm, string>>>({});
   const [saving, setSaving] = useState(false);
 
+  const [deleteTarget, setDeleteTarget] = useState<PlanWithUsage | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('plans')
-        .select('*')
+        .select('*, org_subscriptions(count)')
         .is('deleted_at', null)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      setPlans((data as Plan[]) ?? []);
+
+      const rows = (data as unknown as (Plan & {
+        org_subscriptions: { count: number }[];
+      })[]) ?? [];
+
+      setPlans(
+        rows.map((p) => ({
+          ...p,
+          subscription_count: p.org_subscriptions?.[0]?.count ?? 0,
+        }))
+      );
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load plans'));
     } finally {
@@ -103,12 +150,22 @@ export default function PlansPricingPage() {
       annual_price: plan.annual_price != null ? String(plan.annual_price) : '',
       max_users: plan.max_users != null ? String(plan.max_users) : '',
       storage_gb: plan.storage_gb != null ? String(plan.storage_gb) : '',
-      features: plan.features.join('\n'),
+      support_level: plan.support_level ?? '',
+      features: plan.features,
       is_active: plan.is_active,
     });
     setSlugTouched(true);
     setErrors({});
     setDialogOpen(true);
+  };
+
+  const toggleFeature = (label: string) => {
+    setForm((f) => ({
+      ...f,
+      features: f.features.includes(label)
+        ? f.features.filter((x) => x !== label)
+        : [...f.features, label],
+    }));
   };
 
   const validate = (): boolean => {
@@ -147,10 +204,8 @@ export default function PlansPricingPage() {
         annual_price: form.annual_price.trim() === '' ? null : Number(form.annual_price),
         max_users: form.max_users.trim() === '' ? null : Number(form.max_users),
         storage_gb: form.storage_gb.trim() === '' ? null : Number(form.storage_gb),
-        features: form.features
-          .split('\n')
-          .map((f) => f.trim())
-          .filter(Boolean),
+        support_level: form.support_level.trim() || null,
+        features: form.features,
         is_active: form.is_active,
       };
 
@@ -173,6 +228,41 @@ export default function PlansPricingPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      // Soft delete. The guard against in-use plans is enforced before the
+      // dialog opens, so a plan reaching here has no subscriptions.
+      const { error } = await supabase
+        .from('plans')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', deleteTarget.id);
+      if (error) throw error;
+      toast.success(`${deleteTarget.name} removed`);
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to remove plan'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // A plan in use can't be removed — offer the honest alternative rather
+  // than a delete that would fail or strand a subscribed org.
+  const requestDelete = (plan: PlanWithUsage) => {
+    if (plan.subscription_count > 0) {
+      toast.error(
+        `${plan.name} has ${plan.subscription_count} organization${
+          plan.subscription_count === 1 ? '' : 's'
+        } on it. Retire it instead (turn off "Offered to new organizations").`
+      );
+      return;
+    }
+    setDeleteTarget(plan);
   };
 
   return (
@@ -218,9 +308,24 @@ export default function PlansPricingPage() {
                       <p className="mt-0.5 text-sm text-muted-foreground">{plan.description}</p>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(plan)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(plan)} title="Edit plan">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => requestDelete(plan)}
+                      title={
+                        plan.subscription_count > 0
+                          ? 'In use — retire instead of removing'
+                          : 'Remove plan'
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div>
@@ -235,16 +340,23 @@ export default function PlansPricingPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="flex flex-col items-center gap-1 rounded-lg bg-muted/50 px-2 py-3 text-center">
+                    <Users className="h-4 w-4 text-muted-foreground" />
                     <p className="font-medium">{plan.max_users ?? '∞'}</p>
-                    <p className="text-xs text-muted-foreground">users</p>
+                    <p className="text-[11px] text-muted-foreground">users</p>
                   </div>
-                  <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
-                    <p className="font-medium">
-                      {plan.storage_gb != null ? `${plan.storage_gb} GB` : '∞'}
+                  <div className="flex flex-col items-center gap-1 rounded-lg bg-muted/50 px-2 py-3 text-center">
+                    <Database className="h-4 w-4 text-muted-foreground" />
+                    <p className="font-medium">{formatStorage(plan.storage_gb)}</p>
+                    <p className="text-[11px] text-muted-foreground">storage</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 rounded-lg bg-muted/50 px-2 py-3 text-center">
+                    <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-medium leading-tight">
+                      {plan.support_level ?? '—'}
                     </p>
-                    <p className="text-xs text-muted-foreground">storage</p>
+                    <p className="text-[11px] text-muted-foreground">support</p>
                   </div>
                 </div>
 
@@ -273,27 +385,46 @@ export default function PlansPricingPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editTarget ? 'Edit Plan' : 'New Plan'}</DialogTitle>
-            <DialogDescription>
-              {editTarget
-                ? `Update ${editTarget.name}'s pricing and limits.`
-                : 'Define a new subscription tier.'}
-            </DialogDescription>
+            <DialogTitle>{editTarget ? `Edit ${editTarget.name}` : 'New Plan'}</DialogTitle>
+            <DialogDescription>Define pricing, limits and included features.</DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-name">Plan name</Label>
-              <Input
-                id="plan-name"
-                value={form.name}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  setForm((f) => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }));
-                }}
-                placeholder="Professional"
-              />
-              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="plan-name">Plan name</Label>
+                <Input
+                  id="plan-name"
+                  value={form.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setForm((f) => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }));
+                  }}
+                  placeholder="Professional"
+                />
+                {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="plan-support">Support level</Label>
+                <Select
+                  value={form.support_level || 'none'}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, support_level: v === 'none' ? '' : v }))
+                  }
+                >
+                  <SelectTrigger id="plan-support">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {SUPPORT_LEVELS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -321,7 +452,7 @@ export default function PlansPricingPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="plan-monthly">Monthly price (₦)</Label>
+                <Label htmlFor="plan-monthly">Monthly (₦)</Label>
                 <Input
                   id="plan-monthly"
                   type="number"
@@ -333,7 +464,7 @@ export default function PlansPricingPage() {
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="plan-annual">Annual price (₦, optional)</Label>
+                <Label htmlFor="plan-annual">Yearly (₦)</Label>
                 <Input
                   id="plan-annual"
                   type="number"
@@ -348,22 +479,24 @@ export default function PlansPricingPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="plan-max-users">Max users (blank = unlimited)</Label>
+                <Label htmlFor="plan-max-users">Max users</Label>
                 <Input
                   id="plan-max-users"
                   type="number"
                   value={form.max_users}
                   onChange={(e) => setForm((f) => ({ ...f, max_users: e.target.value }))}
+                  placeholder="Blank = ∞"
                 />
                 {errors.max_users && <p className="text-xs text-destructive">{errors.max_users}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="plan-storage">Storage GB (blank = unlimited)</Label>
+                <Label htmlFor="plan-storage">Storage (GB)</Label>
                 <Input
                   id="plan-storage"
                   type="number"
                   value={form.storage_gb}
                   onChange={(e) => setForm((f) => ({ ...f, storage_gb: e.target.value }))}
+                  placeholder="Blank = ∞"
                 />
                 {errors.storage_gb && (
                   <p className="text-xs text-destructive">{errors.storage_gb}</p>
@@ -371,15 +504,45 @@ export default function PlansPricingPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-features">Features (one per line)</Label>
-              <Textarea
-                id="plan-features"
-                rows={5}
-                value={form.features}
-                onChange={(e) => setForm((f) => ({ ...f, features: e.target.value }))}
-                placeholder={'Shipment Tracking\nCustoms Documentation\nInvoicing'}
-              />
+            <div className="space-y-2">
+              <Label>Included features</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {FEATURE_CATALOG.map((feat) => {
+                  const on = form.features.includes(feat.label);
+                  return (
+                    <button
+                      key={feat.label}
+                      type="button"
+                      onClick={() => toggleFeature(feat.label)}
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
+                        on
+                          ? 'border-primary/40 bg-primary/5 font-medium'
+                          : 'border-border text-muted-foreground hover:bg-muted/50'
+                      )}
+                    >
+                      <span>{feat.label}</span>
+                      {on && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Surface any stored feature that predates the catalog so it
+                  is not silently dropped on the next save. */}
+              {form.features
+                .filter((f) => !FEATURE_LABELS.includes(f))
+                .map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => toggleFeature(f)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-sm text-amber-800"
+                    title="Custom feature — click to remove"
+                  >
+                    <span>{f} (custom)</span>
+                    <Check className="h-4 w-4 shrink-0" />
+                  </button>
+                ))}
             </div>
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
@@ -403,6 +566,32 @@ export default function PlansPricingPage() {
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               {editTarget ? 'Save Changes' : 'Create Plan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove plan confirmation */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Remove {deleteTarget?.name}?
+            </DialogTitle>
+            <DialogDescription>
+              No organization is on this plan, so removing it is safe. It stops
+              appearing anywhere and can&apos;t be assigned. This can&apos;t be undone
+              from the UI.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Remove plan
             </Button>
           </DialogFooter>
         </DialogContent>

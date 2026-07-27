@@ -64,6 +64,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatDate } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type {
   DocumentRecord,
   DocumentCategory,
@@ -107,6 +109,18 @@ type DocumentRow = DocumentRecord & {
   created_by_user?: { id: string; full_name: string } | null;
   branch?: { id: string; name: string } | null;
 };
+
+const DOCUMENT_EXPORT_COLUMNS: ExportColumn<DocumentRow>[] = [
+  { header: 'Name', value: (d) => d.name },
+  { header: 'Category', value: (d) => d.category },
+  { header: 'Shipment', value: (d) => d.shipment?.reference_number ?? '' },
+  { header: 'Customer', value: (d) => d.customer?.company_name ?? '' },
+  { header: 'Size (bytes)', value: (d) => d.file_size },
+  { header: 'Type', value: (d) => d.mime_type },
+  { header: 'Branch', value: (d) => d.branch?.name ?? '' },
+  { header: 'Uploaded By', value: (d) => d.created_by_user?.full_name ?? '' },
+  { header: 'Uploaded', value: (d) => d.created_at },
+];
 
 type LinkTarget = 'none' | 'shipment' | 'customer';
 
@@ -537,10 +551,13 @@ export default function DocumentsPage() {
             Upload, manage, and download shipping and customs documents.
           </p>
         </div>
-        <Button size="sm" onClick={() => setUploadOpen(true)} className="w-full sm:w-auto">
-          <Upload className="mr-1.5 h-4 w-4" />
-          Upload Documents
-        </Button>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton data={documents} columns={DOCUMENT_EXPORT_COLUMNS} filename="documents" />
+          <Button size="sm" onClick={() => setUploadOpen(true)} className="w-full sm:w-auto">
+            <Upload className="mr-1.5 h-4 w-4" />
+            Upload Documents
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

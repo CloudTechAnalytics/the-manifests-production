@@ -16,6 +16,8 @@ import {
   Menu,
   CreditCard,
   Tag,
+  Bell,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
@@ -30,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { PlatformSearch } from '@/components/platform/platform-search';
 import type { Profile } from '@/types';
 
 type NavItem = { href: string; label: string; icon: typeof Building2 };
@@ -55,6 +58,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/platform/plans-pricing', label: 'Plans & Pricing', icon: Tag },
       { href: '/platform/platform-users', label: 'Platform Users', icon: ShieldCheck },
+      { href: '/platform/settings', label: 'Settings', icon: Settings },
     ],
   },
 ];
@@ -71,15 +75,11 @@ function initials(name: string): string {
 }
 
 function SidebarContent({
-  profile,
   pathname,
   onNavigate,
-  onSignOut,
 }: {
-  profile: Profile;
   pathname: string;
   onNavigate?: () => void;
-  onSignOut: () => void;
 }) {
   const isDashboard = pathname === '/platform';
 
@@ -148,44 +148,62 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className="border-t border-brand-dark-border p-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 px-2 py-2 text-brand-dark-foreground hover:bg-brand-dark-elevated hover:text-brand-dark-foreground"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
-                  {initials(profile.full_name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-1 flex-col items-start gap-0.5 overflow-hidden">
-                <span className="w-full truncate text-left text-sm font-medium leading-none">
-                  {profile.full_name}
-                </span>
-                <span className="text-xs text-brand-dark-muted">Platform Admin</span>
-              </div>
-              <ChevronDown className="h-4 w-4 shrink-0 text-brand-dark-muted" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{profile.full_name}</p>
-              <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={onSignOut}
-              className="text-destructive focus:text-destructive"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
+        <p className="text-[11px] font-medium text-brand-dark-muted/70">
+          Platform Console · v1.0
+        </p>
       </div>
     </>
+  );
+}
+
+/**
+ * The account control, lifted out of the sidebar and into the top bar's
+ * right edge. Shared by the header on every platform page.
+ */
+function UserMenu({
+  profile,
+  onSignOut,
+}: {
+  profile: Profile;
+  onSignOut: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-auto gap-2.5 px-2 py-1.5 hover:bg-accent"
+        >
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
+              {initials(profile.full_name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden flex-col items-start gap-0.5 overflow-hidden sm:flex">
+            <span className="max-w-[140px] truncate text-sm font-medium leading-none">
+              {profile.full_name}
+            </span>
+            <span className="text-xs text-muted-foreground">Platform Admin</span>
+          </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-medium">{profile.full_name}</p>
+          <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={onSignOut}
+          className="text-destructive focus:text-destructive"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -224,22 +242,18 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
     );
   }
 
-  const activeGroup = navGroups.find((g) =>
-    g.items.some((i) => pathname.startsWith(i.href))
-  );
-  const activeItem = activeGroup?.items.find((i) => pathname.startsWith(i.href));
-  const isDashboard = pathname === '/platform';
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
-        <SidebarContent profile={profile} pathname={pathname} onSignOut={signOut} />
+        <SidebarContent pathname={pathname} />
       </aside>
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:px-6">
+        {/* h-16 matches the sidebar's logo block so both bottom borders sit
+            on the same line across the sidebar and the main column. */}
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:px-6">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="-ml-2 lg:hidden">
@@ -250,16 +264,26 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <SheetContent side="left" className="flex w-72 flex-col bg-brand-dark p-0">
               <SheetTitle className="sr-only">Platform navigation</SheetTitle>
               <SidebarContent
-                profile={profile}
                 pathname={pathname}
                 onNavigate={() => setMobileOpen(false)}
-                onSignOut={signOut}
               />
             </SheetContent>
           </Sheet>
-          <p className="text-sm text-muted-foreground">
-            {activeItem?.label ?? (isDashboard ? 'Dashboard' : 'Platform Console')}
-          </p>
+          <div className="min-w-0 flex-1">
+            <PlatformSearch />
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+            </Button>
+            <UserMenu profile={profile} onSignOut={signOut} />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto scrollbar-thin p-6 lg:p-8">{children}</main>
       </div>

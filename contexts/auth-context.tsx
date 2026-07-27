@@ -34,7 +34,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching profile:', error);
       return null;
     }
-    return data as Profile | null;
+
+    const p = data as Profile | null;
+
+    // Load the organization separately rather than as an embed: if this
+    // fails (RLS, a relationship quirk), it must NOT null out the whole
+    // profile — that would blank the user's name and role app-wide.
+    if (p?.organization_id) {
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', p.organization_id)
+        .maybeSingle();
+      if (orgError) {
+        console.error('Error fetching organization:', orgError);
+      } else {
+        p.organization = (org as Profile['organization']) ?? null;
+      }
+    }
+
+    return p;
   };
 
   useEffect(() => {
@@ -51,6 +70,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setLoading(false);
       }
+    }).catch(() => {
+      // A rejected getSession (e.g. an invalid/expired refresh token left
+      // in storage) must still resolve the loading state, or the app hangs
+      // on the splash spinner forever. Treat it as "no session" so the
+      // router falls through to /login.
+      if (!isMounted) return;
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(

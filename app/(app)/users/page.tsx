@@ -66,7 +66,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatDate, formatDateTime } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Profile, Branch, UserRole, Invitation } from '@/types';
+
+const USER_EXPORT_COLUMNS: ExportColumn<Profile>[] = [
+  { header: 'Full Name', value: (u) => u.full_name },
+  { header: 'Email', value: (u) => u.email },
+  { header: 'Role', value: (u) => u.role },
+  { header: 'Branch', value: (u) => u.branch?.name ?? '' },
+  { header: 'Status', value: (u) => (u.is_active ? 'Active' : 'Inactive') },
+  { header: 'Created', value: (u) => u.created_at },
+];
 
 // --- Constants -------------------------------------------------------------
 
@@ -729,6 +740,11 @@ export default function UsersPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <ExportButton
+            data={users}
+            columns={USER_EXPORT_COLUMNS}
+            filename="users"
+          />
           <Button
             size="sm"
             variant="outline"
@@ -1185,7 +1201,7 @@ export default function UsersPage() {
               Invite Member
             </DialogTitle>
             <DialogDescription>
-              We'll email a join link so they can set their own password.
+              We&apos;ll email a join link so they can set their own password.
             </DialogDescription>
           </DialogHeader>
 

@@ -26,9 +26,12 @@ import {
   Warehouse,
   ClipboardList,
   Building2,
+  Bell,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
+import { useNotifications } from '@/hooks/use-notifications';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -108,17 +111,84 @@ const administrationItems: NavItem[] = [
   },
 ];
 
+// Two-letter monogram from an organization name, used as its logo mark
+// until real logo uploads exist.
+function orgMonogram(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('') || '?'
+  );
+}
+
+/** Compact brand for the mobile top bar: org monogram + name, same
+ *  fallback as the sidebar Logo. */
+function MobileBrand() {
+  const { profile } = useAuth();
+  const orgName = profile?.organization?.name;
+  const logoUrl = profile?.organization?.logo_url;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt={orgName ?? 'Organization logo'}
+          className="h-7 w-7 shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-gold">
+          {orgName ? (
+            <span className="text-xs font-bold text-brand-dark">{orgMonogram(orgName)}</span>
+          ) : (
+            <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
+          )}
+        </div>
+      )}
+      <span className="truncate font-serif text-base font-bold tracking-tight">
+        {orgName ?? 'The Manifest'}
+      </span>
+    </div>
+  );
+}
+
+/** Sidebar brand block. Shows the signed-in user's organization once it's
+ *  loaded; falls back to the product identity while loading or for a user
+ *  with no organization. */
 function Logo() {
+  const { profile } = useAuth();
+  const orgName = profile?.organization?.name;
+  const logoUrl = profile?.organization?.logo_url;
+
   return (
     <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border px-6">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
-        <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
-      </div>
-      <div className="flex flex-col">
-        <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-dark-foreground">
-          The Manifest
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt={orgName ?? 'Organization logo'}
+          className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-brand-gold/30"
+        />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
+          {orgName ? (
+            <span className="text-sm font-bold text-brand-dark">
+              {orgMonogram(orgName)}
+            </span>
+          ) : (
+            <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
+          )}
+        </div>
+      )}
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate font-serif text-base font-bold leading-tight tracking-tight text-brand-dark-foreground">
+          {orgName ?? 'The Manifest'}
         </span>
-        <span className="mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
           Freight Management
         </span>
       </div>
@@ -268,15 +338,174 @@ function UserMenu() {
   );
 }
 
+/** Version footer pinned to the bottom of the sidebar on every page. */
+function SidebarFooter() {
+  return (
+    <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
+      <p className="text-[11px] font-medium text-brand-dark-muted/70">
+        The Manifest · v1.0
+      </p>
+    </div>
+  );
+}
+
 /** Desktop, always-visible sidebar (lg and up). Permanently dark, regardless
- *  of the app's light/dark theme setting — a fixed brand identity element. */
+ *  of the app's light/dark theme setting — a fixed brand identity element.
+ *  The account control lives in the TopBar now, not here. */
 export function Sidebar() {
   return (
     <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
       <Logo />
       <NavLinks />
-      <UserMenu />
+      <SidebarFooter />
     </aside>
+  );
+}
+
+/** Light-themed account dropdown for the top bar (the sidebar's own
+ *  UserMenu is styled for the dark sidebar and stays in the mobile drawer). */
+function HeaderUserMenu() {
+  const { profile, signOut } = useAuth();
+
+  const initials =
+    profile?.full_name
+      ?.split(' ')
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() ?? '??';
+  const roleLabel = profile?.role?.replace('_', ' ') ?? '';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-auto gap-2.5 px-2 py-1.5 hover:bg-accent">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden flex-col items-start gap-0.5 overflow-hidden sm:flex">
+            <span className="max-w-[140px] truncate text-sm font-medium leading-none">
+              {profile?.full_name}
+            </span>
+            <span className="text-xs capitalize text-muted-foreground">{roleLabel}</span>
+          </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-medium">{profile?.full_name}</p>
+          <p className="truncate text-xs text-muted-foreground">{profile?.email}</p>
+          {profile?.branch && (
+            <Badge variant="secondary" className="mt-1.5 text-[10px]">
+              {profile.branch.name}
+            </Badge>
+          )}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => signOut()}
+          className="text-destructive focus:text-destructive"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Notifications bell: live operational signals (delayed shipments,
+ *  paperwork due, quotations awaiting response) from useNotifications.
+ *  The badge reflects outstanding work and clears when the work is done. */
+function NotificationsBell() {
+  const { items, total, loading } = useNotifications();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative text-muted-foreground"
+          aria-label={total > 0 ? `Notifications (${total})` : 'Notifications'}
+        >
+          <Bell className="h-5 w-5" />
+          {total > 0 && (
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
+              {total > 9 ? '9+' : total}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-medium">Notifications</p>
+          <p className="text-xs text-muted-foreground">
+            {total > 0
+              ? `${total} item${total === 1 ? '' : 's'} need attention`
+              : 'Outstanding operational items'}
+          </p>
+        </div>
+        <DropdownMenuSeparator />
+        {loading ? (
+          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
+            <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+            <p className="text-sm font-medium">You&apos;re all caught up</p>
+            <p className="text-xs text-muted-foreground">
+              No outstanding items right now.
+            </p>
+          </div>
+        ) : (
+          items.map((item) => (
+            <DropdownMenuItem key={item.key} asChild className="cursor-pointer">
+              <Link href={item.href} className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive/10 px-1.5 text-xs font-semibold text-destructive">
+                  {item.count}
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium leading-tight">{item.label}</span>
+                  <span className="text-xs text-muted-foreground">{item.description}</span>
+                </span>
+              </Link>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Desktop top bar (lg and up): global search on the left, notifications
+ *  and the account menu on the right. h-16 matches the sidebar's logo block
+ *  so both bottom borders line up across the shell. */
+export function TopBar() {
+  const { openSearch } = useSearchContext();
+
+  return (
+    <header className="hidden h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6 lg:flex">
+      <button
+        type="button"
+        onClick={openSearch}
+        className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm text-muted-foreground transition-colors hover:bg-accent"
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="flex-1 text-left">Search…</span>
+        <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium sm:inline-flex">
+          Ctrl K
+        </kbd>
+      </button>
+      <div className="ml-auto flex items-center gap-1">
+        <NotificationsBell />
+        <HeaderUserMenu />
+      </div>
+    </header>
   );
 }
 
@@ -299,14 +528,11 @@ export function MobileTopBar() {
           <Logo />
           <NavLinks onNavigate={() => setOpen(false)} />
           <UserMenu />
+          <SidebarFooter />
         </SheetContent>
       </Sheet>
-      <div className="flex flex-1 items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold">
-          <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
-        </div>
-        <span className="font-serif text-base font-bold tracking-tight">The Manifest</span>
-      </div>
+      <MobileBrand />
+      <div className="flex-1" />
       <Button
         variant="ghost"
         size="icon"

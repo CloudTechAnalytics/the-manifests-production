@@ -33,12 +33,26 @@ import {
   formatDate,
   pickPrimaryCurrency,
 } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Payment, PaymentMethod, Branch } from '@/types';
 
 type PaymentRow = Payment & {
   customer?: { id: string; company_name: string } | null;
   allocations?: { amount: number; invoice: { invoice_number: string | null } | null }[];
 };
+
+const PAYMENT_EXPORT_COLUMNS: ExportColumn<PaymentRow>[] = [
+  { header: 'Number', value: (p) => p.payment_number },
+  { header: 'Customer', value: (p) => p.customer?.company_name ?? '' },
+  { header: 'Date', value: (p) => p.payment_date },
+  { header: 'Method', value: (p) => p.payment_method },
+  { header: 'Amount', value: (p) => p.amount },
+  { header: 'Allocated', value: (p) => p.allocated_amount },
+  { header: 'Unallocated', value: (p) => p.amount - p.allocated_amount },
+  { header: 'Reference', value: (p) => p.reference },
+  { header: 'Created', value: (p) => p.created_at },
+];
 
 export default function PaymentsPage() {
   const router = useRouter();
@@ -145,12 +159,19 @@ export default function PaymentsPage() {
             Track and manage all customer payments.
           </p>
         </div>
-        <Link href="/payments/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            Record Payment
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={payments}
+            columns={PAYMENT_EXPORT_COLUMNS}
+            filename="payments"
+          />
+          <Link href="/payments/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Record Payment
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

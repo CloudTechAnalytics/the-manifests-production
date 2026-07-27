@@ -32,6 +32,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { QUOTATION_STATUS_META, formatDate, formatCurrency } from '@/lib/utils/status';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { Quotation, QuotationStatus, ShipmentType, Branch } from '@/types';
 
 type StatusFilter = 'all' | QuotationStatus;
@@ -58,6 +60,22 @@ type QuotationRow = Quotation & {
   customer?: { id: string; company_name: string } | null;
   branch?: { id: string; name: string } | null;
 };
+
+const QUOTATION_EXPORT_COLUMNS: ExportColumn<QuotationRow>[] = [
+  { header: 'Number', value: (q) => q.quotation_number },
+  { header: 'Customer', value: (q) => q.customer?.company_name ?? '' },
+  { header: 'Status', value: (q) => q.status },
+  { header: 'Type', value: (q) => q.shipment_type ?? '' },
+  { header: 'Origin', value: (q) => q.origin },
+  { header: 'Destination', value: (q) => q.destination },
+  { header: 'Valid Until', value: (q) => q.valid_until },
+  { header: 'Subtotal', value: (q) => q.subtotal },
+  { header: 'Tax', value: (q) => q.tax_amount },
+  { header: 'Total', value: (q) => q.total },
+  { header: 'Currency', value: (q) => q.currency },
+  { header: 'Branch', value: (q) => q.branch?.name ?? '' },
+  { header: 'Created', value: (q) => q.created_at },
+];
 
 const VALID_QUOTATION_STATUSES = new Set<string>([
   'draft',
@@ -198,12 +216,19 @@ export default function QuotationsPage() {
             Create and manage freight quotations for your customers.
           </p>
         </div>
-        <Link href="/quotations/new" className="sm:shrink-0">
-          <Button size="sm" className="w-full sm:w-auto">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Quotation
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <ExportButton
+            data={quotations}
+            columns={QUOTATION_EXPORT_COLUMNS}
+            filename="quotations"
+          />
+          <Link href="/quotations/new">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Quotation
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
