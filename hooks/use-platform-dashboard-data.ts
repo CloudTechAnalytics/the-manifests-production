@@ -125,10 +125,20 @@ export function usePlatformDashboardData(): PlatformDashboardData {
         const activeOrganizations = orgs.filter((o) => o.is_active).length;
         const suspendedOrganizations = totalOrganizations - activeOrganizations;
 
-        const tenantProfiles = profiles.filter((p) => p.role !== 'platform_admin');
+        // profiles is fetched with is_platform_admin()'s full cross-org
+        // visibility and isn't itself scoped to non-deleted orgs — a
+        // member whose organization was moved to Trash still has a row
+        // here. Counting them under "Total Users" would make the two
+        // numbers contradict each other (0 organizations, 1 user), so
+        // tenant counts are restricted to members of orgs that still
+        // exist in the active list above.
+        const activeOrgIds = new Set(orgs.map((o) => o.id));
+        const tenantProfiles = profiles.filter(
+          (p) => p.role !== 'platform_admin' && p.organization_id && activeOrgIds.has(p.organization_id)
+        );
         const totalUsers = tenantProfiles.length;
         const platformTeamCount = profiles.filter((p) => p.role === 'platform_admin').length;
-        const newUsersThisMonth = profiles.filter(
+        const newUsersThisMonth = tenantProfiles.filter(
           (p) => new Date(p.created_at) >= startOfMonth
         ).length;
 
