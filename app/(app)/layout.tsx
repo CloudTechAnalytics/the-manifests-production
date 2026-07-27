@@ -14,10 +14,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/login');
+      return;
     }
-  }, [loading, user, router]);
+    // A platform_admin isn't scoped to any single organization, so the
+    // tenant shell (shipments, quotations, warehouse…) is never their
+    // actual workspace — bounce them to the console regardless of how
+    // they arrived here (login redirect only covers the login form
+    // itself, not history/bookmarks/direct navigation).
+    if (!loading && profile && profile.role === 'platform_admin') {
+      router.replace('/platform');
+    }
+  }, [loading, user, profile, router]);
 
-  if (loading || !user) {
+  if (loading || !user || profile?.role === 'platform_admin') {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="space-y-4">

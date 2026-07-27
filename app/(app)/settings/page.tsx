@@ -68,14 +68,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/status';
 import { useTheme } from '@/contexts/theme-context';
 import type { Branch, UserRole, UserPreferences } from '@/types';
 
 // --- Constants -------------------------------------------------------------
 
-const ROLE_META: Record<UserRole, { label: string; color: string }> = {
+const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; color: string }> = {
   admin: { label: 'Administrator', color: 'bg-blue-100 text-blue-700' },
   operations: { label: 'Operations', color: 'bg-purple-100 text-purple-700' },
   sales: { label: 'Sales', color: 'bg-amber-100 text-amber-700' },
@@ -170,7 +170,7 @@ export default function SettingsPage() {
       setBranches((data as Branch[]) ?? []);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to load branches';
+        getErrorMessage(err, 'Failed to load branches');
       setBranchesError(message);
       console.error('Error loading branches:', err);
     } finally {
@@ -249,6 +249,7 @@ export default function SettingsPage() {
           address: createForm.address.trim() || null,
           phone: createForm.phone.trim() || null,
           email: createForm.email.trim() || null,
+          organization_id: profile.organization_id,
           is_active: true,
         })
         .select()
@@ -280,7 +281,7 @@ export default function SettingsPage() {
       loadBranches();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to create branch';
+        getErrorMessage(err, 'Failed to create branch');
       toast.error(message);
     } finally {
       setCreating(false);
@@ -343,7 +344,7 @@ export default function SettingsPage() {
       loadBranches();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update branch';
+        getErrorMessage(err, 'Failed to update branch');
       toast.error(message);
     } finally {
       setEditing(false);
@@ -383,7 +384,7 @@ export default function SettingsPage() {
       loadBranches();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update branch status';
+        getErrorMessage(err, 'Failed to update branch status');
       toast.error(message);
     } finally {
       setToggling(false);
@@ -431,7 +432,7 @@ export default function SettingsPage() {
       toast.success('Profile updated successfully');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update profile';
+        getErrorMessage(err, 'Failed to update profile');
       toast.error(message);
     } finally {
       setSavingProfile(false);
@@ -486,7 +487,7 @@ export default function SettingsPage() {
       setPasswordErrors({});
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to change password';
+        getErrorMessage(err, 'Failed to change password');
       toast.error(message);
     } finally {
       setChangingPassword(false);
@@ -509,7 +510,7 @@ export default function SettingsPage() {
   }
 
   const userBranch = profile.branch;
-  const roleMeta = ROLE_META[profile.role] ?? {
+  const roleMeta = ROLE_META[profile.role as keyof typeof ROLE_META] ?? {
     label: profile.role,
     color: 'bg-gray-100 text-gray-700',
   };

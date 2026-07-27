@@ -1,6 +1,11 @@
 // Auto-generated-compatible types for the Freight Operations Management Platform
 
-export type UserRole = 'admin' | 'operations' | 'sales' | 'branch_manager';
+export type UserRole =
+  | 'platform_admin'
+  | 'admin'
+  | 'operations'
+  | 'sales'
+  | 'branch_manager';
 
 export type CustomerType = 'individual' | 'corporate';
 
@@ -53,6 +58,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   branch_id: string | null;
+  organization_id: string | null;
   is_active: boolean;
   must_change_password: boolean;
   created_by: string | null;
@@ -61,6 +67,75 @@ export interface Profile {
   updated_at: string;
   deleted_at: string | null;
   branch?: Branch | null;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type SubscriptionStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
+export type BillingCycle = 'monthly' | 'annual';
+
+export interface Plan {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  monthly_price: number;
+  annual_price: number | null;
+  currency: string;
+  max_users: number | null;
+  storage_gb: number | null;
+  features: string[];
+  is_active: boolean;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface OrgSubscription {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  status: SubscriptionStatus;
+  billing_cycle: BillingCycle;
+  seats: number;
+  trial_ends_at: string | null;
+  started_at: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  plan?: Plan;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  email: string;
+  full_name: string | null;
+  role: UserRole;
+  invited_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Customer {

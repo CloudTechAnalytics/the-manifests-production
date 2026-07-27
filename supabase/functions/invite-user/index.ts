@@ -13,9 +13,6 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * used to accept someone else's invite.
  */
 
-// APP_ORIGIN is a comma-separated allowlist. A single hard-coded origin
-// breaks the moment you use a second URL (localhost vs preview vs prod),
-// which is exactly how "Failed to fetch" shows up in the browser.
 function corsHeaders(req: Request) {
   const allowed = (Deno.env.get("APP_ORIGIN") ?? "")
     .split(",")
@@ -35,8 +32,7 @@ function corsHeaders(req: Request) {
 // platform_admin is deliberately absent: it is never scoped to one
 // organization, so it cannot be granted through an org invitation.
 const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager"]);
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_TTL_DAYS = 7;
 

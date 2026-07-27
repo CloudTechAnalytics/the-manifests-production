@@ -1,20 +1,32 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") ?? "",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+/*
+ * send-quotation-status-email
+ *
+ * Emails the customer on a quotation's record when its status changes.
+ * The caller's own JWT is used for the quotation lookup, so RLS branch
+ * scoping applies — if the caller can't see the quotation, this reports
+ * "not found" rather than leaking its existence.
+ */
+
+function corsHeaders(req: Request) {
+  const allowed = (Deno.env.get("APP_ORIGIN") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origin = req.headers.get("Origin") ?? "";
+  const allow = allowed.includes(origin) ? origin : (allowed[0] ?? "");
+  return {
+    "Access-Control-Allow-Origin": allow,
+    Vary: "Origin",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Client-Info, Apikey",
+  };
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function jsonError(status: number, message: string) {
-  return new Response(
-    JSON.stringify({ error: message }),
-    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
-}
 
 const STATUS_COPY: Record<string, { subject: string; heading: string; body: string }> = {
   draft: {
@@ -45,19 +57,21 @@ const STATUS_COPY: Record<string, { subject: string; heading: string; body: stri
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
-  }
+  const cors = corsHeaders(req);
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
 
-  if (req.method !== "POST") {
-    return jsonError(405, "Method not allowed");
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: cors });
   }
+  if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonError(401, "Missing authorization header");
-    }
+    if (!authHeader) return json(401, { error: "Missing authorization header" });
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -66,42 +80,34 @@ Deno.serve(async (req: Request) => {
     );
 
     const { data: callerData, error: callerError } = await supabase.auth.getUser();
-    if (callerError || !callerData.user) {
-      return jsonError(401, "Unauthorized");
-    }
+    if (callerError || !callerData.user) return json(401, { error: "Unauthorized" });
 
     let body: { quotation_id?: string };
     try {
       body = await req.json();
     } catch {
-      return jsonError(400, "Invalid JSON body");
+      return json(400, { error: "Invalid JSON body" });
     }
 
     if (!body.quotation_id || !UUID_RE.test(body.quotation_id)) {
-      return jsonError(400, "Invalid quotation_id");
+      return json(400, { error: "Invalid quotation_id" });
     }
 
-    // RLS (branch scoping) applies here via the caller's own JWT — if they
-    // can't see this quotation, this returns nothing.
     const { data: quotation, error: quoteError } = await supabase
       .from("quotations")
       .select(
-        "id, quotation_number, status, total, currency, valid_until, customer:customers(company_name, email)"
+        "id, quotation_number, status, total, currency, valid_until, customer:customers(company_name, email)",
       )
       .eq("id", body.quotation_id)
       .maybeSingle();
 
-    if (quoteError || !quotation) {
-      return jsonError(404, "Quotation not found");
-    }
+    if (quoteError || !quotation) return json(404, { error: "Quotation not found" });
 
     const customer = quotation.customer as unknown as
       | { company_name: string; email: string | null }
       | null;
 
-    if (!customer?.email) {
-      return jsonError(400, "Customer has no email on file");
-    }
+    if (!customer?.email) return json(400, { error: "Customer has no email on file" });
 
     const copy = STATUS_COPY[quotation.status] ?? {
       subject: "Update on your quotation",
@@ -110,9 +116,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      return jsonError(500, "Email service is not configured");
-    }
+    if (!resendApiKey) return json(500, { error: "Email service is not configured" });
 
     const html = `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
@@ -159,17 +163,13 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!emailRes.ok) {
-      const errText = await emailRes.text();
-      console.error("Resend error:", errText);
-      return jsonError(502, "Failed to send email");
+      console.error("Resend error:", await emailRes.text());
+      return json(502, { error: "Failed to send email" });
     }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return json(200, { success: true });
   } catch (err) {
     console.error("send-quotation-status-email unhandled error:", err);
-    return jsonError(500, "Internal server error");
+    return json(500, { error: "Internal server error" });
   }
 });

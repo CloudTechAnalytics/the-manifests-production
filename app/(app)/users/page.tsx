@@ -12,9 +12,13 @@ import {
   Power,
   Mail,
   ShieldAlert,
+  UserPlus,
+  Clock,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -61,14 +65,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatDate } from '@/lib/utils/status';
-import type { Profile, Branch, UserRole } from '@/types';
+import { formatDate, formatDateTime } from '@/lib/utils/status';
+import type { Profile, Branch, UserRole, Invitation } from '@/types';
 
 // --- Constants -------------------------------------------------------------
 
 type RoleFilter = 'all' | UserRole;
 
-const ROLE_META: Record<UserRole, { label: string; color: string }> = {
+const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; color: string }> = {
   admin: { label: 'Admin', color: 'bg-blue-100 text-blue-700' },
   operations: { label: 'Operations', color: 'bg-purple-100 text-purple-700' },
   sales: { label: 'Sales', color: 'bg-amber-100 text-amber-700' },
@@ -97,6 +101,13 @@ interface EditForm {
   role: UserRole;
   branch_id: string;
   is_active: boolean;
+}
+
+interface InviteForm {
+  email: string;
+  full_name: string;
+  role: UserRole;
+  branch_id: string;
 }
 
 // --- Component -------------------------------------------------------------
@@ -141,6 +152,21 @@ export default function UsersPage() {
   const [resetting, setResetting] = useState(false);
 
   const [toggling, setToggling] = useState(false);
+
+  // Invitations state
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState<InviteForm>({
+    email: '',
+    full_name: '',
+    role: 'operations',
+    branch_id: '',
+  });
+  const [inviteFormErrors, setInviteFormErrors] = useState<Partial<Record<keyof InviteForm, string>>>({});
+  const [inviting, setInviting] = useState(false);
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<Invitation | null>(null);
+  const [revokingInvite, setRevokingInvite] = useState(false);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -201,6 +227,27 @@ export default function UsersPage() {
     }
   }, [profile, roleFilter, debouncedSearch]);
 
+  const loadInvitations = useCallback(async () => {
+    if (!profile) return;
+    setInvitationsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('invitations')
+        .select('*')
+        .eq('organization_id', profile.organization_id)
+        .is('accepted_at', null)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInvitations((data as Invitation[]) ?? []);
+    } catch (err) {
+      console.error('Error loading invitations:', err);
+    } finally {
+      setInvitationsLoading(false);
+    }
+  }, [profile]);
+
   useEffect(() => {
     if (isAdmin) {
       loadBranches();
@@ -214,6 +261,14 @@ export default function UsersPage() {
       setLoading(false);
     }
   }, [isAdmin, loadUsers]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadInvitations();
+    } else {
+      setInvitationsLoading(false);
+    }
+  }, [isAdmin, loadInvitations]);
 
   const roleFilterOptions = useMemo(
     () => [
@@ -319,7 +374,7 @@ export default function UsersPage() {
         'user.created',
         'profiles',
         newUserId,
-        `Created user "${createForm.email.trim()}" (${ROLE_META[createForm.role].label})`,
+        `Created user "${createForm.email.trim()}" (${ROLE_META[createForm.role as keyof typeof ROLE_META].label})`,
         {
           email: createForm.email.trim(),
           full_name: createForm.full_name.trim(),
@@ -342,10 +397,98 @@ export default function UsersPage() {
       loadUsers();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to create user';
+        getErrorMessage(err, 'Failed to create user');
       toast.error(message);
     } finally {
       setCreating(false);
+    }
+  };
+
+  // --- Invite member ---------------------------------------------------------
+
+  const validateInviteForm = (): boolean => {
+    const errs: Partial<Record<keyof InviteForm, string>> = {};
+    if (!inviteForm.email.trim()) {
+      errs.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteForm.email.trim())) {
+      errs.email = 'Invalid email address';
+    }
+    if (!inviteForm.role) errs.role = 'Role is required';
+    if (!inviteForm.branch_id) errs.branch_id = 'Branch is required';
+    setInviteFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleInviteMember = async () => {
+    if (!validateInviteForm()) return;
+    if (!profile) return;
+
+    setInviting(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) {
+        toast.error('Your session has expired. Please sign in again.');
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            email: inviteForm.email.trim(),
+            full_name: inviteForm.full_name.trim() || undefined,
+            role: inviteForm.role,
+            branch_id: inviteForm.branch_id,
+          }),
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        toast.error(result.error ?? `Request failed (${response.status})`);
+        return;
+      }
+
+      toast.success(
+        result.emailed
+          ? `Invitation emailed to ${inviteForm.email.trim()}`
+          : `Invitation created. Email delivery isn't configured — share this link: ${result.link}`
+      );
+      setInviteOpen(false);
+      setInviteForm({ email: '', full_name: '', role: 'operations', branch_id: '' });
+      setInviteFormErrors({});
+      loadInvitations();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to send invitation'));
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRevokeInvite = async () => {
+    if (!revokeInviteTarget) return;
+    setRevokingInvite(true);
+    try {
+      const { error } = await supabase
+        .from('invitations')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', revokeInviteTarget.id);
+      if (error) throw error;
+      toast.success('Invitation revoked');
+      setRevokeInviteTarget(null);
+      loadInvitations();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to revoke invitation'));
+    } finally {
+      setRevokingInvite(false);
     }
   };
 
@@ -412,7 +555,7 @@ export default function UsersPage() {
       loadUsers();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update user';
+        getErrorMessage(err, 'Failed to update user');
       toast.error(message);
     } finally {
       setEditing(false);
@@ -481,7 +624,7 @@ export default function UsersPage() {
       setResetPasswordError('');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to reset password';
+        getErrorMessage(err, 'Failed to reset password');
       toast.error(message);
     } finally {
       setResetting(false);
@@ -524,7 +667,7 @@ export default function UsersPage() {
       loadUsers();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update user status';
+        getErrorMessage(err, 'Failed to update user status');
       toast.error(message);
     } finally {
       setToggling(false);
@@ -550,7 +693,7 @@ export default function UsersPage() {
               </p>
             </div>
             <Badge variant="secondary" className="text-[11px]">
-              Your role: {ROLE_META[profile.role]?.label ?? profile.role}
+              Your role: {ROLE_META[profile.role as keyof typeof ROLE_META]?.label ?? profile.role}
             </Badge>
           </CardContent>
         </Card>
@@ -585,10 +728,21 @@ export default function UsersPage() {
             Manage system users, roles, and permissions across all branches.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-1.5 h-4 w-4" />
-          Create User
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setInviteOpen(true)}
+            className="flex-1 sm:flex-none"
+          >
+            <UserPlus className="mr-1.5 h-4 w-4" />
+            Invite Member
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none">
+            <Plus className="mr-1.5 h-4 w-4" />
+            Create User
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -683,7 +837,10 @@ export default function UsersPage() {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => {
-                    const roleMeta = ROLE_META[user.role];
+                    const roleMeta = ROLE_META[user.role as keyof typeof ROLE_META] ?? {
+                      label: user.role,
+                      color: 'bg-gray-100 text-gray-700',
+                    };
                     const isSelf = user.id === profile.id;
                     return (
                       <TableRow key={user.id} className="transition-colors hover:bg-accent/60">
@@ -781,6 +938,69 @@ export default function UsersPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pending Invitations */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">
+            Pending Invitations
+            {!invitationsLoading && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({invitations.length})
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {invitationsLoading ? (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : invitations.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <Clock className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">No pending invitations.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitations.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium">{inv.email}</TableCell>
+                    <TableCell>
+                      <Badge className={ROLE_META[inv.role as Exclude<UserRole, 'platform_admin'>]?.color}>
+                        {ROLE_META[inv.role as Exclude<UserRole, 'platform_admin'>]?.label ?? inv.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDateTime(inv.expires_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setRevokeInviteTarget(inv)}
+                        aria-label="Revoke invitation"
+                      >
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
@@ -943,6 +1163,165 @@ export default function UsersPage() {
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               )}
               Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Member Dialog */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open);
+          if (!open) {
+            setInviteFormErrors({});
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-blue-600" />
+              Invite Member
+            </DialogTitle>
+            <DialogDescription>
+              We'll email a join link so they can set their own password.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-email">
+                Email <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="jane@company.com"
+                value={inviteForm.email}
+                onChange={(e) =>
+                  setInviteForm((f) => ({ ...f, email: e.target.value }))
+                }
+              />
+              {inviteFormErrors.email && (
+                <p className="text-xs text-destructive">{inviteFormErrors.email}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-full_name">Full Name</Label>
+              <Input
+                id="invite-full_name"
+                placeholder="Jane Doe"
+                value={inviteForm.full_name}
+                onChange={(e) =>
+                  setInviteForm((f) => ({ ...f, full_name: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-role">
+                  Role <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={inviteForm.role}
+                  onValueChange={(v) =>
+                    setInviteForm((f) => ({ ...f, role: v as UserRole }))
+                  }
+                >
+                  <SelectTrigger id="invite-role">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {inviteFormErrors.role && (
+                  <p className="text-xs text-destructive">{inviteFormErrors.role}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-branch">
+                  Branch <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={inviteForm.branch_id}
+                  onValueChange={(v) =>
+                    setInviteForm((f) => ({ ...f, branch_id: v }))
+                  }
+                >
+                  <SelectTrigger id="invite-branch">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {inviteFormErrors.branch_id && (
+                  <p className="text-xs text-destructive">{inviteFormErrors.branch_id}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setInviteOpen(false)}
+              disabled={inviting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleInviteMember} disabled={inviting}>
+              {inviting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Send Invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke Invitation Dialog */}
+      <Dialog
+        open={!!revokeInviteTarget}
+        onOpenChange={(open) => !open && setRevokeInviteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <X className="h-5 w-5 text-red-600" />
+              Revoke invitation?
+            </DialogTitle>
+            <DialogDescription>
+              {revokeInviteTarget?.email} will no longer be able to use this
+              invitation link to join.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRevokeInviteTarget(null)}
+              disabled={revokingInvite}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRevokeInvite}
+              disabled={revokingInvite}
+            >
+              {revokingInvite && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Revoke
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -25,6 +25,7 @@ import {
   CreditCard,
   Warehouse,
   ClipboardList,
+  Building2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -51,6 +52,7 @@ type NavItem = {
   label: string;
   icon: typeof LayoutDashboard;
   adminOnly?: boolean;
+  platformAdminOnly?: boolean;
 };
 
 // Professionally grouped navigation. Only real, existing routes are
@@ -98,6 +100,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 const administrationItems: NavItem[] = [
   { href: '/users', label: 'Users', icon: UserCog, adminOnly: true },
   { href: '/settings', label: 'Settings', icon: Settings },
+  {
+    href: '/platform',
+    label: 'Platform Console',
+    icon: Building2,
+    platformAdminOnly: true,
+  },
 ];
 
 function Logo() {
@@ -107,7 +115,7 @@ function Logo() {
         <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
       </div>
       <div className="flex flex-col">
-        <span className="text-xl font-bold leading-none tracking-tight text-brand-dark-foreground">
+        <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-dark-foreground">
           The Manifest
         </span>
         <span className="mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
@@ -138,7 +146,8 @@ function NavGroup({
       </p>
       <div className="space-y-0.5">
         {items.map((item) => {
-          if ('adminOnly' in item && item.adminOnly && role !== 'admin') return null;
+          if (item.adminOnly && role !== 'admin') return null;
+          if (item.platformAdminOnly && role !== 'platform_admin') return null;
           const Icon = item.icon;
           const active = pathname.startsWith(item.href);
           return (
@@ -296,7 +305,7 @@ export function MobileTopBar() {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold">
           <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
         </div>
-        <span className="text-base font-bold tracking-tight">The Manifest</span>
+        <span className="font-serif text-base font-bold tracking-tight">The Manifest</span>
       </div>
       <Button
         variant="ghost"

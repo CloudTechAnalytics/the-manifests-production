@@ -28,6 +28,7 @@ export function useBranchFilter() {
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
+  platform_admin: 'Platform Admin',
   admin: 'Administrator',
   operations: 'Operations',
   sales: 'Sales',
