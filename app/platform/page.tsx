@@ -6,8 +6,6 @@ import {
   CheckCircle2,
   XCircle,
   Users,
-  ShieldCheck,
-  UserPlus,
   Plus,
   TrendingUp,
   DollarSign,
@@ -24,7 +22,7 @@ import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { OrganizationGrowthChart } from '@/components/platform/organization-growth-chart';
 import { SystemHealthCard } from '@/components/platform/system-health-card';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/utils/status';
+import { formatCompactCurrency } from '@/lib/utils/status';
 
 export default function PlatformDashboardPage() {
   const { profile } = useAuth();
@@ -54,15 +52,17 @@ export default function PlatformDashboardPage() {
       color: 'bg-red-50 text-red-600',
     },
     {
+      // Compact notation (₦50K, ₦2.5M) so the figure always fits the
+      // tile; the exact amount lives on Subscriptions, one click away.
       label: 'MRR',
-      value: formatCurrency(stats.mrr),
+      value: formatCompactCurrency(stats.mrr),
       icon: TrendingUp,
       href: '/platform/subscriptions',
       color: 'bg-primary/10 text-primary',
     },
     {
       label: 'ARR',
-      value: formatCurrency(stats.arr),
+      value: formatCompactCurrency(stats.arr),
       icon: DollarSign,
       href: '/platform/subscriptions',
       color: 'bg-primary/10 text-primary',
@@ -78,20 +78,6 @@ export default function PlatformDashboardPage() {
       label: 'Total Users',
       value: stats.totalUsers,
       icon: Users,
-      href: '/platform/organization-users',
-      color: 'bg-primary/10 text-primary',
-    },
-    {
-      label: 'Platform Team',
-      value: stats.platformTeamCount,
-      icon: ShieldCheck,
-      href: '/platform/platform-users',
-      color: 'bg-primary/10 text-primary',
-    },
-    {
-      label: 'New This Month',
-      value: stats.newUsersThisMonth,
-      icon: UserPlus,
       href: '/platform/organization-users',
       color: 'bg-primary/10 text-primary',
     },
@@ -115,7 +101,7 @@ export default function PlatformDashboardPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-9">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading} />
         ))}

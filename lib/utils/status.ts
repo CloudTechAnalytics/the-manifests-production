@@ -208,6 +208,20 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
 }
 
 /**
+ * Compact currency for KPI tiles — "₦50K", "₦2.5M" — where the full
+ * 2-decimal figure would overflow a narrow card. Exact amounts belong on
+ * the page the tile links to, not the tile itself.
+ */
+export function formatCompactCurrency(amount: number, currency = 'NGN'): string {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(amount);
+}
+
+/**
  * Given a map of currency -> total, picks the currency with the highest
  * total to use as the "primary" one for single-number aggregates (avoids
  * silently blending incompatible currencies into one misleading figure).
