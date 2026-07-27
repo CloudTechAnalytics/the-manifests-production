@@ -20,6 +20,7 @@ import {
   Boxes,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -325,7 +326,7 @@ export default function EditShipmentPage() {
       router.push(`/shipments/${shipmentId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update shipment';
+        getErrorMessage(err, 'Failed to update shipment');
       toast.error(message);
     } finally {
       setSubmitting(false);

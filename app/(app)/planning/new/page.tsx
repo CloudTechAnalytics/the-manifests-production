@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, ClipboardList, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -209,7 +210,7 @@ export default function NewPlanPage() {
       toast.success('Plan created — fill in container, vessel, and transport details as they become available.');
       router.push(`/planning/${data.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create plan';
+      const message = getErrorMessage(err, 'Failed to create plan');
       toast.error(message);
     } finally {
       setSubmitting(false);

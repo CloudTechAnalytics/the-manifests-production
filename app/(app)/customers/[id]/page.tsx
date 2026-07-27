@@ -21,6 +21,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -193,7 +194,7 @@ export default function CustomerDetailPage() {
       router.push('/customers');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to delete customer';
+        getErrorMessage(err, 'Failed to delete customer');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -300,7 +301,7 @@ export default function CustomerDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete customer?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete customer?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete &quot;{customer.company_name}&quot;.
                   The record is retained but hidden from lists. This action

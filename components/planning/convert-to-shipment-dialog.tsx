@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowRightLeft, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -109,7 +110,7 @@ export function ConvertToShipmentDialog({
       onOpenChange(false);
       router.push(`/shipments/${shipment.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to convert plan';
+      const message = getErrorMessage(err, 'Failed to convert plan');
       toast.error(message);
     } finally {
       setConverting(false);

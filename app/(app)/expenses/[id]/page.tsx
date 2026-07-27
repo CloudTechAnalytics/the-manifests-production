@@ -15,6 +15,7 @@ import {
   Package,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -121,7 +122,7 @@ export default function ExpenseDetailPage() {
       toast.success(`Expense ${decision}`);
       loadData();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update expense';
+      const message = getErrorMessage(err, 'Failed to update expense');
       toast.error(message);
     } finally {
       setUpdating(false);
@@ -151,7 +152,7 @@ export default function ExpenseDetailPage() {
       toast.success('Expense deleted');
       router.push('/expenses');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete expense';
+      const message = getErrorMessage(err, 'Failed to delete expense');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -265,7 +266,7 @@ export default function ExpenseDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete expense?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete expense?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete expense &quot;{expense.expense_number}&quot;. The
                   record is retained but hidden from lists.

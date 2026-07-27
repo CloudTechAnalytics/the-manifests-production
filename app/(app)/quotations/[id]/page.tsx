@@ -28,6 +28,7 @@ import {
   Waypoints,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -265,7 +266,7 @@ export default function QuotationDetailPage() {
       loadData();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update status';
+        getErrorMessage(err, 'Failed to update status');
       toast.error(message);
     } finally {
       setUpdatingStatus(false);
@@ -304,7 +305,7 @@ export default function QuotationDetailPage() {
       router.push('/quotations');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to delete quotation';
+        getErrorMessage(err, 'Failed to delete quotation');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -385,7 +386,7 @@ export default function QuotationDetailPage() {
       router.push(`/quotations/${newId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to duplicate quotation';
+        getErrorMessage(err, 'Failed to duplicate quotation');
       toast.error(message);
     } finally {
       setDuplicating(false);
@@ -560,7 +561,7 @@ export default function QuotationDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete quotation?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete quotation?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete quotation{' '}
                   &quot;{quotation.quotation_number ?? 'Draft'}&quot;. The record

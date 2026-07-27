@@ -20,6 +20,7 @@ import {
   Boxes,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -290,7 +291,7 @@ export default function NewShipmentPage() {
       router.push(`/shipments/${shipmentId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to create shipment';
+        getErrorMessage(err, 'Failed to create shipment');
       toast.error(message);
     } finally {
       setSubmitting(false);

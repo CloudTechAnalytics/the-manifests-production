@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -137,7 +138,7 @@ export default function NewExpensePage() {
       toast.success('Expense logged successfully');
       router.push(`/expenses/${data.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create expense';
+      const message = getErrorMessage(err, 'Failed to create expense');
       toast.error(message);
     } finally {
       setSubmitting(false);

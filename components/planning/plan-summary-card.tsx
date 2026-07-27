@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { DollarSign, TrendingUp, Percent, ShieldAlert, Copy, XCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,7 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
       toast.success(`Duplicated as ${data.plan_number}`);
       router.push(`/planning/${data.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to duplicate plan';
+      const message = getErrorMessage(err, 'Failed to duplicate plan');
       toast.error(message);
     } finally {
       setDuplicating(false);
@@ -118,7 +119,7 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
       setCancelOpen(false);
       onUpdated();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel plan';
+      const message = getErrorMessage(err, 'Failed to cancel plan');
       toast.error(message);
     } finally {
       setCancelling(false);
@@ -215,7 +216,10 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel plan?</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              Cancel plan?
+            </DialogTitle>
             <DialogDescription>
               This marks &quot;{plan.plan_number}&quot; as cancelled. It stays visible for reference
               but can no longer be converted to a shipment.

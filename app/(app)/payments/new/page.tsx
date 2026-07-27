@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Wallet, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -241,7 +242,7 @@ export default function NewPaymentPage() {
       toast.success('Payment recorded successfully');
       router.push(`/payments/${paymentData.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to record payment';
+      const message = getErrorMessage(err, 'Failed to record payment');
       toast.error(message);
     } finally {
       setSubmitting(false);

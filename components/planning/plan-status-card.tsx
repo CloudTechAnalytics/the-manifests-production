@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Info, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ export function PlanStatusCard({ plan, onUpdated }: PlanStatusCardProps) {
       toast.success(`Plan marked as ${PLAN_STATUS_META[status].label}`);
       onUpdated();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update plan status';
+      const message = getErrorMessage(err, 'Failed to update plan status');
       toast.error(message);
     } finally {
       setUpdating(false);

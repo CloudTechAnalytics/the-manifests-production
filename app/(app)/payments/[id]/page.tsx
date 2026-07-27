@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Trash2, Wallet, User, Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -200,7 +201,7 @@ export default function PaymentDetailPage() {
       setNewAllocations({});
       loadData();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to allocate payment';
+      const message = getErrorMessage(err, 'Failed to allocate payment');
       toast.error(message);
     } finally {
       setAllocating(false);
@@ -242,7 +243,7 @@ export default function PaymentDetailPage() {
       toast.success('Payment deleted');
       router.push('/payments');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete payment';
+      const message = getErrorMessage(err, 'Failed to delete payment');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -437,7 +438,7 @@ export default function PaymentDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete payment?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete payment?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete payment &quot;{payment.payment_number}&quot; and remove
                   its allocations, updating any linked invoices&apos; outstanding balances back

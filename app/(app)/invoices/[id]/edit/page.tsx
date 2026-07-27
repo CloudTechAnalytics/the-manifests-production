@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Receipt, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -169,7 +170,7 @@ export default function EditInvoicePage() {
       toast.success('Invoice updated successfully');
       router.push(`/invoices/${invoiceId}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update invoice';
+      const message = getErrorMessage(err, 'Failed to update invoice');
       toast.error(message);
     } finally {
       setSubmitting(false);

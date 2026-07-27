@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowLeft, Warehouse as WarehouseIcon, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,7 +132,7 @@ export default function WarehouseLocationsPage() {
       setDialogOpen(false);
       loadWarehouses();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save warehouse';
+      const message = getErrorMessage(err, 'Failed to save warehouse');
       toast.error(message);
     } finally {
       setSubmitting(false);
@@ -151,7 +152,7 @@ export default function WarehouseLocationsPage() {
       setDeleteTarget(null);
       loadWarehouses();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete warehouse';
+      const message = getErrorMessage(err, 'Failed to delete warehouse');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -293,7 +294,7 @@ export default function WarehouseLocationsPage() {
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete warehouse?</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete warehouse?</DialogTitle>
             <DialogDescription>
               This will soft-delete &quot;{deleteTarget?.name}&quot;. Its stock and movement history are
               preserved but the location will no longer appear in selectors.

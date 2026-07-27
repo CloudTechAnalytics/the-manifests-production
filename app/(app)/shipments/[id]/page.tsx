@@ -29,6 +29,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -266,7 +267,7 @@ export default function ShipmentDetailPage() {
       loadData();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update status';
+        getErrorMessage(err, 'Failed to update status');
       toast.error(message);
     } finally {
       setUpdatingStatus(false);
@@ -322,7 +323,7 @@ export default function ShipmentDetailPage() {
       loadData();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to add timeline entry';
+        getErrorMessage(err, 'Failed to add timeline entry');
       toast.error(message);
     } finally {
       setAddingTimeline(false);
@@ -363,7 +364,7 @@ export default function ShipmentDetailPage() {
       router.push('/shipments');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to delete shipment';
+        getErrorMessage(err, 'Failed to delete shipment');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -546,7 +547,7 @@ export default function ShipmentDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete shipment?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete shipment?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete shipment{' '}
                   &quot;{shipment.reference_number}&quot;. The record is

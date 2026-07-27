@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CheckSquare, Loader2, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,7 +107,7 @@ export function PlanTasksPanel({ planId, branchId, staff }: PlanTasksPanelProps)
       resetForm();
       loadTasks();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to add task';
+      const message = getErrorMessage(err, 'Failed to add task');
       toast.error(message);
     } finally {
       setSubmitting(false);

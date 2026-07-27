@@ -52,7 +52,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/status';
 import type { Customer, Quotation, ShipmentType } from '@/types';
 
@@ -380,7 +380,7 @@ export default function EditQuotationPage() {
       router.push(`/quotations/${quotationId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update quotation';
+        getErrorMessage(err, 'Failed to update quotation');
       toast.error(message);
     } finally {
       setSubmitting(false);

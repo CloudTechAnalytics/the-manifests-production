@@ -17,6 +17,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -147,7 +148,7 @@ export default function InvoiceDetailPage() {
       toast.success('Invoice deleted');
       router.push('/invoices');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete invoice';
+      const message = getErrorMessage(err, 'Failed to delete invoice');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -166,7 +167,7 @@ export default function InvoiceDetailPage() {
       toast.success('Invoice cancelled');
       loadData();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel invoice';
+      const message = getErrorMessage(err, 'Failed to cancel invoice');
       toast.error(message);
     }
   };
@@ -281,7 +282,7 @@ export default function InvoiceDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete invoice?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete invoice?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete invoice &quot;{invoice.invoice_number}&quot;. The
                   record is retained but hidden from lists. This action can be undone by

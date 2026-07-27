@@ -9,8 +9,13 @@ import {
   EyeOff,
   Plane,
   Package,
-  Globe2,
+  ClipboardList,
+  FileText,
+  Warehouse,
+  Radar,
+  Receipt,
   ShieldCheck,
+  Building2,
   Mail,
   Lock,
   ArrowRight,
@@ -21,22 +26,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
-const highlights = [
-  {
-    icon: Package,
-    title: 'End-to-end shipment tracking',
-    description: 'Follow every booking from origin to delivery in real time.',
-  },
-  {
-    icon: Globe2,
-    title: 'Multi-branch operations',
-    description: 'Coordinate customers, quotations, and staff across branches.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Role-based access control',
-    description: 'Keep sensitive freight data scoped to the right people.',
-  },
+// Every entry here maps to a real, existing module in the app — no
+// aspirational or not-yet-built features listed.
+const features = [
+  { icon: Package, label: 'Import & Export Operations' },
+  { icon: Radar, label: 'Live Shipment Tracking' },
+  { icon: ClipboardList, label: 'Shipment Planning' },
+  { icon: Receipt, label: 'Finance & Invoicing' },
+  { icon: FileText, label: 'Customs Documentation' },
+  { icon: ShieldCheck, label: 'Enterprise-grade Security' },
+  { icon: Warehouse, label: 'Warehouse Management' },
+  { icon: Building2, label: 'Multi-branch Operations' },
 ];
 
 // A hub node on the route illustration — position is percentage-based so it
@@ -49,14 +49,14 @@ const routeHubs = [
 
 function RouteIllustration() {
   return (
-    <div className="relative mx-auto aspect-[400/260] w-full max-w-sm">
+    <div className="relative mx-auto aspect-[400/180] w-full max-w-sm">
       <svg
-        viewBox="0 0 400 260"
+        viewBox="0 0 400 180"
         className="absolute inset-0 h-full w-full"
         aria-hidden
       >
         <path
-          d="M60 203 C 130 100, 230 100, 340 52"
+          d="M40 140 C 110 50, 210 50, 320 30"
           stroke="hsl(var(--brand-gold-soft))"
           strokeOpacity="0.35"
           strokeWidth="1.5"
@@ -64,7 +64,7 @@ function RouteIllustration() {
           fill="none"
         />
         <path
-          d="M60 203 C 120 235, 260 235, 340 151"
+          d="M40 140 C 100 165, 240 165, 320 100"
           stroke="hsl(var(--brand-gold-soft))"
           strokeOpacity="0.2"
           strokeWidth="1.5"
@@ -79,8 +79,8 @@ function RouteIllustration() {
           style={{ left, top }}
         >
           <span className="absolute inset-0 animate-ping rounded-full bg-brand-gold/20" />
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-brand-gold/10 ring-1 ring-brand-gold/30 backdrop-blur-sm">
-            <Icon className="h-4 w-4 text-brand-gold-soft" />
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold/10 ring-1 ring-brand-gold/30 backdrop-blur-sm">
+            <Icon className="h-3.5 w-3.5 text-brand-gold-soft" />
           </div>
         </div>
       ))}
@@ -100,6 +100,11 @@ export default function LoginPage() {
     if (!loading && user) {
       if (profile?.must_change_password) {
         router.replace('/change-password');
+      } else if (profile?.role === 'platform_admin') {
+        // Platform admins are onboarding organizations, not running one —
+        // the tenant dashboard (shipments, quotations, warehouse…) isn't
+        // their workspace, so send them straight to the console instead.
+        router.replace('/platform');
       } else {
         router.replace('/dashboard');
       }
@@ -122,7 +127,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel (lg+) */}
-      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-brand-dark px-12 py-12 text-brand-dark-foreground lg:flex">
+      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-brand-dark px-12 py-10 text-brand-dark-foreground lg:flex">
         {/* Decorative background */}
         <div
           aria-hidden
@@ -139,43 +144,34 @@ export default function LoginPage() {
             <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-bold leading-none tracking-tight">
+            <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-gold-soft">
               The Manifest
             </span>
             <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
-              Est. 2026 &middot; Nigeria
+              Freight Management Platform
             </span>
           </div>
         </div>
 
-        <div className="relative space-y-8">
+        <div className="relative space-y-6">
           <RouteIllustration />
 
-          <div className="space-y-3">
-            <h1 className="text-3xl font-bold leading-tight tracking-tight">
-              Where every shipment
-              <br />
-              becomes <span className="text-brand-gold-soft">manifest.</span>
+          <div className="space-y-2.5">
+            <h1 className="font-serif text-2xl font-bold leading-tight tracking-tight">
+              The operating system for modern{' '}
+              <span className="text-brand-gold-soft">freight forwarders.</span>
             </h1>
             <p className="max-w-sm text-sm leading-relaxed text-brand-dark-muted">
-              A single, refined workspace for the modern freight forwarder —
-              quotations, bookings, tracking, and documents, brought into one
-              quiet command of operations.
+              Manage shipments, planning, tracking, warehouse operations,
+              quotations, invoices, and documents — all from one workspace.
             </p>
           </div>
 
-          <div className="space-y-5">
-            {highlights.map((h) => (
-              <div key={h.title} className="flex items-start gap-3.5">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gold/10 ring-1 ring-brand-gold/20">
-                  <h.icon className="h-4 w-4 text-brand-gold-soft" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">{h.title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-brand-dark-muted">
-                    {h.description}
-                  </p>
-                </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+            {features.map((f) => (
+              <div key={f.label} className="flex items-center gap-2">
+                <f.icon className="h-4 w-4 shrink-0 text-brand-gold-soft" />
+                <span className="text-xs text-brand-dark-muted">{f.label}</span>
               </div>
             ))}
           </div>
@@ -195,9 +191,9 @@ export default function LoginPage() {
               <Ship className="h-7 w-7 text-brand-dark" strokeWidth={2.25} />
             </div>
             <div className="text-center">
-              <h1 className="text-xl font-bold tracking-tight">The Manifest</h1>
+              <h1 className="font-serif text-xl font-bold tracking-tight">The Manifest</h1>
               <p className="text-sm text-muted-foreground">
-                Freight Operations Management
+                Freight Management Platform
               </p>
             </div>
           </div>
@@ -206,23 +202,23 @@ export default function LoginPage() {
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">
               Welcome back
             </p>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Sign in to your operations
+            <h2 className="font-serif text-2xl font-bold tracking-tight">
+              Welcome back.
             </h2>
             <p className="text-sm text-muted-foreground">
-              Enter your credentials to access the workspace.
+              Sign in to your operations workspace.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email">Business Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@company.com"
+                  placeholder="you@yourcompany.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -264,11 +260,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-brand-dark text-brand-dark-foreground hover:bg-brand-dark-elevated"
-              disabled={submitting}
-            >
+            <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -276,7 +268,7 @@ export default function LoginPage() {
                 </>
               ) : (
                 <>
-                  Sign in
+                  Sign In
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </>
               )}

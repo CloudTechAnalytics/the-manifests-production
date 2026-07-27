@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -219,7 +220,7 @@ export default function NewCustomerPage() {
       router.push(`/customers/${customerId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to create customer';
+        getErrorMessage(err, 'Failed to create customer');
       toast.error(message);
     } finally {
       setSubmitting(false);

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, ClipboardList, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -257,7 +258,7 @@ export default function EditPlanPage() {
       toast.success('Plan updated successfully');
       router.push(`/planning/${planId}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update plan';
+      const message = getErrorMessage(err, 'Failed to update plan');
       toast.error(message);
     } finally {
       setSubmitting(false);

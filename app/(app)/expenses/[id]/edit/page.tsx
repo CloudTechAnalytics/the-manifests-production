@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -174,7 +175,7 @@ export default function EditExpensePage() {
       toast.success('Expense updated successfully');
       router.push(`/expenses/${expenseId}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update expense';
+      const message = getErrorMessage(err, 'Failed to update expense');
       toast.error(message);
     } finally {
       setSubmitting(false);

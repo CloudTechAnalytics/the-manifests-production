@@ -16,6 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -309,7 +310,7 @@ export default function EditCustomerPage({
       router.push(`/customers/${customerId}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update customer';
+        getErrorMessage(err, 'Failed to update customer');
       toast.error(message);
     } finally {
       setSubmitting(false);

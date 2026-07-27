@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Receipt, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -207,7 +208,7 @@ export default function NewInvoicePage() {
       toast.success('Invoice created successfully');
       router.push(`/invoices/${invoiceData.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create invoice';
+      const message = getErrorMessage(err, 'Failed to create invoice');
       toast.error(message);
     } finally {
       setSubmitting(false);

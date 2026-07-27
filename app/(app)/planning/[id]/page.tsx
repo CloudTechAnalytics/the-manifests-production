@@ -13,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -201,7 +202,7 @@ export default function PlanDetailPage() {
       setEditingNotes(false);
       loadPlan();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update notes';
+      const message = getErrorMessage(err, 'Failed to update notes');
       toast.error(message);
     } finally {
       setSavingNotes(false);
@@ -220,7 +221,7 @@ export default function PlanDetailPage() {
       toast.success('Plan deleted');
       router.push('/planning');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete plan';
+      const message = getErrorMessage(err, 'Failed to delete plan');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -343,7 +344,7 @@ export default function PlanDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete plan?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete plan?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete &quot;{plan.plan_number}&quot;. This does not affect any
                   shipment it was already converted to.

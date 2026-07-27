@@ -16,6 +16,7 @@ import {
   ArrowLeftRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -151,7 +152,7 @@ export default function StockItemDetailPage() {
       toast.success('Item deleted');
       router.push('/warehouse');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete item';
+      const message = getErrorMessage(err, 'Failed to delete item');
       toast.error(message);
     } finally {
       setDeleting(false);
@@ -259,7 +260,7 @@ export default function StockItemDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete item?</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete item?</DialogTitle>
                 <DialogDescription>
                   This will soft-delete &quot;{item.name}&quot; from the catalog. Its stock and
                   movement history are preserved.

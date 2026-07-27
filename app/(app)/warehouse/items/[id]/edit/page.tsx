@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Boxes, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -133,7 +134,7 @@ export default function EditStockItemPage() {
       toast.success('Item updated successfully');
       router.push(`/warehouse/items/${itemId}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update item';
+      const message = getErrorMessage(err, 'Failed to update item');
       toast.error(message);
     } finally {
       setSubmitting(false);

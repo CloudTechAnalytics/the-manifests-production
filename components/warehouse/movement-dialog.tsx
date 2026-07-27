@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -135,7 +136,7 @@ export function MovementDialog({
       onOpenChange(false);
       onSuccess();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to record movement';
+      const message = getErrorMessage(err, 'Failed to record movement');
       toast.error(message);
     } finally {
       setSubmitting(false);

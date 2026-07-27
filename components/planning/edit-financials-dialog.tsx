@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,7 +68,7 @@ export function EditFinancialsDialog({ plan, open, onOpenChange, onSaved }: Edit
       onOpenChange(false);
       onSaved();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update financials';
+      const message = getErrorMessage(err, 'Failed to update financials');
       toast.error(message);
     } finally {
       setSubmitting(false);
