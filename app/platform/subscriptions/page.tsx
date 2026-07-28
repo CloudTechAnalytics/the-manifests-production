@@ -172,6 +172,16 @@ export default function SubscriptionsPage() {
         { onConflict: 'organization_id' }
       );
       if (error) throw error;
+
+      const planName = plans.find((p) => p.id === assignPlanId)?.name ?? 'a plan';
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: assignTarget.id,
+        action: 'subscription.assigned',
+        entity_type: 'org_subscription',
+        description: `Assigned "${assignTarget.name}" to the ${planName} plan`,
+      });
+
       toast.success(`${assignTarget.name} assigned to a plan`);
       setAssignTarget(null);
       load();
@@ -183,13 +193,26 @@ export default function SubscriptionsPage() {
   };
 
   const handleChangePlan = async (sub: OrgSubscription, planId: string) => {
+    if (!profile) return;
     setUpdating(sub.id);
     try {
       const { error } = await supabase
         .from('org_subscriptions')
-        .update({ plan_id: planId, updated_by: profile?.id })
+        .update({ plan_id: planId, updated_by: profile.id })
         .eq('id', sub.id);
       if (error) throw error;
+
+      const org = orgs.find((o) => o.subscription?.id === sub.id);
+      const planName = plans.find((p) => p.id === planId)?.name ?? 'a plan';
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: sub.organization_id,
+        action: 'subscription.plan_changed',
+        entity_type: 'org_subscription',
+        entity_id: sub.id,
+        description: `Changed "${org?.name ?? 'organization'}" to the ${planName} plan`,
+      });
+
       load();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to change plan'));
@@ -199,13 +222,25 @@ export default function SubscriptionsPage() {
   };
 
   const handleChangeStatus = async (sub: OrgSubscription, status: SubscriptionStatus) => {
+    if (!profile) return;
     setUpdating(sub.id);
     try {
       const { error } = await supabase
         .from('org_subscriptions')
-        .update({ status, updated_by: profile?.id })
+        .update({ status, updated_by: profile.id })
         .eq('id', sub.id);
       if (error) throw error;
+
+      const org = orgs.find((o) => o.subscription?.id === sub.id);
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: sub.organization_id,
+        action: 'subscription.status_changed',
+        entity_type: 'org_subscription',
+        entity_id: sub.id,
+        description: `Changed "${org?.name ?? 'organization'}"'s subscription status to ${status}`,
+      });
+
       load();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to change status'));

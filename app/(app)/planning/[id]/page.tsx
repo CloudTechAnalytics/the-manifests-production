@@ -218,6 +218,16 @@ export default function PlanDetailPage() {
         .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
         .eq('id', planId);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: plan.branch_id,
+        action: 'plan.deleted',
+        entity_type: 'shipment_plan',
+        entity_id: planId,
+        description: `Deleted plan ${plan.plan_number ?? ''}`,
+      });
+
       toast.success('Plan deleted');
       router.push('/planning');
     } catch (err) {

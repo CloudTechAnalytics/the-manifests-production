@@ -164,6 +164,16 @@ export default function InvoiceDetailPage() {
         .update({ status: 'cancelled', updated_by: profile.id, updated_at: new Date().toISOString() })
         .eq('id', invoiceId);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: invoice.branch_id,
+        action: 'invoice.cancelled',
+        entity_type: 'invoice',
+        entity_id: invoiceId,
+        description: `Cancelled invoice ${invoice.invoice_number ?? ''}`,
+      });
+
       toast.success('Invoice cancelled');
       loadData();
     } catch (err) {

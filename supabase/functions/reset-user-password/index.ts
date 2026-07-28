@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: targetProfile } = await admin
       .from("profiles")
-      .select("id, is_active, branch_id")
+      .select("id, is_active, branch_id, organization_id")
       .eq("id", body.user_id)
       .maybeSingle();
 
@@ -117,19 +117,15 @@ Deno.serve(async (req: Request) => {
       .update({ must_change_password: true, updated_by: callerId })
       .eq("id", body.user_id);
 
-    // activities.branch_id is NOT NULL — only log when the target user has
-    // a branch to attribute it to, rather than failing this insert (and
-    // silently losing the audit trail) on every reset for a branch-less user.
-    if (targetProfile.branch_id) {
-      await admin.from("activities").insert({
-        user_id: callerId,
-        branch_id: targetProfile.branch_id,
-        action: "reset_user_password",
-        entity_type: "profiles",
-        entity_id: body.user_id,
-        description: "Admin reset user password",
-      });
-    }
+    await admin.from("activities").insert({
+      user_id: callerId,
+      branch_id: targetProfile.branch_id,
+      organization_id: targetProfile.branch_id ? null : targetProfile.organization_id,
+      action: "user.password_reset",
+      entity_type: "profiles",
+      entity_id: body.user_id,
+      description: "Admin reset user password",
+    });
 
     return json(200, { success: true });
   } catch (err) {

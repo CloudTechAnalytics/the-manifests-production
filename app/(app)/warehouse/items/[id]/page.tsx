@@ -149,6 +149,16 @@ export default function StockItemDetailPage() {
         .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
         .eq('id', itemId);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: item.branch_id,
+        action: 'stock_item.deleted',
+        entity_type: 'stock_item',
+        entity_id: itemId,
+        description: `Deleted item "${item.name}"`,
+      });
+
       toast.success('Item deleted');
       router.push('/warehouse');
     } catch (err) {

@@ -6,6 +6,7 @@ import { ArrowLeft, Trash2, ArchiveRestore, Loader2, AlertTriangle } from 'lucid
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { useAuth } from '@/contexts/auth-context';
 import { formatDate } from '@/lib/utils/status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,6 +30,7 @@ import {
 import type { Organization } from '@/types';
 
 export default function OrganizationsTrashPage() {
+  const { profile } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoreTarget, setRestoreTarget] = useState<Organization | null>(null);
@@ -58,7 +60,7 @@ export default function OrganizationsTrashPage() {
   }, [load]);
 
   const handleRestore = async () => {
-    if (!restoreTarget) return;
+    if (!restoreTarget || !profile) return;
     setRestoring(true);
     try {
       const { error } = await supabase
@@ -66,6 +68,16 @@ export default function OrganizationsTrashPage() {
         .update({ deleted_at: null })
         .eq('id', restoreTarget.id);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: restoreTarget.id,
+        action: 'organization.restored',
+        entity_type: 'organization',
+        entity_id: restoreTarget.id,
+        description: `Restored organization "${restoreTarget.name}" from Trash`,
+      });
+
       toast.success(`${restoreTarget.name} restored`);
       setRestoreTarget(null);
       load();

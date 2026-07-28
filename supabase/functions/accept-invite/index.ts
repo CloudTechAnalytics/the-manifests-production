@@ -166,19 +166,15 @@ Deno.serve(async (req: Request) => {
       console.error("accept-invite mark error:", markError.message);
     }
 
-    // activities.branch_id is NOT NULL, but an org admin can legitimately
-    // have no branch — log only when there is one to attribute it to,
-    // rather than failing an otherwise-successful signup.
-    if (invite.branch_id) {
-      await admin.from("activities").insert({
-        user_id: newUserId,
-        branch_id: invite.branch_id,
-        action: "user.joined",
-        entity_type: "profiles",
-        entity_id: newUserId,
-        description: `${invite.email} accepted an invitation (${invite.role})`,
-      });
-    }
+    await admin.from("activities").insert({
+      user_id: newUserId,
+      branch_id: invite.branch_id,
+      organization_id: invite.organization_id,
+      action: "user.joined",
+      entity_type: "profiles",
+      entity_id: newUserId,
+      description: `${invite.email} accepted an invitation (${invite.role})`,
+    });
 
     return json(200, { success: true, email: invite.email });
   } catch (err) {

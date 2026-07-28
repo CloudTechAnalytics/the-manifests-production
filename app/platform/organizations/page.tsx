@@ -190,6 +190,15 @@ export default function PlatformOrganizationsPage() {
       if (error) throw error;
       const newOrg = data as Organization;
 
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: newOrg.id,
+        action: 'organization.created',
+        entity_type: 'organization',
+        entity_id: newOrg.id,
+        description: `Created organization "${newOrg.name}"`,
+      });
+
       if (createPlanId === TRIAL_ONLY) {
         // Free trial with no paid plan chosen yet — nothing to assign.
         toast.success(`${newOrg.name} created on a ${TRIAL_DAYS}-day free trial`);
@@ -216,6 +225,13 @@ export default function PlatformOrganizationsPage() {
           );
         } else {
           const planName = plans.find((p) => p.id === createPlanId)?.name ?? 'plan';
+          await supabase.from('activities').insert({
+            user_id: profile.id,
+            organization_id: newOrg.id,
+            action: 'subscription.assigned',
+            entity_type: 'org_subscription',
+            description: `Assigned "${newOrg.name}" to the ${planName} plan (trial)`,
+          });
           toast.success(`${newOrg.name} created on the ${planName} plan (trial)`);
         }
       }
@@ -246,7 +262,7 @@ export default function PlatformOrganizationsPage() {
   };
 
   const handleEdit = async () => {
-    if (!editTarget) return;
+    if (!editTarget || !profile) return;
     const errs = validate(editForm);
     setEditErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -267,6 +283,15 @@ export default function PlatformOrganizationsPage() {
 
       if (error) throw error;
 
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: editTarget.id,
+        action: 'organization.updated',
+        entity_type: 'organization',
+        entity_id: editTarget.id,
+        description: `Updated organization "${editForm.name.trim()}"`,
+      });
+
       toast.success('Organization updated');
       setEditTarget(null);
       load();
@@ -278,7 +303,7 @@ export default function PlatformOrganizationsPage() {
   };
 
   const handleToggleActive = async () => {
-    if (!toggleTarget) return;
+    if (!toggleTarget || !profile) return;
     setToggling(true);
     try {
       const newState = !toggleTarget.is_active;
@@ -287,6 +312,16 @@ export default function PlatformOrganizationsPage() {
         .update({ is_active: newState })
         .eq('id', toggleTarget.id);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: toggleTarget.id,
+        action: newState ? 'organization.activated' : 'organization.suspended',
+        entity_type: 'organization',
+        entity_id: toggleTarget.id,
+        description: `${newState ? 'Activated' : 'Suspended'} organization "${toggleTarget.name}"`,
+      });
+
       toast.success(`${toggleTarget.name} ${newState ? 'activated' : 'suspended'}`);
       setToggleTarget(null);
       load();
@@ -298,7 +333,7 @@ export default function PlatformOrganizationsPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !profile) return;
     setDeleting(true);
     try {
       const { error } = await supabase
@@ -306,6 +341,16 @@ export default function PlatformOrganizationsPage() {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', deleteTarget.id);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: deleteTarget.id,
+        action: 'organization.deleted',
+        entity_type: 'organization',
+        entity_id: deleteTarget.id,
+        description: `Moved organization "${deleteTarget.name}" to Trash`,
+      });
+
       toast.success(`${deleteTarget.name} moved to Trash`);
       setDeleteTarget(null);
       setDeleteConfirmText('');

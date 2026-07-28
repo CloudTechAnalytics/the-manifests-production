@@ -32,7 +32,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager"]);
+const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -192,18 +192,15 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "Failed to create user profile" });
     }
 
-    // activities.branch_id is NOT NULL — only log when this user has a
-    // branch to attribute it to (a freshly created org admin may not).
-    if (branchId) {
-      await admin.from("activities").insert({
-        user_id: callerId,
-        branch_id: branchId,
-        action: "created_user",
-        entity_type: "profiles",
-        entity_id: newUserId,
-        description: `Created user ${body.email} (${body.role})`,
-      });
-    }
+    await admin.from("activities").insert({
+      user_id: callerId,
+      branch_id: branchId,
+      organization_id: branchId ? null : organizationId,
+      action: "user.created",
+      entity_type: "profiles",
+      entity_id: newUserId,
+      description: `Created user ${body.email} (${body.role})`,
+    });
 
     return json(200, { success: true, user_id: newUserId });
   } catch (err) {

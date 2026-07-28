@@ -15,7 +15,9 @@ import {
   FileCheck,
   Loader2,
   CloudUpload,
+  Eye,
 } from 'lucide-react';
+import { DocumentViewerDialog } from '@/components/documents/document-viewer-dialog';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from 'sonner';
@@ -160,6 +162,9 @@ export default function DocumentsPage() {
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Preview state
+  const [previewTarget, setPreviewTarget] = useState<DocumentRow | null>(null);
 
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -720,6 +725,15 @@ export default function DocumentsPage() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:bg-accent"
+                            onClick={() => setPreviewTarget(doc)}
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                             onClick={() => handleDownload(doc)}
                             title="Download"
@@ -1054,6 +1068,8 @@ export default function DocumentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DocumentViewerDialog doc={previewTarget} onClose={() => setPreviewTarget(null)} />
     </div>
   );
 }

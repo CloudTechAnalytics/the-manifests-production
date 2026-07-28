@@ -81,6 +81,7 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   operations: { label: 'Operations', color: 'bg-purple-100 text-purple-700' },
   sales: { label: 'Sales', color: 'bg-amber-100 text-amber-700' },
   branch_manager: { label: 'Branch Manager', color: 'bg-cyan-100 text-cyan-700' },
+  finance: { label: 'Finance', color: 'bg-emerald-100 text-emerald-700' },
 };
 
 interface BranchForm {

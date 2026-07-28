@@ -5,7 +5,8 @@ export type UserRole =
   | 'admin'
   | 'operations'
   | 'sales'
-  | 'branch_manager';
+  | 'branch_manager'
+  | 'finance';
 
 export type CustomerType = 'individual' | 'corporate';
 
@@ -292,7 +293,8 @@ export interface UserPreferences {
 export interface Activity {
   id: string;
   user_id: string | null;
-  branch_id: string;
+  branch_id: string | null;
+  organization_id: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;

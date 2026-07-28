@@ -100,6 +100,7 @@ export default function EditPlanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [planNumber, setPlanNumber] = useState<string | null>(null);
+  const [planBranchId, setPlanBranchId] = useState<string | null>(null);
   const [staff, setStaff] = useState<Profile[]>([]);
 
   const isAdmin = profile?.role === 'admin';
@@ -133,6 +134,7 @@ export default function EditPlanPage() {
 
       const p = data as ShipmentPlan;
       setPlanNumber(p.plan_number);
+      setPlanBranchId(p.branch_id);
       reset({
         priority: p.priority,
         shipment_type: p.shipment_type ?? '',
@@ -254,6 +256,15 @@ export default function EditPlanPage() {
         .eq('id', planId);
 
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: planBranchId,
+        action: 'plan.updated',
+        entity_type: 'shipment_plan',
+        entity_id: planId,
+        description: `Updated plan ${planNumber ?? ''}`,
+      });
 
       toast.success('Plan updated successfully');
       router.push(`/planning/${planId}`);

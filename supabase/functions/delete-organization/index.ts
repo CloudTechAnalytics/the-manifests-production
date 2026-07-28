@@ -126,6 +126,16 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Logged before the delete — organization_id would have nothing left
+    // to reference once the row it's about is actually gone.
+    await admin.from("activities").insert({
+      user_id: callerData.user.id,
+      organization_id: body.organization_id,
+      action: "organization.permanently_deleted",
+      entity_type: "organization",
+      description: `Permanently deleted organization "${org.name}" (${members?.length ?? 0} member account${(members?.length ?? 0) === 1 ? "" : "s"} removed)`,
+    });
+
     const { error: deleteOrgError } = await admin
       .from("organizations")
       .delete()

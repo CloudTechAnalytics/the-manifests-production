@@ -31,7 +31,7 @@ function corsHeaders(req: Request) {
 
 // platform_admin is deliberately absent: it is never scoped to one
 // organization, so it cannot be granted through an org invitation.
-const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager"]);
+const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_TTL_DAYS = 7;
@@ -210,6 +210,16 @@ Deno.serve(async (req: Request) => {
       console.error("invite insert error:", inviteError.message);
       return json(400, { error: "Failed to create invitation" });
     }
+
+    await admin.from("activities").insert({
+      user_id: caller.id,
+      branch_id: branchId,
+      organization_id: isPlatformAdmin ? orgId : null,
+      action: "invitation.sent",
+      entity_type: "invitation",
+      entity_id: invite.id,
+      description: `Invited ${email} as ${body.role}`,
+    });
 
     // The link points at the first allowlisted origin — the canonical app URL.
     const appUrl = (Deno.env.get("APP_ORIGIN") ?? "").split(",")[0].trim();

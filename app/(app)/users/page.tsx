@@ -88,6 +88,7 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   operations: { label: 'Operations', color: 'bg-purple-100 text-purple-700' },
   sales: { label: 'Sales', color: 'bg-amber-100 text-amber-700' },
   branch_manager: { label: 'Branch Manager', color: 'bg-cyan-100 text-cyan-700' },
+  finance: { label: 'Finance', color: 'bg-emerald-100 text-emerald-700' },
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -95,6 +96,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'operations', label: 'Operations' },
   { value: 'sales', label: 'Sales' },
   { value: 'branch_manager', label: 'Branch Manager' },
+  { value: 'finance', label: 'Finance' },
 ];
 
 // --- Form types ------------------------------------------------------------
@@ -493,6 +495,18 @@ export default function UsersPage() {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', revokeInviteTarget.id);
       if (error) throw error;
+
+      if (profile) {
+        await supabase.from('activities').insert({
+          user_id: profile.id,
+          branch_id: revokeInviteTarget.branch_id,
+          action: 'invitation.revoked',
+          entity_type: 'invitation',
+          entity_id: revokeInviteTarget.id,
+          description: `Revoked invitation for ${revokeInviteTarget.email}`,
+        });
+      }
+
       toast.success('Invitation revoked');
       setRevokeInviteTarget(null);
       loadInvitations();

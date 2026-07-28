@@ -116,17 +116,41 @@ export default function WarehouseLocationsPage() {
           })
           .eq('id', editing.id);
         if (error) throw error;
+
+        await supabase.from('activities').insert({
+          user_id: profile.id,
+          branch_id: editing.branch_id,
+          action: 'warehouse.updated',
+          entity_type: 'warehouse',
+          entity_id: editing.id,
+          description: `Updated warehouse "${name.trim()}"`,
+        });
+
         toast.success('Warehouse updated');
       } else {
-        const { error } = await supabase.from('warehouses').insert({
-          name: name.trim(),
-          city: city.trim() || null,
-          address: address.trim() || null,
-          branch_id: profile.branch_id,
-          created_by: profile.id,
-          updated_by: profile.id,
-        });
+        const { data: created, error } = await supabase
+          .from('warehouses')
+          .insert({
+            name: name.trim(),
+            city: city.trim() || null,
+            address: address.trim() || null,
+            branch_id: profile.branch_id,
+            created_by: profile.id,
+            updated_by: profile.id,
+          })
+          .select('id')
+          .single();
         if (error) throw error;
+
+        await supabase.from('activities').insert({
+          user_id: profile.id,
+          branch_id: profile.branch_id,
+          action: 'warehouse.created',
+          entity_type: 'warehouse',
+          entity_id: created?.id,
+          description: `Created warehouse "${name.trim()}"`,
+        });
+
         toast.success('Warehouse created');
       }
       setDialogOpen(false);
@@ -148,6 +172,16 @@ export default function WarehouseLocationsPage() {
         .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
         .eq('id', deleteTarget.id);
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: deleteTarget.branch_id,
+        action: 'warehouse.deleted',
+        entity_type: 'warehouse',
+        entity_id: deleteTarget.id,
+        description: `Deleted warehouse "${deleteTarget.name}"`,
+      });
+
       toast.success('Warehouse deleted');
       setDeleteTarget(null);
       loadWarehouses();

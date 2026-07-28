@@ -18,8 +18,10 @@ import {
   Tag,
   Bell,
   Settings,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { usePlatformNotifications } from '@/hooks/use-platform-notifications';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +35,67 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { PlatformSearch } from '@/components/platform/platform-search';
+
+/** Live onboarding signals (orgs with no admin, invites/trials expiring
+ *  soon) from usePlatformNotifications — the badge clears when the
+ *  underlying thing is resolved, not on a "mark as read" click. */
+function PlatformNotificationsBell() {
+  const { items, total, loading } = usePlatformNotifications();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative text-muted-foreground"
+          aria-label={total > 0 ? `Notifications (${total})` : 'Notifications'}
+        >
+          <Bell className="h-5 w-5" />
+          {total > 0 && (
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
+              {total > 9 ? '9+' : total}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-medium">Notifications</p>
+          <p className="text-xs text-muted-foreground">
+            {total > 0
+              ? `${total} item${total === 1 ? '' : 's'} need attention`
+              : 'Onboarding & billing signals'}
+          </p>
+        </div>
+        <DropdownMenuSeparator />
+        {loading ? (
+          <div className="px-2 py-6 text-center text-sm text-muted-foreground">Loading…</div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
+            <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+            <p className="text-sm font-medium">You&apos;re all caught up</p>
+            <p className="text-xs text-muted-foreground">No outstanding items right now.</p>
+          </div>
+        ) : (
+          items.map((item) => (
+            <DropdownMenuItem key={item.key} asChild className="cursor-pointer">
+              <Link href={item.href} className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive/10 px-1.5 text-xs font-semibold text-destructive">
+                  {item.count}
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium leading-tight">{item.label}</span>
+                  <span className="text-xs text-muted-foreground">{item.description}</span>
+                </span>
+              </Link>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 import type { Profile } from '@/types';
 
 type NavItem = { href: string; label: string; icon: typeof Building2 };
@@ -273,15 +336,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <PlatformSearch />
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground"
-              title="Notifications"
-              aria-label="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-            </Button>
+            <PlatformNotificationsBell />
             <UserMenu profile={profile} onSignOut={signOut} />
           </div>
         </header>

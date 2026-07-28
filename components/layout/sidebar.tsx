@@ -28,6 +28,7 @@ import {
   Building2,
   Bell,
   CheckCircle2,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -49,6 +50,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import type { UserRole } from '@/types';
 
 type NavItem = {
   href: string;
@@ -56,46 +58,55 @@ type NavItem = {
   icon: typeof LayoutDashboard;
   adminOnly?: boolean;
   platformAdminOnly?: boolean;
+  roles?: UserRole[];
 };
 
+const OPERATIONS_ROLES: UserRole[] = ['admin', 'branch_manager', 'operations'];
+const SALES_ROLES: UserRole[] = ['admin', 'branch_manager', 'sales'];
+const FINANCE_ROLES: UserRole[] = ['admin', 'branch_manager', 'finance'];
+
 // Professionally grouped navigation. Only real, existing routes are
-// included — dead-end links are never added.
+// included — dead-end links are never added. `roles` restricts a track
+// to the specialist roles that actually manage it (see the RBAC
+// migrations) — omitted entirely means visible to every role, used for
+// cross-cutting items like Dashboard/Documents/Reports/Activity Log.
 const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Operations',
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/shipments', label: 'Shipments', icon: Package },
-      { href: '/planning', label: 'Planning', icon: ClipboardList },
-      { href: '/tracking', label: 'Tracking', icon: Radar },
-      { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+      { href: '/shipments', label: 'Shipments', icon: Package, roles: OPERATIONS_ROLES },
+      { href: '/planning', label: 'Planning', icon: ClipboardList, roles: OPERATIONS_ROLES },
+      { href: '/tracking', label: 'Tracking', icon: Radar, roles: OPERATIONS_ROLES },
+      { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: OPERATIONS_ROLES },
     ],
   },
   {
     label: 'Sales',
     items: [
-      { href: '/quotations', label: 'Quotations', icon: FileText },
-      { href: '/sales', label: 'Sales', icon: TrendingUp },
+      { href: '/quotations', label: 'Quotations', icon: FileText, roles: SALES_ROLES },
+      { href: '/sales', label: 'Sales', icon: TrendingUp, roles: SALES_ROLES },
     ],
   },
   {
     label: 'Customers',
-    items: [{ href: '/customers', label: 'Customers', icon: Users }],
+    items: [{ href: '/customers', label: 'Customers', icon: Users, roles: SALES_ROLES }],
   },
   {
     label: 'Finance',
     items: [
-      { href: '/invoices', label: 'Invoices', icon: Receipt },
-      { href: '/payments', label: 'Payments', icon: Wallet },
-      { href: '/expenses', label: 'Expenses', icon: CreditCard },
+      { href: '/invoices', label: 'Invoices', icon: Receipt, roles: FINANCE_ROLES },
+      { href: '/payments', label: 'Payments', icon: Wallet, roles: FINANCE_ROLES },
+      { href: '/expenses', label: 'Expenses', icon: CreditCard, roles: FINANCE_ROLES },
     ],
   },
   {
     label: 'Operations Support',
     items: [
       { href: '/documents', label: 'Documents', icon: FolderOpen },
-      { href: '/warehouse', label: 'Warehouse', icon: Warehouse },
+      { href: '/warehouse', label: 'Warehouse', icon: Warehouse, roles: OPERATIONS_ROLES },
       { href: '/reports', label: 'Reports', icon: BarChart3 },
+      { href: '/activity-log', label: 'Activity Log', icon: History },
     ],
   },
 ];
@@ -209,15 +220,25 @@ function NavGroup({
   role?: string;
   onNavigate?: () => void;
 }) {
+  const visibleItems = items.filter((item) => {
+    if (item.adminOnly && role !== 'admin') return false;
+    if (item.platformAdminOnly && role !== 'platform_admin') return false;
+    if (item.roles && !item.roles.includes(role as UserRole)) return false;
+    return true;
+  });
+
+  // A role with no access to any item in a track-specific group (e.g.
+  // Finance, for an operations user) shouldn't show a floating heading
+  // with nothing underneath it.
+  if (visibleItems.length === 0) return null;
+
   return (
     <div>
       <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
         {label}
       </p>
       <div className="space-y-0.5">
-        {items.map((item) => {
-          if (item.adminOnly && role !== 'admin') return null;
-          if (item.platformAdminOnly && role !== 'platform_admin') return null;
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const active = pathname.startsWith(item.href);
           return (
@@ -258,6 +279,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             label={group.label}
             items={group.items}
             pathname={pathname}
+            role={profile?.role}
             onNavigate={onNavigate}
           />
         ))}

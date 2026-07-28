@@ -55,6 +55,7 @@ export default function EditStockItemPage() {
   const [submitting, setSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [itemName, setItemName] = useState<string | null>(null);
+  const [itemBranchId, setItemBranchId] = useState<string | null>(null);
 
   const {
     control,
@@ -92,6 +93,7 @@ export default function EditStockItemPage() {
 
       const item = data as StockItem;
       setItemName(item.name);
+      setItemBranchId(item.branch_id);
       reset({
         sku: item.sku,
         name: item.name,
@@ -130,6 +132,15 @@ export default function EditStockItemPage() {
         .eq('id', itemId);
 
       if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: itemBranchId,
+        action: 'stock_item.updated',
+        entity_type: 'stock_item',
+        entity_id: itemId,
+        description: `Updated item "${values.name.trim()}"`,
+      });
 
       toast.success('Item updated successfully');
       router.push(`/warehouse/items/${itemId}`);
