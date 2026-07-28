@@ -554,6 +554,20 @@ export default function SettingsPage() {
 
     setChangingPassword(true);
     try {
+      // The "Current Password" field was only ever checked for presence,
+      // never verified — any non-empty string would pass, which is a
+      // false assurance UX bug (not a privilege-escalation one, since a
+      // valid session is already required to reach this page). Verify it
+      // by attempting a real sign-in before applying the change.
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
+      if (verifyError) {
+        setPasswordErrors({ current: 'Current password is incorrect' });
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });

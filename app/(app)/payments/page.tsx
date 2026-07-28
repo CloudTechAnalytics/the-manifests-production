@@ -99,8 +99,9 @@ export default function PaymentsPage() {
       if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
       if (methodFilter !== 'all') query = query.eq('payment_method', methodFilter);
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `payment_number.ilike.%${debouncedSearch}%,reference.ilike.%${debouncedSearch}%,customer.company_name.ilike.%${debouncedSearch}%`
+          `payment_number.ilike.%${sanitized}%,reference.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
 

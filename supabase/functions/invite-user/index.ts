@@ -156,6 +156,13 @@ Deno.serve(async (req: Request) => {
       if (!branch) {
         return json(400, { error: "Branch does not belong to that organization" });
       }
+    } else if (body.role !== "admin") {
+      // Every non-admin role's RLS access is entirely branch-scoped (via
+      // can_access_branch(branch_id)) — an invite accepted with no branch
+      // would produce a profile locked out of everything. The frontend
+      // already enforces this (users/page.tsx's validateInviteForm), but
+      // the endpoint itself should refuse it too, same as create-user.
+      return json(400, { error: "branch_id is required for this role" });
     }
 
     const admin = createClient(

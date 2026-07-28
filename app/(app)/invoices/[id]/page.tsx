@@ -129,6 +129,19 @@ export default function InvoiceDetailPage() {
     if (!invoice || !profile) return;
     setDeleting(true);
     try {
+      // Remove allocations first so the sync trigger recalculates the
+      // affected payments' allocated/unallocated amounts before this
+      // invoice disappears — otherwise a payment would keep counting
+      // money as allocated to an invoice that's now hidden everywhere
+      // (deleted_at IS NULL is required by every SELECT policy), with no
+      // way to free that cash without direct DB intervention. Mirrors
+      // payments/[id]'s delete handler.
+      const { error: allocDeleteError } = await supabase
+        .from('payment_allocations')
+        .delete()
+        .eq('invoice_id', invoiceId);
+      if (allocDeleteError) throw allocDeleteError;
+
       const { error } = await supabase
         .from('invoices')
         .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
@@ -220,7 +233,11 @@ export default function InvoiceDetailPage() {
   const statusMeta = INVOICE_STATUS_META[invoice.status];
   const outstanding = invoice.total - invoice.amount_paid;
   const canCancel = invoice.status !== 'paid' && invoice.status !== 'cancelled';
-  const canRecordPayment = invoice.status !== 'paid' && invoice.status !== 'cancelled';
+  // Matches payments/new's loadOutstandingInvoices filter (status in
+  // sent/partial) — a draft invoice isn't sent yet, so offering "Record
+  // Payment" for one led to a dead-end: the new-payment form has nothing
+  // to preselect and never explains why.
+  const canRecordPayment = invoice.status === 'sent' || invoice.status === 'partial';
 
   return (
     <div className="space-y-6 p-6 lg:p-8">

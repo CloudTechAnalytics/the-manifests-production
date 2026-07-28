@@ -362,7 +362,7 @@ export default function CustomerDetailPage() {
                 icon={Globe}
                 label="Website"
                 value={customer.website}
-                href={customer.website ?? undefined}
+                href={customer.website ? toAbsoluteUrl(customer.website) : undefined}
               />
               <Separator />
               <div className="flex justify-between">
@@ -638,6 +638,13 @@ export default function CustomerDetailPage() {
 }
 
 // --- Small presentational helpers ----------------------------------------
+
+// The website field's validation accepts values with no protocol (e.g.
+// "acme.com"), so an href built straight from it would resolve as a
+// relative link within the app instead of navigating out.
+function toAbsoluteUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
 
 function InfoRow({
   icon: Icon,

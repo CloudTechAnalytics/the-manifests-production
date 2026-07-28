@@ -38,6 +38,16 @@ export default function DashboardPage() {
   const stageCount = (key: string) =>
     data.pipeline.find((p) => p.key === key)?.count ?? 0;
 
+  // Mirrors can_manage_finance() (the RLS gate on invoices/payments/expenses
+  // — migration 024): for operations/sales, those tables return zero rows
+  // rather than an error, so without this check the dashboard would show
+  // "Outstanding Invoices: 0" and "No invoices yet" as if the org had no
+  // invoices, instead of "you don't have permission to see them."
+  const canSeeFinance =
+    profile?.role === 'admin' ||
+    profile?.role === 'branch_manager' ||
+    profile?.role === 'finance';
+
   // Eight operational KPIs. Every value is read from a real column —
   // nothing here is derived from a placeholder or a synthetic field.
   const kpis = [
@@ -76,13 +86,17 @@ export default function DashboardPage() {
       href: '/quotations',
       color: 'bg-primary/10 text-primary',
     },
-    {
-      label: 'Outstanding Invoices',
-      value: data.finance.outstandingCount,
-      icon: Receipt,
-      href: '/invoices',
-      color: 'bg-primary/10 text-primary',
-    },
+    ...(canSeeFinance
+      ? [
+          {
+            label: 'Outstanding Invoices',
+            value: data.finance.outstandingCount,
+            icon: Receipt,
+            href: '/invoices',
+            color: 'bg-primary/10 text-primary',
+          },
+        ]
+      : []),
     {
       label: 'Warehouse Inventory',
       value: warehouse.stats.totalItems,
@@ -187,7 +201,11 @@ export default function DashboardPage() {
 
       {/* 7. Finance summary + planning overview */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <FinanceSummary finance={data.finance} loading={data.loading} />
+        <FinanceSummary
+          finance={data.finance}
+          loading={data.loading}
+          restricted={!canSeeFinance}
+        />
         <PlanningOverview planning={data.planning} loading={data.loading} />
       </div>
 

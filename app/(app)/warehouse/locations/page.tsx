@@ -7,6 +7,8 @@ import { ArrowLeft, Warehouse as WarehouseIcon, Plus, Pencil, Trash2, Loader2 } 
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +48,15 @@ export default function WarehouseLocationsPage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
+  const {
+    needsSelection: needsBranchSelection,
+    branches: selectableBranches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId: newWarehouseBranchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
+
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,6 +65,7 @@ export default function WarehouseLocationsPage() {
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
+  const [branchError, setBranchError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
@@ -90,6 +102,8 @@ export default function WarehouseLocationsPage() {
     setName('');
     setCity('');
     setAddress('');
+    setSelectedBranchId('');
+    setBranchError('');
     setDialogOpen(true);
   };
 
@@ -102,7 +116,12 @@ export default function WarehouseLocationsPage() {
   };
 
   const handleSubmit = async () => {
-    if (!profile?.branch_id || !profile.id || !name.trim()) return;
+    if (!profile?.id || !name.trim()) return;
+    if (!editing && !newWarehouseBranchId) {
+      setBranchError('Please select a branch');
+      return;
+    }
+    setBranchError('');
     setSubmitting(true);
     try {
       if (editing) {
@@ -134,7 +153,7 @@ export default function WarehouseLocationsPage() {
             name: name.trim(),
             city: city.trim() || null,
             address: address.trim() || null,
-            branch_id: profile.branch_id,
+            branch_id: newWarehouseBranchId,
             created_by: profile.id,
             updated_by: profile.id,
           })
@@ -144,7 +163,7 @@ export default function WarehouseLocationsPage() {
 
         await supabase.from('activities').insert({
           user_id: profile.id,
-          branch_id: profile.branch_id,
+          branch_id: newWarehouseBranchId,
           action: 'warehouse.created',
           entity_type: 'warehouse',
           entity_id: created?.id,
@@ -298,6 +317,15 @@ export default function WarehouseLocationsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {!editing && needsBranchSelection && (
+              <BranchSelectField
+                branches={selectableBranches}
+                value={selectedBranchId}
+                onChange={setSelectedBranchId}
+                loading={branchesLoading}
+                error={branchError}
+              />
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="wh-name">
                 Name <span className="text-destructive">*</span>

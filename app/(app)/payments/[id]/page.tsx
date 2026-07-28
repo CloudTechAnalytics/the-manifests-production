@@ -52,7 +52,7 @@ import type { Payment, Customer, PaymentAllocation, Invoice } from '@/types';
 
 type PaymentDetail = Payment & { customer: Customer | null };
 type AllocationRow = PaymentAllocation & {
-  invoice: { id: string; invoice_number: string | null; total: number } | null;
+  invoice: { id: string; invoice_number: string | null; total: number; currency: string } | null;
 };
 
 export default function PaymentDetailPage() {
@@ -92,7 +92,7 @@ export default function PaymentDetailPage() {
 
       const { data: allocs } = await supabase
         .from('payment_allocations')
-        .select('*, invoice:invoices(id, invoice_number, total)')
+        .select('*, invoice:invoices(id, invoice_number, total, currency)')
         .eq('payment_id', paymentId)
         .order('created_at', { ascending: false });
       setAllocations((allocs as AllocationRow[]) ?? []);
@@ -149,12 +149,32 @@ export default function PaymentDetailPage() {
   const remainingAfterNew = unallocated - totalNewAllocated;
 
   const toggleNewInvoice = (invoice: Invoice, checked: boolean) => {
+    if (checked) {
+      // This payment has no currency of its own — allocating across
+      // invoices of different currencies would silently mark a
+      // foreign-currency invoice as paid/partial with no conversion
+      // applied. Block mixing currencies, whether the conflicting invoice
+      // is already-allocated on this payment or newly being checked now.
+      const existingCurrency = allocations.find((a) => a.invoice)?.invoice?.currency;
+      const selectedIds = Object.keys(newAllocations);
+      const newlySelected = outstandingInvoices.find((i) => selectedIds.includes(i.id));
+      const conflictCurrency = existingCurrency ?? newlySelected?.currency;
+      if (conflictCurrency && conflictCurrency !== invoice.currency) {
+        toast.error(
+          `This payment already has a ${conflictCurrency} invoice — can't mix currencies in one payment.`
+        );
+        return;
+      }
+    }
     setNewAllocations((prev) => {
       const next = { ...prev };
       if (checked) {
         const outstanding = Number(invoice.total) - Number(invoice.amount_paid);
         const remaining = Math.max(unallocated - totalNewAllocated, 0);
-        next[invoice.id] = Math.min(outstanding, remaining || outstanding);
+        // No `|| outstanding` fallback — see payments/new's toggleInvoice
+        // for why: a legitimate 0 (nothing left unallocated) shouldn't
+        // fall back to the full outstanding balance.
+        next[invoice.id] = Math.min(outstanding, remaining);
       } else {
         delete next[invoice.id];
       }

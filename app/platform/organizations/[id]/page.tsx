@@ -283,6 +283,20 @@ export default function OrganizationDetailPage() {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', revokeTarget.id);
       if (error) throw error;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const callerId = sessionData?.session?.user?.id;
+      if (callerId) {
+        await supabase.from('activities').insert({
+          user_id: callerId,
+          organization_id: orgId,
+          action: 'invitation.revoked',
+          entity_type: 'invitation',
+          entity_id: revokeTarget.id,
+          description: `Revoked invitation for ${revokeTarget.email}`,
+        });
+      }
+
       toast.success('Invitation revoked');
       setRevokeTarget(null);
       load();
@@ -324,6 +338,19 @@ export default function OrganizationDetailPage() {
         .update({ logo_url: url })
         .eq('id', orgId);
       if (updErr) throw updErr;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const callerId = sessionData?.session?.user?.id;
+      if (callerId) {
+        await supabase.from('activities').insert({
+          user_id: callerId,
+          organization_id: orgId,
+          action: 'organization.logo_updated',
+          entity_type: 'organization',
+          entity_id: orgId,
+          description: `Updated logo for "${org?.name ?? 'organization'}"`,
+        });
+      }
 
       toast.success('Logo updated');
       load();

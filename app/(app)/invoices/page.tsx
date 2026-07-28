@@ -122,8 +122,9 @@ export default function InvoicesPage() {
       if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
       if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `invoice_number.ilike.%${debouncedSearch}%,customer.company_name.ilike.%${debouncedSearch}%`
+          `invoice_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
 

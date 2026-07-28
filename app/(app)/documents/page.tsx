@@ -76,6 +76,8 @@ import type {
 
 // ─── Constants & helpers ───────────────────────────────────────────────────
 
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
 type CategoryFilter = 'all' | DocumentCategory;
 
 const CATEGORY_META: Record<
@@ -276,9 +278,21 @@ export default function DocumentsPage() {
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
     const files = Array.from(fileList);
+    const tooLarge = files.filter((f) => f.size > MAX_FILE_SIZE_BYTES);
+    const accepted = files.filter((f) => f.size <= MAX_FILE_SIZE_BYTES);
+
+    if (tooLarge.length > 0) {
+      toast.error(
+        tooLarge.length === 1
+          ? `"${tooLarge[0].name}" is over the 50 MB limit and was not added.`
+          : `${tooLarge.length} files are over the 50 MB limit and were not added.`
+      );
+    }
+    if (accepted.length === 0) return;
+
     setPendingFiles((prev) => [
       ...prev,
-      ...files.map((file) => ({
+      ...accepted.map((file) => ({
         file,
         category: 'other' as DocumentCategory,
         linkTarget: 'none' as LinkTarget,

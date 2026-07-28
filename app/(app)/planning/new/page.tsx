@@ -117,6 +117,7 @@ export default function NewPlanPage() {
     let query = supabase
       .from('customers')
       .select('*')
+      .eq('status', 'active')
       .is('deleted_at', null)
       .order('company_name', { ascending: true });
     if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);

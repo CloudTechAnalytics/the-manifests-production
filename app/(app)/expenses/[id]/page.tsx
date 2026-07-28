@@ -60,6 +60,12 @@ export default function ExpenseDetailPage() {
   const { profile } = useAuth();
   const expenseId = params.id;
   const isAdmin = profile?.role === 'admin';
+  // Mirrors can_manage_finance() (migration 024's RLS for expenses UPDATE):
+  // admin, branch_manager, and finance can all approve/reject, not just admin.
+  const canApprove =
+    profile?.role === 'admin' ||
+    profile?.role === 'branch_manager' ||
+    profile?.role === 'finance';
 
   const [expense, setExpense] = useState<ExpenseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -229,7 +235,7 @@ export default function ExpenseDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && expense.status === 'pending' && (
+          {canApprove && expense.status === 'pending' && (
             <>
               <Button size="sm" onClick={() => handleDecision('approved')} disabled={updating}>
                 {updating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}

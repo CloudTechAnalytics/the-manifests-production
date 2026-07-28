@@ -136,8 +136,9 @@ export default function TrackingPage() {
         query = query.eq('shipment_type', typeFilter);
       }
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `reference_number.ilike.%${debouncedSearch}%,tracking_number.ilike.%${debouncedSearch}%,container_number.ilike.%${debouncedSearch}%`
+          `reference_number.ilike.%${sanitized}%,tracking_number.ilike.%${sanitized}%,container_number.ilike.%${sanitized}%`
         );
       }
 

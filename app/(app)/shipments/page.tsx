@@ -191,8 +191,9 @@ export default function ShipmentsPage() {
 
       // Search by reference_number, customer name, or tracking_number
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `reference_number.ilike.%${debouncedSearch}%,customer.company_name.ilike.%${debouncedSearch}%,tracking_number.ilike.%${debouncedSearch}%`
+          `reference_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%,tracking_number.ilike.%${sanitized}%`
         );
       }
 

@@ -158,8 +158,9 @@ export default function QuotationsPage() {
 
       // Search by quotation_number or customer company_name
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `quotation_number.ilike.%${debouncedSearch}%,customer.company_name.ilike.%${debouncedSearch}%`
+          `quotation_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
 

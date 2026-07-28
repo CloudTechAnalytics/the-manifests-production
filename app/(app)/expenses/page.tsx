@@ -100,8 +100,9 @@ export default function ExpensesPage() {
       if (categoryFilter !== 'all') query = query.eq('category', categoryFilter);
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `expense_number.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`
+          `expense_number.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
         );
       }
 

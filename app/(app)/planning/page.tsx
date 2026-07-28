@@ -114,8 +114,9 @@ export default function PlanningPage() {
       if (statusFilter !== 'all') query = query.eq('status', statusFilter);
       if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
       if (debouncedSearch) {
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `plan_number.ilike.%${debouncedSearch}%,customer.company_name.ilike.%${debouncedSearch}%`
+          `plan_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
 

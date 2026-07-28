@@ -95,7 +95,7 @@ type QuotationReportRow = Quotation & {
 };
 
 type ActivityReportRow = Activity & {
-  user?: { id: string; full_name: string } | null;
+  userName: string;
 };
 
 type ReportTab = 'customers' | 'shipments' | 'quotations' | 'operations';
@@ -410,7 +410,7 @@ export default function ReportsPage() {
   const loadActivitiesReport = useCallback(async () => {
     let query = supabase
       .from('activities')
-      .select('*, user:user_id(id, full_name)')
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (effectiveBranchId) {
@@ -423,7 +423,25 @@ export default function ReportsPage() {
       console.error('Error loading activities report:', error);
       return [];
     }
-    return (data as ActivityReportRow[]) ?? [];
+    const rows = (data as Activity[]) ?? [];
+
+    // activities.user_id is a FK to auth.users, not profiles — no PostgREST
+    // embed exists for it, so actor names are batch-fetched separately and
+    // mapped in memory (same pattern used in activity-log and audit-logs).
+    const actorIds = Array.from(new Set(rows.map((a) => a.user_id).filter(Boolean))) as string[];
+    const actorNames = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const { data: actorRows } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', actorIds);
+      (actorRows ?? []).forEach((p) => actorNames.set(p.id, p.full_name));
+    }
+
+    return rows.map((a) => ({
+      ...a,
+      userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
+    }));
   }, [effectiveBranchId, applyDateRange]);
 
   // Load all report data when filters change
@@ -581,7 +599,7 @@ export default function ReportsPage() {
       const rows = activities.map((a) => [
         formatDateTime(a.created_at),
         a.action,
-        a.user?.full_name ?? 'System',
+        a.userName,
         a.description,
       ]);
       exportToCsv(headers, rows, `operations-report_${dateStr}.csv`);
@@ -1322,7 +1340,7 @@ export default function ReportsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {a.user?.full_name ?? 'System'}
+                            {a.userName}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {a.description}

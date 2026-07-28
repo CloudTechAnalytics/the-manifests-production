@@ -543,15 +543,23 @@ export default function UsersPage() {
     if (!editTarget || !profile) return;
     if (!validateEditForm()) return;
 
+    // An admin editing their own account can't change their own role or
+    // active status here — the quick-toggle button already refuses this
+    // (disabled={isSelf}) for the same reason: doing so from the Edit
+    // dialog could lock them out with no admin left to undo it. Enforced
+    // here too, not just by disabling the fields below, in case of any UI
+    // bypass.
+    const isEditingSelf = editTarget.id === profile.id;
+
     setEditing(true);
     try {
       const { error } = await supabase
         .from('profiles')
         .update({
           full_name: editForm.full_name.trim(),
-          role: editForm.role,
+          role: isEditingSelf ? editTarget.role : editForm.role,
           branch_id: editForm.branch_id,
-          is_active: editForm.is_active,
+          is_active: isEditingSelf ? editTarget.is_active : editForm.is_active,
           updated_by: profile.id,
           updated_at: new Date().toISOString(),
         })
@@ -1413,6 +1421,7 @@ export default function UsersPage() {
                   onValueChange={(v) =>
                     setEditForm((f) => ({ ...f, role: v as UserRole }))
                   }
+                  disabled={editTarget?.id === profile?.id}
                 >
                   <SelectTrigger id="edit-role">
                     <SelectValue placeholder="Select role" />
@@ -1428,6 +1437,11 @@ export default function UsersPage() {
                 {editFormErrors.role && (
                   <p className="text-xs text-destructive">
                     {editFormErrors.role}
+                  </p>
+                )}
+                {editTarget?.id === profile?.id && (
+                  <p className="text-xs text-muted-foreground">
+                    You can't change your own role.
                   </p>
                 )}
               </div>
@@ -1465,7 +1479,9 @@ export default function UsersPage() {
               <div className="space-y-0.5">
                 <Label htmlFor="edit-is_active">Active Status</Label>
                 <p className="text-xs text-muted-foreground">
-                  Inactive users cannot sign in to the system.
+                  {editTarget?.id === profile?.id
+                    ? "You can't deactivate your own account."
+                    : 'Inactive users cannot sign in to the system.'}
                 </p>
               </div>
               <Switch
@@ -1474,6 +1490,7 @@ export default function UsersPage() {
                 onCheckedChange={(checked) =>
                   setEditForm((f) => ({ ...f, is_active: checked }))
                 }
+                disabled={editTarget?.id === profile?.id}
               />
             </div>
           </div>

@@ -314,7 +314,7 @@ export default function QuotationDetailPage() {
   };
 
   const handleDuplicate = async () => {
-    if (!quotation || !profile?.branch_id || !profile.id) return;
+    if (!quotation || !profile?.id) return;
     setDuplicating(true);
     try {
       // 1. Clone the quotation (without quotation_number — auto-generated)

@@ -175,12 +175,30 @@ export default function NewPaymentPage() {
   const unallocated = amount - totalAllocated;
 
   const toggleInvoice = (invoice: Invoice, checked: boolean) => {
+    if (checked) {
+      // payments has no currency of its own — a single payment amount
+      // allocated across invoices of different currencies would silently
+      // mark a foreign-currency invoice as paid/partial with no
+      // conversion applied. Block mixing currencies within one payment.
+      const selectedIds = Object.keys(allocations);
+      const firstSelected = outstandingInvoices.find((i) => selectedIds.includes(i.id));
+      if (firstSelected && firstSelected.currency !== invoice.currency) {
+        toast.error(
+          `This payment already has a ${firstSelected.currency} invoice selected — can't mix currencies in one payment.`
+        );
+        return;
+      }
+    }
     setAllocations((prev) => {
       const next = { ...prev };
       if (checked) {
         const outstanding = Number(invoice.total) - Number(invoice.amount_paid);
         const remainingPayment = Math.max(amount - totalAllocated, 0);
-        next[invoice.id] = Math.min(outstanding, remainingPayment || outstanding);
+        // No `|| outstanding` fallback: remainingPayment is legitimately 0
+        // when the amount hasn't been entered yet (or is already fully
+        // allocated) — falling back to the full outstanding balance in
+        // that case silently overallocated past the payment amount.
+        next[invoice.id] = Math.min(outstanding, remainingPayment);
       } else {
         delete next[invoice.id];
       }

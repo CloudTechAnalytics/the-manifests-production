@@ -262,15 +262,20 @@ export default function EditCustomerPage({
         if (delErr) console.error('Contact delete error:', delErr);
       }
 
-      // Upsert each contact
+      // Upsert each contact — at most one primary: the first marked
+      // primary wins, matching the new-customer form's enforcement (no
+      // DB constraint prevents multiple, so this has to happen here).
+      let primaryAssigned = false;
       for (const c of values.contacts) {
+        const isPrimary = c.is_primary && !primaryAssigned;
+        if (isPrimary) primaryAssigned = true;
         const payload = {
           customer_id: customerId,
           name: c.name,
           title: c.title || null,
           email: c.email || null,
           phone: c.phone || null,
-          is_primary: c.is_primary,
+          is_primary: isPrimary,
         };
 
         if (c.id) {

@@ -91,8 +91,13 @@ export default function CustomersPage() {
 
       // Search by company name, email, or phone
       if (debouncedSearch) {
+        // PostgREST's or() filter grammar treats %_(),. as syntactically
+        // significant — a search term containing any of them (e.g. a
+        // company name like "Doe, John Ltd") would otherwise produce a
+        // malformed filter and a 400 that gets swallowed as "no results".
+        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         query = query.or(
-          `company_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%`
+          `company_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%,phone.ilike.%${sanitized}%`
         );
       }
 

@@ -40,7 +40,7 @@ export default function AuditLogsPage() {
     const { data, error } = await supabase
       .from('activities')
       .select(
-        'id, user_id, action, description, created_at, branch:branches(name, organization:organizations(name))'
+        'id, user_id, action, description, created_at, branch:branches(name, organization:organizations(name)), organization:organizations(name)'
       )
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
@@ -54,6 +54,7 @@ export default function AuditLogsPage() {
       description: string;
       created_at: string;
       branch: { name: string; organization: { name: string } | null } | null;
+      organization: { name: string } | null;
     }[]) ?? [];
 
     // activities.user_id is a FK to auth.users, not profiles — no PostgREST
@@ -77,7 +78,7 @@ export default function AuditLogsPage() {
       action: a.action,
       description: a.description,
       created_at: a.created_at,
-      organizationName: a.branch?.organization?.name ?? '—',
+      organizationName: a.organization?.name ?? a.branch?.organization?.name ?? '—',
       userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
     }));
 

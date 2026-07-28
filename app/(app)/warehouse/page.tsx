@@ -56,7 +56,7 @@ export default function WarehousePage() {
     if (!profile) return;
     let query = supabase
       .from('stock_items')
-      .select('*')
+      .select('*, branch:branches(name)')
       .is('deleted_at', null)
       .order('name', { ascending: true });
     if (!isAdmin && branchId) query = query.eq('branch_id', branchId);

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Wallet, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Wallet, ArrowRight, AlertTriangle, Lock } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -14,6 +14,10 @@ import type { FinanceSummaryData } from '@/hooks/use-dashboard-data';
 interface FinanceSummaryProps {
   finance: FinanceSummaryData;
   loading?: boolean;
+  /** True when the caller's role can't read invoices/payments/expenses
+   *  (RLS returns zero rows rather than an error) — shown as a permissions
+   *  notice instead of the misleading "no invoices yet" empty state. */
+  restricted?: boolean;
 }
 
 /**
@@ -21,7 +25,7 @@ interface FinanceSummaryProps {
  * currency only — totals across currencies are never blended, matching
  * how the Sales and Reports modules present money.
  */
-export function FinanceSummary({ finance, loading }: FinanceSummaryProps) {
+export function FinanceSummary({ finance, loading, restricted }: FinanceSummaryProps) {
   const currency = finance.primaryCurrency;
   const hasData = currency !== null;
 
@@ -63,17 +67,26 @@ export function FinanceSummary({ finance, loading }: FinanceSummaryProps) {
             </p>
           )}
         </div>
-        <Link
-          href="/invoices"
-          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
-        >
-          Invoices
-          <ArrowRight className="h-3 w-3" />
-        </Link>
+        {!restricted && (
+          <Link
+            href="/invoices"
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            Invoices
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
       </CardHeader>
       <CardContent className="flex-1 px-4 pb-4 pt-0">
         {loading ? (
           <Skeleton className="h-40 w-full" />
+        ) : restricted ? (
+          <EmptyState
+            icon={Lock}
+            title="Restricted"
+            message="Your role doesn't have access to finance data."
+            compact
+          />
         ) : !hasData ? (
           <EmptyState
             icon={Wallet}

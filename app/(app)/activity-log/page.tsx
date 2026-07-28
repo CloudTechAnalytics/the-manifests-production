@@ -38,12 +38,14 @@ export default function ActivityLogPage() {
 
   const loadPage = useCallback(async (offset: number) => {
     // No client-side org/branch filter needed — select_activities_branch
-    // already scopes this to the caller's own organization (every branch,
-    // for an admin) or just their own branch (for everyone else).
+    // scopes branch-scoped rows to the caller's own organization (every
+    // branch, for an admin) or just their own branch (for everyone else),
+    // and select_activities_org_admin separately lets an org admin see
+    // their own organization's branch-less rows (e.g. inviting a user
+    // with no branch yet).
     const { data, error } = await supabase
       .from('activities')
       .select('id, user_id, action, description, created_at, branch:branches(name)')
-      .not('branch_id', 'is', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
 
@@ -79,7 +81,7 @@ export default function ActivityLogPage() {
       action: a.action,
       description: a.description,
       created_at: a.created_at,
-      branchName: a.branch?.name ?? '—',
+      branchName: a.branch?.name ?? 'Organization-wide',
       userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
     }));
   }, []);
