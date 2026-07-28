@@ -80,35 +80,38 @@ export default function OrganizationsTrashPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      // FK constraints don't care whether a referencing row is itself
-      // soft-deleted — only whether it physically exists — so branches
-      // and members must be gone first. Checked up front for a clear
-      // message instead of a raw Postgres constraint-violation error.
-      const [branchesRes, profilesRes] = await Promise.all([
-        supabase
-          .from('branches')
-          .select('id', { count: 'exact', head: true })
-          .eq('organization_id', deleteTarget.id),
-        supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .eq('organization_id', deleteTarget.id),
-      ]);
-
-      const branchCount = branchesRes.count ?? 0;
-      const memberCount = profilesRes.count ?? 0;
-
-      if (branchCount > 0 || memberCount > 0) {
-        toast.error(
-          `Can't permanently delete ${deleteTarget.name}: it still has ${memberCount} member${memberCount === 1 ? '' : 's'} and ${branchCount} branch${branchCount === 1 ? '' : 'es'}. Remove those first.`
-        );
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) {
+        toast.error('Your session has expired. Please sign in again.');
         return;
       }
 
-      const { error } = await supabase.from('organizations').delete().eq('id', deleteTarget.id);
-      if (error) throw error;
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-organization`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ organization_id: deleteTarget.id }),
+        }
+      );
 
-      toast.success(`${deleteTarget.name} permanently deleted`);
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        toast.error(result.error ?? `Request failed (${response.status})`);
+        return;
+      }
+
+      toast.success(
+        result.membersRemoved > 0
+          ? `${deleteTarget.name} and ${result.membersRemoved} member account${result.membersRemoved === 1 ? '' : 's'} permanently deleted`
+          : `${deleteTarget.name} permanently deleted`
+      );
       setDeleteTarget(null);
       load();
     } catch (err) {
@@ -226,9 +229,12 @@ export default function OrganizationsTrashPage() {
               Permanently delete organization?
             </DialogTitle>
             <DialogDescription>
-              This cannot be undone. <strong>{deleteTarget?.name}</strong> can only
-              be permanently deleted once it has no branches and no members left —
-              you'll be told what's still blocking it if anything is.
+              This cannot be undone. <strong>{deleteTarget?.name}</strong>'s
+              member accounts will be deleted along with it. This only
+              succeeds if the organization has no branches left — since every
+              shipment, customer, and invoice requires one, zero branches
+              means there's no operational history to lose. You'll be told if
+              that's still blocking it.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

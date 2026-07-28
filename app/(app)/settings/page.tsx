@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -116,6 +117,7 @@ export default function SettingsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Branch | null>(null);
   const [toggleTarget, setToggleTarget] = useState<Branch | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
 
   // Form state
   const [createForm, setCreateForm] = useState<BranchForm>(EMPTY_FORM);
@@ -127,6 +129,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState(false);
 
   const [toggling, setToggling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Profile edit state
   const [profileName, setProfileName] = useState('');
@@ -388,6 +391,91 @@ export default function SettingsPage() {
       toast.error(message);
     } finally {
       setToggling(false);
+    }
+  };
+
+  // --- Delete branch ---------------------------------------------------------
+
+  // Every table with a NOT NULL branch_id ON DELETE RESTRICT — a real
+  // DELETE on branches fails the moment any of these still has a row
+  // pointing at it, so counts are checked up front for a clear message
+  // instead of a raw foreign-key-violation error.
+  const BRANCH_DEPENDENT_TABLES: { table: string; label: string }[] = [
+    { table: 'shipments', label: 'shipment' },
+    { table: 'customers', label: 'customer' },
+    { table: 'quotations', label: 'quotation' },
+    { table: 'invoices', label: 'invoice' },
+    { table: 'payments', label: 'payment' },
+    { table: 'expenses', label: 'expense' },
+    { table: 'documents', label: 'document' },
+    { table: 'shipment_plans', label: 'shipment plan' },
+    { table: 'plan_tasks', label: 'plan task' },
+    { table: 'warehouses', label: 'warehouse' },
+    { table: 'stock_items', label: 'stock item' },
+    { table: 'warehouse_stock', label: 'warehouse stock record' },
+    { table: 'stock_movements', label: 'stock movement' },
+  ];
+
+  const handleDeleteBranch = async () => {
+    if (!deleteTarget || !profile) return;
+
+    setDeleting(true);
+    try {
+      const [dependentResults, staffResult] = await Promise.all([
+        Promise.all(
+          BRANCH_DEPENDENT_TABLES.map(({ table }) =>
+            supabase
+              .from(table)
+              .select('id', { count: 'exact', head: true })
+              .eq('branch_id', deleteTarget.id)
+          )
+        ),
+        supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('branch_id', deleteTarget.id)
+          .is('deleted_at', null),
+      ]);
+
+      const blockers = dependentResults
+        .map((res, i) => ({ label: BRANCH_DEPENDENT_TABLES[i].label, count: res.count ?? 0 }))
+        .filter((b) => b.count > 0);
+
+      const staffCount = staffResult.count ?? 0;
+      if (staffCount > 0) blockers.push({ label: 'staff member', count: staffCount });
+
+      if (blockers.length > 0) {
+        const summary = blockers
+          .map((b) => `${b.count} ${b.label}${b.count === 1 ? '' : 's'}`)
+          .join(', ');
+        toast.error(
+          `Can't delete "${deleteTarget.name}": it still has ${summary}. Remove or reassign those first, or use Disable if you just want it out of active use.`
+        );
+        return;
+      }
+
+      // Logged before the delete — activities.branch_id would fail its
+      // own foreign key the moment the branch it points at is gone.
+      await logActivity(
+        'branch.deleted',
+        'branches',
+        deleteTarget.id,
+        `Deleted branch "${deleteTarget.name}" (${deleteTarget.code})`,
+        undefined,
+        deleteTarget.id
+      );
+
+      const { error } = await supabase.from('branches').delete().eq('id', deleteTarget.id);
+      if (error) throw error;
+
+      toast.success('Branch permanently deleted');
+      setDeleteTarget(null);
+      loadBranches();
+    } catch (err) {
+      const message = getErrorMessage(err, 'Failed to delete branch');
+      toast.error(message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -881,6 +969,15 @@ export default function SettingsPage() {
                                           : 'text-gray-400'
                                       }`}
                                     />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    title="Delete branch"
+                                    onClick={() => setDeleteTarget(branch)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
                                 </div>
                               </TableCell>
@@ -1405,6 +1502,47 @@ export default function SettingsPage() {
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               )}
               {toggleTarget?.is_active ? 'Disable' : 'Enable'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* Delete Branch Confirmation                                      */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Delete Branch Permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes "{deleteTarget?.name}" ({deleteTarget?.code})
+              entirely — it can't be undone. This only succeeds if the branch
+              has no shipments, customers, invoices, or staff still attached;
+              otherwise you'll be told exactly what's blocking it. If you just
+              want it out of active use without deleting it, use Disable
+              instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteBranch();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
