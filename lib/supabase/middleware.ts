@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/accept-invite'];
+// '/' is the public marketing landing page for logged-out visitors — the
+// page itself (app/page.tsx) redirects an authenticated user away to their
+// dashboard/console client-side, so this only ever affects logged-out
+// traffic. The exact-match check below means this doesn't open up any
+// other path, just the root.
+const PUBLIC_PATHS = ['/', '/login', '/accept-invite'];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

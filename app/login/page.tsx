@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Ship,
   Loader2,
@@ -19,6 +20,7 @@ import {
   Mail,
   Lock,
   ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -139,18 +141,27 @@ export default function LoginPage() {
           }}
         />
 
-        <div className="relative flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gold">
-            <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
+        <div className="relative flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gold">
+              <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-gold-soft">
+                The Manifest
+              </span>
+              <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
+                Freight Management Platform
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-gold-soft">
-              The Manifest
-            </span>
-            <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
-              Freight Management Platform
-            </span>
-          </div>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark-muted transition-colors hover:text-brand-gold-soft"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to home
+          </Link>
         </div>
 
         <div className="relative space-y-6">
@@ -185,6 +196,14 @@ export default function LoginPage() {
       {/* Form panel */}
       <div className="flex flex-1 items-center justify-center bg-background px-4 py-12 sm:px-6">
         <div className="w-full max-w-sm space-y-8">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to home
+          </Link>
+
           {/* Mobile logo (brand panel hidden below lg) */}
           <div className="flex flex-col items-center gap-3 lg:hidden">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-gold shadow-lg shadow-brand-gold/20">
