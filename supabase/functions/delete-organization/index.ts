@@ -4,8 +4,11 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 /*
  * delete-organization
  *
- * Permanently deletes an organization AND its member accounts.
- * platform_admin only.
+ * Permanently deletes an organization: every branch, every shipment,
+ * customer, quotation, invoice, payment, expense, warehouse record,
+ * document, and member login under it. platform_admin only. This is a
+ * true cascade with no "must be empty first" guard — confirmed
+ * deliberately irreversible.
  *
  * Why this needs an edge function, not a plain client DELETE:
  * profiles.id is a FK to auth.users(id), so removing a member for real
@@ -14,12 +17,15 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * the auth user cascades to their profile row automatically (ON DELETE
  * CASCADE), so profiles are never touched directly here.
  *
- * Still refuses if the organization has any branches. Every operational
- * table (shipments, customers, invoices, warehouse, etc.) requires a
- * branch_id, so zero branches means there is no operational history that
- * could be silently destroyed by this — only the org record and its bare
- * member accounts. This is a narrower cascade than "delete everything",
- * on purpose.
+ * Member accounts are removed first (one Admin API call per member,
+ * since that's the only safe way to erase a login), then the
+ * permanently_delete_organization_data() SQL function clears every
+ * branch and everything under it in one atomic transaction — so a
+ * failure partway through that function rolls back the whole cascade
+ * instead of leaving the organization half-destroyed. Only after both
+ * of those succeed is the organizations row itself deleted, since
+ * profiles.organization_id and branches.organization_id are both
+ * ON DELETE RESTRICT.
  */
 
 function corsHeaders(req: Request) {
@@ -100,17 +106,6 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!org) return json(404, { error: "Organization not found" });
 
-    const { count: branchCount } = await admin
-      .from("branches")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", body.organization_id);
-
-    if ((branchCount ?? 0) > 0) {
-      return json(400, {
-        error: `Can't delete ${org.name}: it still has ${branchCount} branch${branchCount === 1 ? "" : "es"}. Remove those first.`,
-      });
-    }
-
     const { data: members } = await admin
       .from("profiles")
       .select("id")
@@ -124,6 +119,17 @@ Deno.serve(async (req: Request) => {
           error: `Failed to remove a member account while deleting ${org.name}. No changes were made to the remaining members — try again.`,
         });
       }
+    }
+
+    const { error: cascadeError } = await admin.rpc(
+      "permanently_delete_organization_data",
+      { p_org_id: body.organization_id },
+    );
+    if (cascadeError) {
+      console.error("cascade delete error:", cascadeError.message);
+      return json(400, {
+        error: `Failed to delete ${org.name}'s branches and business data. Member accounts were already removed; try again to finish deleting the organization.`,
+      });
     }
 
     // Logged before the delete — organization_id would have nothing left

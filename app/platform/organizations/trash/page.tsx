@@ -241,12 +241,12 @@ export default function OrganizationsTrashPage() {
               Permanently delete organization?
             </DialogTitle>
             <DialogDescription>
-              This cannot be undone. <strong>{deleteTarget?.name}</strong>'s
-              member accounts will be deleted along with it. This only
-              succeeds if the organization has no branches left — since every
-              shipment, customer, and invoice requires one, zero branches
-              means there's no operational history to lose. You'll be told if
-              that's still blocking it.
+              This cannot be undone. Every branch, shipment, customer,
+              quotation, invoice, payment, expense, warehouse record, and
+              document under <strong>{deleteTarget?.name}</strong> will be
+              destroyed, along with every member's login. There is no
+              recovery after this — restoring from Trash will no longer be
+              possible.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

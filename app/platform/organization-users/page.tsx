@@ -18,7 +18,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExportButton } from '@/components/ui/export-button';
+import type { ExportColumn } from '@/lib/export';
 import type { UserRole } from '@/types';
+
+const ORG_USER_EXPORT_COLUMNS: ExportColumn<OrgUserRow>[] = [
+  { header: 'Full Name', value: (u) => u.full_name },
+  { header: 'Email', value: (u) => u.email },
+  { header: 'Organization', value: (u) => u.organization?.name ?? '' },
+  { header: 'Role', value: (u) => ROLE_LABELS[u.role] ?? u.role },
+  { header: 'Branch', value: (u) => u.branch?.name ?? '' },
+  { header: 'Status', value: (u) => (u.is_active ? 'Active' : 'Inactive') },
+];
 
 interface OrgUserRow {
   id: string;
@@ -78,11 +89,14 @@ export default function OrganizationUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title">Organization Users</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every tenant staff member across every organization.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-title">Organization Users</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every tenant staff member across every organization.
+          </p>
+        </div>
+        <ExportButton data={filtered} columns={ORG_USER_EXPORT_COLUMNS} filename="organization-users" />
       </div>
 
       <Card>
