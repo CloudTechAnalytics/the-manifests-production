@@ -17,15 +17,20 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * the auth user cascades to their profile row automatically (ON DELETE
  * CASCADE), so profiles are never touched directly here.
  *
- * Member accounts are removed first (one Admin API call per member,
- * since that's the only safe way to erase a login), then the
- * permanently_delete_organization_data() SQL function clears every
- * branch and everything under it in one atomic transaction — so a
- * failure partway through that function rolls back the whole cascade
- * instead of leaving the organization half-destroyed. Only after both
- * of those succeed is the organizations row itself deleted, since
- * profiles.organization_id and branches.organization_id are both
- * ON DELETE RESTRICT.
+ * Order matters here and is not arbitrary: created_by/updated_by (and,
+ * on expenses, paid_by/approved_by) on customers, quotations, shipments,
+ * invoices, payments, and expenses all reference auth.users(id) with no
+ * ON DELETE action, so Postgres refuses to delete a member's auth
+ * account while any of those rows still name them as creator/editor.
+ * permanently_delete_organization_data() must therefore run BEFORE any
+ * member is removed — it wipes every branch and everything under it
+ * (which clears those references) in one atomic transaction, and also
+ * nulls out profiles.created_by/updated_by so one member's profile can
+ * never block deleting another member's auth account. Only after that
+ * cascade succeeds are member auth accounts removed (one Admin API call
+ * each, the only safe way to erase a login), and only after that is the
+ * organizations row itself deleted, since profiles.organization_id and
+ * branches.organization_id are both ON DELETE RESTRICT.
  */
 
 function corsHeaders(req: Request) {
@@ -111,6 +116,21 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .eq("organization_id", body.organization_id);
 
+    // Must run before any member is removed: it clears every business-data
+    // row that could still name a member as created_by/updated_by (which
+    // would otherwise block deleting their auth account), and nulls out
+    // profiles.created_by/updated_by so members can't block each other.
+    const { error: cascadeError } = await admin.rpc(
+      "permanently_delete_organization_data",
+      { p_org_id: body.organization_id },
+    );
+    if (cascadeError) {
+      console.error("cascade delete error:", cascadeError.message);
+      return json(400, {
+        error: `Failed to delete ${org.name}'s branches and business data: ${cascadeError.message}. No member accounts were removed — try again.`,
+      });
+    }
+
     for (const member of members ?? []) {
       const { error: deleteUserError } = await admin.auth.admin.deleteUser(member.id);
       if (deleteUserError) {
@@ -123,24 +143,13 @@ Deno.serve(async (req: Request) => {
         if (!notFound) {
           console.error(`Failed to delete auth user ${member.id}:`, deleteUserError.message);
           return json(400, {
-            error: `Failed to remove a member account while deleting ${org.name}: ${deleteUserError.message}. No changes were made to the remaining members — try again.`,
+            error: `Failed to remove a member account while deleting ${org.name}: ${deleteUserError.message}. Its branches and business data were already deleted; try again to finish removing members and the organization.`,
           });
         }
         // Orphaned profile: delete the row directly since there's no auth
         // user left whose deletion would have cascaded it away.
         await admin.from("profiles").delete().eq("id", member.id);
       }
-    }
-
-    const { error: cascadeError } = await admin.rpc(
-      "permanently_delete_organization_data",
-      { p_org_id: body.organization_id },
-    );
-    if (cascadeError) {
-      console.error("cascade delete error:", cascadeError.message);
-      return json(400, {
-        error: `Failed to delete ${org.name}'s branches and business data: ${cascadeError.message}. Member accounts were already removed; try again to finish deleting the organization.`,
-      });
     }
 
     // Logged before the delete — organization_id would have nothing left
