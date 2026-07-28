@@ -10,7 +10,6 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "strict": false,
-    "baseUrl": ".",
     "paths": {
       "npm:@supabase/supabase-js@2.58.0": ["../../node_modules/@supabase/supabase-js"]
     }
