@@ -11,6 +11,8 @@ import { ArrowLeft, Receipt, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -68,7 +70,16 @@ export default function NewInvoicePage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
 
   const isAdmin = profile?.role === 'admin';
-  const branchId = profile?.branch_id ?? null;
+  const myBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     control,
@@ -107,12 +118,12 @@ export default function NewInvoicePage() {
       .eq('status', 'active')
       .is('deleted_at', null)
       .order('company_name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
     query.then(({ data, error }) => {
       if (error) return console.error('Error loading customers:', error);
       setCustomers((data as Customer[]) ?? []);
     });
-  }, [profile, isAdmin, branchId]);
+  }, [profile, isAdmin, myBranchId]);
 
   // Load shipments + approved quotations for the selected customer
   const loadForCustomer = useCallback(async () => {
@@ -134,14 +145,14 @@ export default function NewInvoicePage() {
       .eq('status', 'approved')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
-    if (!isAdmin && branchId) {
-      shipQuery = shipQuery.eq('branch_id', branchId);
-      quotQuery = quotQuery.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) {
+      shipQuery = shipQuery.eq('branch_id', myBranchId);
+      quotQuery = quotQuery.eq('branch_id', myBranchId);
     }
     const [shipRes, quotRes] = await Promise.all([shipQuery, quotQuery]);
     setShipments((shipRes.data as Shipment[]) ?? []);
     setQuotations((quotRes.data as Quotation[]) ?? []);
-  }, [selectedCustomerId, isAdmin, branchId]);
+  }, [selectedCustomerId, isAdmin, myBranchId]);
 
   useEffect(() => {
     loadForCustomer();
@@ -158,10 +169,12 @@ export default function NewInvoicePage() {
   };
 
   const onSubmit = async (values: InvoiceFormValues) => {
-    if (!profile?.branch_id || !profile.id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile?.id) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     setSubmitting(true);
     try {
       const { data: invoiceData, error: invoiceError } = await supabase
@@ -170,7 +183,7 @@ export default function NewInvoicePage() {
           customer_id: values.customer_id,
           shipment_id: values.shipment_id || null,
           quotation_id: values.quotation_id || null,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           status: 'sent',
           issue_date: values.issue_date,
           due_date: values.due_date || null,
@@ -193,7 +206,7 @@ export default function NewInvoicePage() {
       const customer = customers.find((c) => c.id === values.customer_id);
       await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'invoice.created',
         entity_type: 'invoice',
         entity_id: invoiceData.id,
@@ -249,6 +262,16 @@ export default function NewInvoicePage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold">

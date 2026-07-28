@@ -11,6 +11,8 @@ import { ArrowLeft, Wallet, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -65,7 +67,16 @@ export default function NewPaymentPage() {
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   const isAdmin = profile?.role === 'admin';
-  const branchId = profile?.branch_id ?? null;
+  const myBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     control,
@@ -96,12 +107,12 @@ export default function NewPaymentPage() {
       .select('*')
       .is('deleted_at', null)
       .order('company_name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
     query.then(({ data, error }) => {
       if (error) return console.error('Error loading customers:', error);
       setCustomers((data as Customer[]) ?? []);
     });
-  }, [profile, isAdmin, branchId]);
+  }, [profile, isAdmin, myBranchId]);
 
   // If arriving from an invoice's "Record Payment" link, preselect that
   // invoice's customer.
@@ -129,7 +140,7 @@ export default function NewPaymentPage() {
       .in('status', ['sent', 'partial'])
       .is('deleted_at', null)
       .order('due_date', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
 
     const { data, error } = await query;
     if (error) {
@@ -149,7 +160,7 @@ export default function NewPaymentPage() {
         setValue('amount', outstanding);
       }
     }
-  }, [selectedCustomerId, isAdmin, branchId, preselectInvoiceId, setValue]);
+  }, [selectedCustomerId, isAdmin, myBranchId, preselectInvoiceId, setValue]);
 
   useEffect(() => {
     loadOutstandingInvoices();
@@ -182,10 +193,12 @@ export default function NewPaymentPage() {
   };
 
   const onSubmit = async (values: PaymentFormValues) => {
-    if (!profile?.branch_id || !profile.id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile?.id) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     if (totalAllocated > values.amount + 0.01) {
       toast.error('Allocated amount cannot exceed the payment amount.');
       return;
@@ -196,7 +209,7 @@ export default function NewPaymentPage() {
         .from('payments')
         .insert({
           customer_id: values.customer_id,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           payment_date: values.payment_date,
           payment_method: values.payment_method,
           amount: values.amount,
@@ -231,7 +244,7 @@ export default function NewPaymentPage() {
       const customer = customers.find((c) => c.id === values.customer_id);
       await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'payment.created',
         entity_type: 'payment',
         entity_id: paymentData.id,
@@ -283,6 +296,16 @@ export default function NewPaymentPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold">

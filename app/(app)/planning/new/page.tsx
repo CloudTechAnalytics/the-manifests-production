@@ -11,6 +11,8 @@ import { ArrowLeft, ClipboardList, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -76,7 +78,16 @@ export default function NewPlanPage() {
   const [staff, setStaff] = useState<Profile[]>([]);
 
   const isAdmin = profile?.role === 'admin';
-  const branchId = profile?.branch_id ?? null;
+  const myBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     control,
@@ -108,7 +119,7 @@ export default function NewPlanPage() {
       .select('*')
       .is('deleted_at', null)
       .order('company_name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
     query.then(({ data, error }) => {
       if (error) return console.error('Error loading customers:', error);
       setCustomers((data as Customer[]) ?? []);
@@ -120,12 +131,12 @@ export default function NewPlanPage() {
       .is('deleted_at', null)
       .eq('is_active', true)
       .order('full_name', { ascending: true });
-    if (!isAdmin && branchId) staffQuery = staffQuery.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) staffQuery = staffQuery.eq('branch_id', myBranchId);
     staffQuery.then(({ data, error }) => {
       if (error) return console.error('Error loading staff:', error);
       setStaff((data as Profile[]) ?? []);
     });
-  }, [profile, isAdmin, branchId]);
+  }, [profile, isAdmin, myBranchId]);
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -156,10 +167,12 @@ export default function NewPlanPage() {
   };
 
   const onSubmit = async (values: PlanFormValues) => {
-    if (!profile?.branch_id || !profile.id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile?.id) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     setSubmitting(true);
     try {
       const { data, error } = await supabase
@@ -167,7 +180,7 @@ export default function NewPlanPage() {
         .insert({
           customer_id: values.customer_id,
           quotation_id: values.quotation_id || null,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           priority: values.priority,
           shipment_type: values.shipment_type || null,
           origin: values.origin || null,
@@ -199,7 +212,7 @@ export default function NewPlanPage() {
       const customer = customers.find((c) => c.id === values.customer_id);
       await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'plan.created',
         entity_type: 'shipment_plan',
         entity_id: data.id,
@@ -252,6 +265,16 @@ export default function NewPlanPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Overview</CardTitle>

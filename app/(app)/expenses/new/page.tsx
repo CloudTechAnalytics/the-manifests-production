@@ -11,6 +11,8 @@ import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -61,7 +63,16 @@ export default function NewExpensePage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
 
   const isAdmin = profile?.role === 'admin';
-  const branchId = profile?.branch_id ?? null;
+  const myBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     control,
@@ -88,18 +99,20 @@ export default function NewExpensePage() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(200);
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
     query.then(({ data, error }) => {
       if (error) return console.error('Error loading shipments:', error);
       setShipments((data as Shipment[]) ?? []);
     });
-  }, [profile, isAdmin, branchId]);
+  }, [profile, isAdmin, myBranchId]);
 
   const onSubmit = async (values: ExpenseFormValues) => {
-    if (!profile?.branch_id || !profile.id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile?.id) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     setSubmitting(true);
     try {
       const { data, error } = await supabase
@@ -108,7 +121,7 @@ export default function NewExpensePage() {
           description: values.description,
           category: values.category,
           shipment_id: values.shipment_id || null,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           amount: values.amount,
           currency: values.currency,
           expense_date: values.expense_date,
@@ -127,7 +140,7 @@ export default function NewExpensePage() {
 
       await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'expense.created',
         entity_type: 'expense',
         entity_id: data.id,
@@ -179,6 +192,16 @@ export default function NewExpensePage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold">

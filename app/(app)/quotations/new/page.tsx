@@ -18,6 +18,8 @@ import {
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -108,6 +110,15 @@ export default function NewQuotationPage() {
 
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     register,
@@ -214,14 +225,15 @@ export default function NewQuotationPage() {
     });
 
   const onSubmit = async (values: QuotationFormValues) => {
-    if (!profile?.branch_id) {
-      toast.error('Your account is not assigned to a branch.');
-      return;
-    }
-    if (!profile.id) {
+    if (!profile?.id) {
       toast.error('Unable to determine current user.');
       return;
     }
+    if (!branchId) {
+      setBranchError('Please select a branch');
+      return;
+    }
+    setBranchError('');
 
     setSubmitting(true);
     try {
@@ -230,7 +242,7 @@ export default function NewQuotationPage() {
         .from('quotations')
         .insert({
           customer_id: values.customer_id,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           status: 'draft',
           shipment_type: values.shipment_type,
           origin: values.origin || null,
@@ -284,7 +296,7 @@ export default function NewQuotationPage() {
       const customer = customers.find((c) => c.id === values.customer_id);
       const { error: activityError } = await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'quotation.created',
         entity_type: 'quotation',
         entity_id: quotationId,
@@ -349,6 +361,16 @@ export default function NewQuotationPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         {/* Quotation Details */}
         <Card>
           <CardHeader>

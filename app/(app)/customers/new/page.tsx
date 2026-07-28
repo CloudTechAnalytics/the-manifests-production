@@ -18,6 +18,8 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -102,6 +104,15 @@ export default function NewCustomerPage() {
   const router = useRouter();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     register,
@@ -141,10 +152,12 @@ export default function NewCustomerPage() {
     });
 
   const onSubmit = async (values: CustomerFormValues) => {
-    if (!profile?.branch_id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     setSubmitting(true);
     try {
       // 1. Insert customer
@@ -161,7 +174,7 @@ export default function NewCustomerPage() {
           website: values.website || null,
           notes: values.notes || null,
           status: values.status,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           created_by: profile.id,
           updated_by: profile.id,
         })
@@ -204,7 +217,7 @@ export default function NewCustomerPage() {
       // 3. Log activity
       const { error: activityError } = await supabase.from('activities').insert({
         user_id: profile.id,
-        branch_id: profile.branch_id,
+        branch_id: branchId,
         action: 'customer.created',
         entity_type: 'customer',
         entity_id: customerId,
@@ -263,6 +276,16 @@ export default function NewCustomerPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         {/* Customer Details */}
         <Card>
           <CardHeader>

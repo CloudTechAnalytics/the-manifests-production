@@ -11,6 +11,8 @@ import { ArrowLeft, Boxes, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { useBranchSelector } from '@/hooks/use-branch-selector';
+import { BranchSelectField } from '@/components/shared/branch-select-field';
 import {
   Card,
   CardContent,
@@ -60,7 +62,16 @@ export default function NewStockItemPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
   const isAdmin = profile?.role === 'admin';
-  const branchId = profile?.branch_id ?? null;
+  const myBranchId = profile?.branch_id ?? null;
+  const [branchError, setBranchError] = useState('');
+  const {
+    needsSelection: needsBranchSelection,
+    branches,
+    selectedBranchId,
+    setSelectedBranchId,
+    branchId,
+    loading: branchesLoading,
+  } = useBranchSelector(profile);
 
   const {
     control,
@@ -91,18 +102,20 @@ export default function NewStockItemPage() {
       .select('*')
       .is('deleted_at', null)
       .order('name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
     query.then(({ data, error }) => {
       if (error) return console.error('Error loading warehouses:', error);
       setWarehouses((data as Warehouse[]) ?? []);
     });
-  }, [profile, isAdmin, branchId]);
+  }, [profile, isAdmin, myBranchId]);
 
   const onSubmit = async (values: ItemFormValues) => {
-    if (!profile?.branch_id || !profile.id) {
-      toast.error('Your account is not assigned to a branch.');
+    if (!profile?.id) return;
+    if (!branchId) {
+      setBranchError('Please select a branch');
       return;
     }
+    setBranchError('');
     setSubmitting(true);
     try {
       const { data: item, error } = await supabase
@@ -115,7 +128,7 @@ export default function NewStockItemPage() {
           unit_cost: values.unit_cost,
           reorder_point: values.reorder_point,
           notes: values.notes || null,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           created_by: profile.id,
           updated_by: profile.id,
         })
@@ -126,11 +139,20 @@ export default function NewStockItemPage() {
         throw new Error(error?.message ?? 'Failed to create item');
       }
 
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: branchId,
+        action: 'stock_item.created',
+        entity_type: 'stock_item',
+        entity_id: item.id,
+        description: `Added item "${item.name}" to the catalog`,
+      });
+
       if (values.initial_warehouse_id && values.initial_quantity && values.initial_quantity > 0) {
         const { error: moveError } = await supabase.from('stock_movements').insert({
           item_id: item.id,
           warehouse_id: values.initial_warehouse_id,
-          branch_id: profile.branch_id,
+          branch_id: branchId,
           movement_type: 'inbound',
           quantity: values.initial_quantity,
           reference: 'Initial stock',
@@ -183,6 +205,16 @@ export default function NewStockItemPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {needsBranchSelection && (
+          <BranchSelectField
+            branches={branches}
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            loading={branchesLoading}
+            error={branchError}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Item Details</CardTitle>
