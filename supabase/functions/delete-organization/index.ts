@@ -114,10 +114,21 @@ Deno.serve(async (req: Request) => {
     for (const member of members ?? []) {
       const { error: deleteUserError } = await admin.auth.admin.deleteUser(member.id);
       if (deleteUserError) {
-        console.error(`Failed to delete auth user ${member.id}:`, deleteUserError.message);
-        return json(400, {
-          error: `Failed to remove a member account while deleting ${org.name}. No changes were made to the remaining members — try again.`,
-        });
+        // A profile with no matching auth.users row (e.g. left over from an
+        // earlier partial failure) has nothing left to delete — that's not
+        // a reason to block the whole cascade, so only genuinely unexpected
+        // errors abort here.
+        const notFound = deleteUserError.status === 404 ||
+          /not.?found/i.test(deleteUserError.message);
+        if (!notFound) {
+          console.error(`Failed to delete auth user ${member.id}:`, deleteUserError.message);
+          return json(400, {
+            error: `Failed to remove a member account while deleting ${org.name}: ${deleteUserError.message}. No changes were made to the remaining members — try again.`,
+          });
+        }
+        // Orphaned profile: delete the row directly since there's no auth
+        // user left whose deletion would have cascaded it away.
+        await admin.from("profiles").delete().eq("id", member.id);
       }
     }
 
@@ -128,7 +139,7 @@ Deno.serve(async (req: Request) => {
     if (cascadeError) {
       console.error("cascade delete error:", cascadeError.message);
       return json(400, {
-        error: `Failed to delete ${org.name}'s branches and business data. Member accounts were already removed; try again to finish deleting the organization.`,
+        error: `Failed to delete ${org.name}'s branches and business data: ${cascadeError.message}. Member accounts were already removed; try again to finish deleting the organization.`,
       });
     }
 
@@ -149,7 +160,7 @@ Deno.serve(async (req: Request) => {
 
     if (deleteOrgError) {
       console.error("organization delete error:", deleteOrgError.message);
-      return json(400, { error: "Failed to delete organization" });
+      return json(400, { error: `Failed to delete organization: ${deleteOrgError.message}` });
     }
 
     return json(200, { success: true, membersRemoved: members?.length ?? 0 });
