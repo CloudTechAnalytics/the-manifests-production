@@ -182,6 +182,45 @@ function RouteIllustration() {
   );
 }
 
+function VesselBackdrop() {
+  const containers = [90, 195, 300, 405, 510, 615];
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-center overflow-hidden text-primary opacity-[0.09]"
+    >
+      <svg
+        viewBox="0 0 900 260"
+        fill="currentColor"
+        className="h-auto w-[60%] max-w-none animate-hero-drift sm:w-[420px]"
+      >
+        {/* hull */}
+        <path d="M30,160 Q30,220 100,220 L780,220 Q850,220 850,160 L850,150 L30,150 Z" />
+        {/* deck containers */}
+        {containers.map((x) => (
+          <rect key={x} x={x} y="100" width="95" height="50" />
+        ))}
+        {/* bridge */}
+        <rect x="740" y="55" width="80" height="95" />
+        <rect x="755" y="30" width="50" height="28" />
+        <line x1="780" y1="30" x2="780" y2="8" stroke="currentColor" strokeWidth="4" />
+        <circle cx="780" cy="6" r="4" />
+        {/* waterline */}
+        <line
+          x1="0"
+          y1="228"
+          x2="900"
+          y2="228"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeDasharray="10 12"
+          opacity="0.5"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function ShipmentJourney() {
   const milestones = [
     { label: 'Quoted', icon: FileText },
@@ -356,7 +395,8 @@ export function LandingPage() {
             backgroundSize: '46px 46px, 64px 64px',
           }}
         />
-        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+        <VesselBackdrop />
+        <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Layers className="h-3.5 w-3.5" />

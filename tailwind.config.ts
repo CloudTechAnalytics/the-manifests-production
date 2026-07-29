@@ -128,6 +128,10 @@ const config: Config = {
             backgroundColor: 'hsl(var(--primary) / 0.1)',
           },
         },
+        'hero-drift': {
+          '0%, 100%': { transform: 'translate(-1.5%, 0)' },
+          '50%': { transform: 'translate(1.5%, -8px)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -137,6 +141,7 @@ const config: Config = {
         'fade-up': 'fade-up 0.7s ease-out both',
         'journey-dot': 'journey-dot 6s linear infinite',
         'journey-pulse': 'journey-pulse 6s ease-in-out infinite',
+        'hero-drift': 'hero-drift 14s ease-in-out infinite',
       },
     },
   },
