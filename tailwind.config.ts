@@ -110,6 +110,24 @@ const config: Config = {
           from: { opacity: '0', transform: 'translateY(16px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        'journey-dot': {
+          '0%': { left: '0%', opacity: '0' },
+          '5%': { opacity: '1' },
+          '95%': { opacity: '1' },
+          '100%': { left: '100%', opacity: '0' },
+        },
+        'journey-pulse': {
+          '0%, 90%, 100%': {
+            borderColor: 'hsl(var(--border))',
+            color: 'hsl(var(--muted-foreground))',
+            backgroundColor: 'hsl(var(--background))',
+          },
+          '4%, 12%': {
+            borderColor: 'hsl(var(--primary))',
+            color: 'hsl(var(--primary))',
+            backgroundColor: 'hsl(var(--primary) / 0.1)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -117,6 +135,8 @@ const config: Config = {
         float: 'float 6s ease-in-out infinite',
         marquee: 'marquee 28s linear infinite',
         'fade-up': 'fade-up 0.7s ease-out both',
+        'journey-dot': 'journey-dot 6s linear infinite',
+        'journey-pulse': 'journey-pulse 6s ease-in-out infinite',
       },
     },
   },

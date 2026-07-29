@@ -182,51 +182,64 @@ function RouteIllustration() {
   );
 }
 
-function ProductPreviewCard() {
-  const rows = [
-    { ref: 'REF-2049', route: 'Lagos → Rotterdam', status: 'In Transit', tone: 'bg-blue-50 text-blue-700' },
-    { ref: 'REF-2050', route: 'Apapa → Hamburg', status: 'Customs', tone: 'bg-amber-50 text-amber-700' },
-    { ref: 'REF-2044', route: 'Lekki → Antwerp', status: 'Delivered', tone: 'bg-emerald-50 text-emerald-700' },
+function ShipmentJourney() {
+  const milestones = [
+    { label: 'Quoted', icon: FileText },
+    { label: 'Booked', icon: ClipboardList },
+    { label: 'Customs', icon: ShieldCheck },
+    { label: 'Transit', icon: Ship },
+    { label: 'Delivered', icon: CheckCircle2 },
   ];
   return (
-    <div className="relative rotate-1 rounded-2xl border border-border bg-card p-4 shadow-2xl shadow-black/10 transition-transform duration-500 hover:rotate-0">
-      <div className="mb-3 flex items-center gap-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-        <span className="ml-2 text-xs font-medium text-muted-foreground">Shipments</span>
+    <div className="relative rounded-2xl border border-border bg-card p-6 shadow-2xl shadow-black/10">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-widest text-primary">
+          REF-2049 &middot; Live
+        </span>
+        <span className="text-[11px] text-muted-foreground">Lagos → Rotterdam</span>
       </div>
-      <div className="space-y-2">
-        {rows.map((r) => (
-          <div
-            key={r.ref}
-            className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2"
-          >
-            <div>
-              <p className="text-xs font-semibold">{r.ref}</p>
-              <p className="text-[11px] text-muted-foreground">{r.route}</p>
+
+      <div className="relative mt-8 h-9">
+        <div className="absolute left-[10%] right-[10%] top-1/2 h-0.5 -translate-y-1/2 bg-border" />
+        <div
+          aria-hidden
+          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 animate-journey-dot rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]"
+        />
+        <div className="relative flex h-full items-center justify-between">
+          {milestones.map((m, i) => (
+            <div
+              key={m.label}
+              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-border bg-background text-muted-foreground animate-journey-pulse"
+              style={{ animationDelay: `${i * 1.2}s` }}
+            >
+              <m.icon className="h-4 w-4" />
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${r.tone}`}>
-              {r.status}
-            </span>
-          </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between">
+        {milestones.map((m) => (
+          <span key={m.label} className="w-9 text-center text-[10px] text-muted-foreground">
+            {m.label}
+          </span>
         ))}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+
+      <div className="mt-5 grid grid-cols-2 gap-2">
         <div className="rounded-lg bg-muted p-2.5">
-          <p className="text-[10px] text-muted-foreground">Active Shipments</p>
-          <p className="font-serif text-lg font-bold">24</p>
+          <p className="text-[10px] text-muted-foreground">Current Stage</p>
+          <p className="font-serif text-base font-bold">Customs Clearance</p>
         </div>
         <div className="rounded-lg bg-muted p-2.5">
-          <p className="text-[10px] text-muted-foreground">Pending Quotations</p>
-          <p className="font-serif text-lg font-bold">7</p>
+          <p className="text-[10px] text-muted-foreground">ETA</p>
+          <p className="font-serif text-base font-bold">4 days</p>
         </div>
       </div>
 
       {/* Floating accent chip */}
       <div className="absolute -right-6 -top-6 hidden animate-float items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 shadow-lg sm:flex">
-        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-        <span className="text-[11px] font-medium">Documents verified</span>
+        <Radar className="h-3.5 w-3.5 text-primary" />
+        <span className="text-[11px] font-medium">Live milestone alerts</span>
       </div>
     </div>
   );
@@ -374,7 +387,7 @@ export function LandingPage() {
           <div className="relative animate-fade-up" style={{ animationDelay: '150ms' }}>
             <RouteIllustration />
             <div className="mt-4">
-              <ProductPreviewCard />
+              <ShipmentJourney />
             </div>
           </div>
         </div>
