@@ -182,76 +182,6 @@ function RouteIllustration() {
   );
 }
 
-function GlobalFreightBackdrop() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 z-0 hidden items-center justify-end overflow-hidden pr-2 opacity-[0.16] md:flex"
-    >
-      <svg
-        viewBox="0 0 460 340"
-        className="h-[340px] w-auto max-w-none animate-hero-drift lg:h-[400px]"
-      >
-        {/* shipping-lane orbit */}
-        <ellipse
-          cx="230"
-          cy="200"
-          rx="220"
-          ry="68"
-          fill="none"
-          stroke="hsl(var(--brand-gold))"
-          strokeWidth="1.5"
-          strokeDasharray="6 9"
-          opacity="0.55"
-        />
-
-        {/* globe */}
-        <circle cx="230" cy="200" r="118" fill="hsl(var(--chart-2))" />
-        <path
-          d="M150,148 Q188,128 226,146 Q208,174 172,182 Q152,166 150,148 Z"
-          fill="hsl(var(--chart-3))"
-        />
-        <path
-          d="M238,222 Q276,204 314,226 Q296,258 258,254 Q234,240 238,222 Z"
-          fill="hsl(var(--chart-3))"
-        />
-        <path
-          d="M162,228 Q192,214 210,238 Q190,258 166,252 Q156,242 162,228 Z"
-          fill="hsl(var(--chart-3))"
-        />
-        <ellipse
-          cx="230"
-          cy="200"
-          rx="118"
-          ry="42"
-          fill="none"
-          stroke="hsl(var(--background))"
-          strokeOpacity="0.35"
-          strokeWidth="2"
-        />
-        <ellipse
-          cx="230"
-          cy="200"
-          rx="42"
-          ry="118"
-          fill="none"
-          stroke="hsl(var(--background))"
-          strokeOpacity="0.35"
-          strokeWidth="2"
-        />
-
-        {/* plane, banking in over the top of the globe */}
-        <g transform="translate(316,78) rotate(16)">
-          <rect x="-42" y="-4" width="84" height="8" rx="4" fill="hsl(var(--brand-dark))" />
-          <path d="M-8,-4 L-30,-24 L-16,-24 L6,-4 Z" fill="hsl(var(--brand-dark))" />
-          <path d="M-8,4 L-30,24 L-16,24 L6,4 Z" fill="hsl(var(--brand-dark))" />
-          <path d="M34,-4 L52,0 L34,4 Z" fill="hsl(var(--brand-dark))" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
 function ShipmentJourney() {
   const milestones = [
     { label: 'Quoted', icon: FileText },
@@ -426,7 +356,6 @@ export function LandingPage() {
             backgroundSize: '46px 46px, 64px 64px',
           }}
         />
-        <GlobalFreightBackdrop />
         <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
