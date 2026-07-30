@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
+import { isSessionIdleExpired, markActive, clearActivity, startActivityTracking } from '@/lib/utils/idle-session';
 import type { Profile, UserRole } from '@/types';
 
 interface AuthContextValue {
@@ -78,11 +79,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!isMounted) return;
+
+      // A session left idle past the timeout is deliberately not
+      // restored — sign it out and fall through to /login instead of
+      // silently logging the user back in.
+      if (session?.user && isSessionIdleExpired()) {
+        await supabase.auth.signOut();
+        clearActivity();
+        if (!isMounted) return;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setRoles([]);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        markActive();
         fetchProfile(session.user.id).then(async (p) => {
           if (!isMounted) return;
           setProfile(p);
@@ -112,11 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
+            markActive();
             const p = await fetchProfile(session.user.id);
             if (isMounted) setProfile(p);
             const r = await fetchRoles(session.user.id, p?.role);
             if (isMounted) setRoles(r);
           } else {
+            clearActivity();
             if (isMounted) { setProfile(null); setRoles([]); }
           }
           if (isMounted) setLoading(false);
@@ -124,9 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    const stopActivityTracking = startActivityTracking();
+
     return () => {
       isMounted = false;
       listener.subscription.unsubscribe();
+      stopActivityTracking();
     };
   }, []);
 
@@ -137,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    clearActivity();
     setProfile(null);
     setUser(null);
     setSession(null);
