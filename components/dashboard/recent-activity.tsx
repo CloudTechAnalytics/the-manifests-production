@@ -13,6 +13,10 @@ import type { ActivityItem } from '@/hooks/use-dashboard-data';
 interface RecentActivityProps {
   activity: ActivityItem[];
   loading?: boolean;
+  /** True for roles other than admin/branch_manager — RLS (migration 028)
+   *  already limits `activity` to the caller's own actions in that case,
+   *  this just keeps the copy from implying it's team-wide. */
+  ownActivityOnly?: boolean;
 }
 
 /** Initials for the actor avatar, e.g. "John David" -> "JD". */
@@ -21,7 +25,7 @@ function initials(name: string): string {
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || '?';
 }
 
-export function RecentActivity({ activity, loading }: RecentActivityProps) {
+export function RecentActivity({ activity, loading, ownActivityOnly }: RecentActivityProps) {
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="px-4 pb-3 pt-4">
@@ -29,7 +33,7 @@ export function RecentActivity({ activity, loading }: RecentActivityProps) {
           Recent Activity
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Latest actions across your branch
+          {ownActivityOnly ? 'Your latest actions' : 'Latest actions across your branch'}
         </p>
       </CardHeader>
       <CardContent className="flex-1 px-4 pb-4 pt-0">
@@ -43,7 +47,11 @@ export function RecentActivity({ activity, loading }: RecentActivityProps) {
           <EmptyState
             icon={History}
             title="No activity yet"
-            message="Actions taken by your team will show up here."
+            message={
+              ownActivityOnly
+                ? 'Actions you take will show up here.'
+                : 'Actions taken by your team will show up here.'
+            }
             compact
           />
         ) : (

@@ -48,6 +48,12 @@ export default function DashboardPage() {
     profile?.role === 'branch_manager' ||
     profile?.role === 'finance';
 
+  // Mirrors select_activities_branch (migration 028): only admin and
+  // branch_manager see everyone's activity — everyone else only sees
+  // their own (enforced by RLS; this just keeps the copy honest about it).
+  const seesEveryonesActivity =
+    profile?.role === 'admin' || profile?.role === 'branch_manager';
+
   // Eight operational KPIs. Every value is read from a real column —
   // nothing here is derived from a placeholder or a synthetic field.
   const kpis = [
@@ -217,7 +223,11 @@ export default function DashboardPage() {
           periodTotals={warehouse.periodTotals}
           loading={warehouse.loading}
         />
-        <RecentActivity activity={data.recentActivity} loading={data.loading} />
+        <RecentActivity
+          activity={data.recentActivity}
+          loading={data.loading}
+          ownActivityOnly={!seesEveryonesActivity}
+        />
       </div>
     </div>
   );

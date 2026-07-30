@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { History, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/auth-context';
 import { getErrorMessage } from '@/lib/utils';
 import { formatDateTime } from '@/lib/utils/status';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,6 +32,13 @@ interface ActivityRow {
 const PAGE_SIZE = 25;
 
 export default function ActivityLogPage() {
+  const { profile } = useAuth();
+  // Mirrors select_activities_branch (migration 028): only admin and
+  // branch_manager see everyone's activity — everyone else only sees
+  // their own, enforced at the database level, not just here.
+  const seesEveryonesActivity =
+    profile?.role === 'admin' || profile?.role === 'branch_manager';
+
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -119,7 +127,9 @@ export default function ActivityLogPage() {
       <div>
         <h1 className="page-title">Activity Log</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every logged action across your organization.
+          {seesEveryonesActivity
+            ? 'Every logged action across your organization.'
+            : 'Your logged actions.'}
         </p>
       </div>
 
