@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { seedShipmentStages } from '@/lib/utils/seed-shipment-stages';
 import { useAuth } from '@/contexts/auth-context';
 import { useBranchSelector } from '@/hooks/use-branch-selector';
 import { BranchSelectField } from '@/components/shared/branch-select-field';
@@ -298,6 +299,13 @@ export default function NewShipmentPage() {
 
       if (activityError) {
         console.error('Activity log error:', activityError);
+      }
+
+      // 4. Seed workflow stages
+      try {
+        await seedShipmentStages(shipmentId, branchId, profile.id);
+      } catch (stageError) {
+        console.error('Workflow stage seed error:', stageError);
       }
 
       toast.success('Shipment created successfully');

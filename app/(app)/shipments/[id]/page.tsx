@@ -30,6 +30,7 @@ import {
   Landmark,
   Building2,
   FileSearch,
+  ListChecks,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
@@ -97,6 +98,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LifecycleTimeline } from '@/components/shipments/lifecycle-timeline';
+import { ShipmentWorkflowPanel } from '@/components/shipments/shipment-workflow-panel';
+import { ShipmentDocumentsPanel } from '@/components/shipments/shipment-documents-panel';
 import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
 import { TerminalFormDialog } from '@/components/terminal/terminal-form-dialog';
 import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
@@ -153,7 +156,7 @@ type TimelineEntry = ShipmentTimelineEntry & {
 };
 
 const KNOWN_TABS = new Set([
-  'overview', 'timeline', 'documents', 'customs', 'terminal', 'examination', 'transportation',
+  'overview', 'timeline', 'workflow', 'documents', 'customs', 'terminal', 'examination', 'transportation',
 ]);
 
 export default function ShipmentDetailPage() {
@@ -186,6 +189,7 @@ export default function ShipmentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [stagesVersion, setStagesVersion] = useState(0);
 
   // Add-to-timeline form state
   const [timelineStatus, setTimelineStatus] = useState<ShipmentStatus>(
@@ -671,11 +675,11 @@ export default function ShipmentDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <LifecycleTimeline shipment={shipment} />
+          <LifecycleTimeline shipment={shipment} refreshToken={stagesVersion} />
         </CardContent>
       </Card>
 
-      {/* Tabs: Overview | Timeline | Documents | Customs | Terminal | Examination | Transportation */}
+      {/* Tabs: Overview | Timeline | Workflow | Documents | Customs | Terminal | Examination | Transportation */}
       <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="overview" className="gap-1.5">
@@ -685,6 +689,10 @@ export default function ShipmentDetailPage() {
           <TabsTrigger value="timeline" className="gap-1.5">
             <Clock className="h-4 w-4" />
             Timeline
+          </TabsTrigger>
+          <TabsTrigger value="workflow" className="gap-1.5">
+            <ListChecks className="h-4 w-4" />
+            Workflow
           </TabsTrigger>
           <TabsTrigger value="documents" className="gap-1.5">
             <FolderOpen className="h-4 w-4" />
@@ -1013,56 +1021,34 @@ export default function ShipmentDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* --- Documents Tab --- */}
-        <TabsContent value="documents">
+        {/* --- Workflow Tab --- */}
+        <TabsContent value="workflow">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold">
-                Shipment Documents
-              </CardTitle>
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold">Workflow Stages</CardTitle>
+              <CardDescription>
+                Start, complete, or skip each stage. Completing a stage checks that its
+                requirements are met first.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              {documents.length === 0 ? (
-                <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                  No documents uploaded for this shipment yet.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Size</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documents.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            {d.name}
-                          </div>
-                        </TableCell>
-                        <TableCell className="capitalize text-muted-foreground">
-                          {d.category.replace(/_/g, ' ')}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {d.file_size
-                            ? `${(d.file_size / 1024).toFixed(1)} KB`
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDate(d.created_at)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+            <CardContent>
+              <ShipmentWorkflowPanel
+                shipmentId={shipmentId}
+                branchId={shipment.branch_id}
+                onChanged={() => setStagesVersion((v) => v + 1)}
+              />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* --- Documents Tab --- */}
+        <TabsContent value="documents">
+          <ShipmentDocumentsPanel
+            shipmentId={shipmentId}
+            branchId={shipment.branch_id}
+            documents={documents}
+            onReload={loadData}
+          />
         </TabsContent>
 
         {/* --- Customs Tab --- */}

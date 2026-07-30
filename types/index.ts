@@ -302,6 +302,16 @@ export interface DocumentRecord {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  status: DocumentStatus;
+  verified_by: string | null;
+  verified_at: string | null;
+  expiry_date: string | null;
+  remarks: string | null;
+  replaces_document_id: string | null;
+  updated_by: string | null;
+  template_id: string | null;
+  stage_id: string | null;
+  verified_by_user?: Profile | null;
 }
 
 export interface ShipmentCustoms {
@@ -682,6 +692,111 @@ export interface PlanTask {
   due_date: string | null;
   status: PlanTaskStatus;
   priority: PriorityLevel;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_user?: Profile | null;
+}
+
+// ============================================================
+// WORKFLOW ENGINE
+// ============================================================
+
+export type WorkflowStageStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+
+export interface WorkflowStageCatalog {
+  id: string;
+  key: string;
+  sequence: number;
+  label: string;
+  default_department: UserRole;
+  is_optional: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ShipmentStage {
+  id: string;
+  shipment_id: string;
+  catalog_id: string;
+  branch_id: string;
+  stage_key: string;
+  sequence: number;
+  label: string;
+  assigned_department: UserRole;
+  assigned_to: string | null;
+  status: WorkflowStageStatus;
+  is_optional: boolean;
+  due_date: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_user?: Profile | null;
+}
+
+export interface ShipmentStageComment {
+  id: string;
+  stage_id: string;
+  shipment_id: string;
+  branch_id: string;
+  comment: string;
+  created_by: string | null;
+  created_at: string;
+  created_by_user?: Profile | null;
+}
+
+// ============================================================
+// DOCUMENT ENGINE
+// ============================================================
+
+export type DocumentStatus = 'uploaded' | 'verified' | 'rejected' | 'expired';
+
+export interface DocumentTemplate {
+  id: string;
+  key: string;
+  name: string;
+  category: DocumentCategory;
+  stage_key: string | null;
+  applies_to_shipment_types: ShipmentType[] | null;
+  requires_red_channel: boolean;
+  is_required: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+// ============================================================
+// TASK ENGINE
+// ============================================================
+
+export interface StageTaskTemplate {
+  id: string;
+  stage_key: string;
+  title: string;
+  default_priority: PriorityLevel;
+  default_department: UserRole | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ShipmentTask {
+  id: string;
+  shipment_id: string;
+  stage_id: string | null;
+  template_id: string | null;
+  branch_id: string;
+  title: string;
+  assigned_to: string | null;
+  assigned_department: UserRole | null;
+  due_date: string | null;
+  status: PlanTaskStatus;
+  priority: PriorityLevel;
+  completed_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

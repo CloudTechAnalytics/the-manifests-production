@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ArrowRightLeft, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { seedShipmentStages } from '@/lib/utils/seed-shipment-stages';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -104,6 +105,12 @@ export function ConvertToShipmentDialog({
         description: `Converted plan ${plan.plan_number ?? ''} to shipment ${shipment.reference_number ?? ''}`,
         metadata: { shipment_id: shipment.id },
       });
+
+      try {
+        await seedShipmentStages(shipment.id, plan.branch_id, profile.id);
+      } catch (stageError) {
+        console.error('Workflow stage seed error:', stageError);
+      }
 
       toast.success(`Converted to shipment ${shipment.reference_number}`);
       onConverted();

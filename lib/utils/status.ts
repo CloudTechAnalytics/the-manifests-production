@@ -11,6 +11,9 @@ import type {
   PlanStatus,
   PriorityLevel,
   PlanTaskStatus,
+  WorkflowStageStatus,
+  DocumentStatus,
+  DocumentRecord,
 } from '@/types';
 
 export const SHIPMENT_STATUS_META: Record<
@@ -178,6 +181,30 @@ export const PLAN_TASK_STATUS_META: Record<PlanTaskStatus, { label: string; colo
   done: { label: 'Done', color: 'bg-green-100 text-green-700' },
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700' },
 };
+
+export const WORKFLOW_STAGE_STATUS_META: Record<WorkflowStageStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-slate-100 text-slate-700' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
+  skipped: { label: 'Skipped', color: 'bg-muted text-muted-foreground' },
+};
+
+export const DOCUMENT_STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
+  uploaded: { label: 'Uploaded', color: 'bg-blue-100 text-blue-700' },
+  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  expired: { label: 'Expired', color: 'bg-amber-100 text-amber-700' },
+};
+
+/**
+ * "Expired" is checked at read time against expiry_date, not relied on
+ * as the stored status value — same reasoning as isInvoiceOverdue: no
+ * scheduled job exists to flip the stored enum at midnight.
+ */
+export function isDocumentExpired(doc: Pick<DocumentRecord, 'expiry_date'>): boolean {
+  if (!doc.expiry_date) return false;
+  return doc.expiry_date < new Date().toISOString().split('T')[0];
+}
 
 export function formatDate(date: string | null): string {
   if (!date) return '—';

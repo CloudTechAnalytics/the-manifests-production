@@ -9,16 +9,8 @@ import {
   MinusCircle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { checkReleaseReadiness } from '@/lib/utils/release-readiness';
 import { cn } from '@/lib/utils';
-import type {
-  Shipment,
-  CustomsStatus,
-  CustomsInspectionChannel,
-  TerminalStatus,
-  ExaminationResult,
-  TransportationStatus,
-} from '@/types';
+import type { Shipment, ShipmentStage } from '@/types';
 
 type StageState = 'completed' | 'in_progress' | 'pending' | 'delayed' | 'not_required';
 
@@ -36,18 +28,13 @@ const STAGE_META: Record<StageState, { icon: typeof CheckCircle2; className: str
   not_required: { icon: MinusCircle, className: 'text-muted-foreground/50 bg-muted/40 border-border/50' },
 };
 
-/** Where a customs_status value sits relative to the three customs stages below. */
-const CUSTOMS_ORDER: Record<CustomsStatus, number> = {
-  draft: 0,
-  submitted: 0,
-  awaiting_assessment: 1,
-  customs_processing: 1,
-  duty_payment: 2,
-  released: 3,
-  rejected: -1,
-};
-
-export function LifecycleTimeline({ shipment }: { shipment: Shipment }) {
+export function LifecycleTimeline({
+  shipment,
+  refreshToken,
+}: {
+  shipment: Shipment;
+  refreshToken?: number;
+}) {
   const [loading, setLoading] = useState(true);
   const [stages, setStages] = useState<StageDef[]>([]);
 
@@ -57,136 +44,37 @@ export function LifecycleTimeline({ shipment }: { shipment: Shipment }) {
     (async () => {
       setLoading(true);
 
-      const [
-        { data: plan },
-        { data: customs },
-        { data: terminal },
-        { data: examinations },
-        { data: transportLegs },
-        releaseReadiness,
-      ] = await Promise.all([
-        supabase
-          .from('shipment_plans')
-          .select('id')
-          .eq('converted_shipment_id', shipment.id)
-          .maybeSingle(),
-        supabase
-          .from('shipment_customs')
-          .select('status, inspection_channel, duty_paid')
-          .eq('shipment_id', shipment.id)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('terminal_operations')
-          .select('status')
-          .eq('shipment_id', shipment.id)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('shipment_examinations')
-          .select('result, created_at')
-          .eq('shipment_id', shipment.id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1),
-        supabase
-          .from('shipment_transportation')
-          .select('status, created_at')
-          .eq('shipment_id', shipment.id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1),
-        checkReleaseReadiness(shipment.id),
-      ]);
+      const { data } = await supabase
+        .from('shipment_stages')
+        .select('*')
+        .eq('shipment_id', shipment.id)
+        .order('sequence', { ascending: true });
 
       if (cancelled) return;
 
-      const typedCustoms = customs as {
-        status: CustomsStatus;
-        inspection_channel: CustomsInspectionChannel | null;
-        duty_paid: boolean;
-      } | null;
-
-      const isOverdue =
-        shipment.status !== 'delivered' &&
-        shipment.status !== 'cancelled' &&
-        !!shipment.estimated_arrival &&
-        new Date(shipment.estimated_arrival) < new Date();
-
-      const customsStage = (target: 0 | 1 | 2): StageState => {
-        if (!typedCustoms) return 'pending';
-        const order = CUSTOMS_ORDER[typedCustoms.status];
-        if (order === -1) return target === 0 ? 'delayed' : 'pending';
-        if (order > target) return 'completed';
-        if (order === target) return isOverdue ? 'delayed' : 'in_progress';
-        return 'pending';
-      };
-
-      const typedTerminal = terminal as { status: TerminalStatus } | null;
-      const terminalState: StageState = !typedTerminal
-        ? 'pending'
-        : typedTerminal.status === 'released'
-          ? 'completed'
-          : isOverdue
-            ? 'delayed'
-            : 'in_progress';
-
-      const latestExam = examinations?.[0] as { result: ExaminationResult | null } | undefined;
-      const examinationRequired = typedCustoms?.inspection_channel === 'red';
-      const examinationState: StageState = !examinationRequired
-        ? 'not_required'
-        : !latestExam
-          ? 'pending'
-          : latestExam.result === 'passed'
-            ? 'completed'
-            : latestExam.result === 'held' ||
-                latestExam.result === 'additional_duty' ||
-                latestExam.result === 'further_inspection'
-              ? 'delayed'
-              : 'in_progress';
-
-      const releaseState: StageState = releaseReadiness.ready ? 'completed' : 'pending';
-
-      const latestLeg = transportLegs?.[0] as { status: TransportationStatus } | undefined;
-      const transportState: StageState = !latestLeg
-        ? 'pending'
-        : latestLeg.status === 'delivered'
-          ? 'completed'
-          : latestLeg.status === 'failed_delivery'
-            ? 'delayed'
-            : 'in_progress';
-
-      const docState: StageState =
-        shipment.status === 'cancelled'
-          ? 'pending'
-          : shipment.status === 'booking_received'
-            ? 'pending'
-            : shipment.status === 'documentation'
-              ? isOverdue
-                ? 'delayed'
-                : 'in_progress'
-              : 'completed';
+      const today = new Date().toISOString().split('T')[0];
+      const rows = (data as ShipmentStage[] | null) ?? [];
 
       setStages(
-        [
-          { key: 'booking', label: 'Booking', state: 'completed' as StageState },
-          { key: 'planning', label: 'Planning', state: (plan ? 'completed' : 'pending') as StageState },
-          { key: 'documentation', label: 'Documentation', state: docState },
-          { key: 'awaiting_customs', label: 'Awaiting Customs', state: customsStage(0) },
-          { key: 'customs_processing', label: 'Customs Processing', state: customsStage(1) },
-          { key: 'duty_payment', label: 'Duty Payment', state: customsStage(2) },
-          { key: 'terminal', label: 'Terminal Operations', state: terminalState },
-          { key: 'examination', label: 'Physical Examination', state: examinationState },
-          { key: 'release', label: 'Release', state: releaseState },
-          { key: 'warehouse', label: 'Warehouse', state: 'not_required' as StageState },
-          { key: 'transportation', label: 'Transportation', state: transportState },
-          {
-            key: 'delivered',
-            label: 'Delivered',
-            state: (shipment.status === 'delivered' ? 'completed' : 'pending') as StageState,
-          },
-          { key: 'completed', label: 'Completed', state: 'pending' as StageState },
-        ].filter((s) => !(s.key === 'examination' && s.state === 'not_required'))
+        rows.map((stage) => {
+          const isOverdue =
+            (stage.status === 'pending' || stage.status === 'in_progress') &&
+            !!stage.due_date &&
+            stage.due_date < today;
+
+          const state: StageState =
+            stage.status === 'skipped'
+              ? 'not_required'
+              : stage.status === 'completed'
+                ? 'completed'
+                : isOverdue
+                  ? 'delayed'
+                  : stage.status === 'in_progress'
+                    ? 'in_progress'
+                    : 'pending';
+
+          return { key: stage.stage_key, label: stage.label, state };
+        })
       );
       setLoading(false);
     })();
@@ -194,7 +82,7 @@ export function LifecycleTimeline({ shipment }: { shipment: Shipment }) {
     return () => {
       cancelled = true;
     };
-  }, [shipment.id, shipment.status, shipment.estimated_arrival]);
+  }, [shipment.id, refreshToken]);
 
   if (shipment.status === 'cancelled') {
     return (
