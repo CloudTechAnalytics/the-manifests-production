@@ -52,6 +52,7 @@ const ROLE_LABEL: Record<string, string> = {
   sales: 'Sales',
   branch_manager: 'Branch Manager',
   finance: 'Finance',
+  customs: 'Customs',
 };
 
 /** A random, readable temporary password — the admin is forced to change

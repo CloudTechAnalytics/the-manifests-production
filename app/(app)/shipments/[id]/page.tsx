@@ -27,6 +27,9 @@ import {
   Box,
   Plus,
   ChevronRight,
+  Landmark,
+  Building2,
+  FileSearch,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
@@ -92,11 +95,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LifecycleTimeline } from '@/components/shipments/lifecycle-timeline';
+import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
+import { TerminalFormDialog } from '@/components/terminal/terminal-form-dialog';
+import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
+import { TransportationFormDialog } from '@/components/transportation/transportation-form-dialog';
 import {
   SHIPMENT_STATUS_META,
   SHIPMENT_STATUS_FLOW,
   formatDate,
   formatDateTime,
+  formatCurrency,
 } from '@/lib/utils/status';
 import type {
   Shipment,
@@ -107,6 +116,10 @@ import type {
   Profile,
   DocumentRecord,
   Branch,
+  ShipmentCustoms,
+  TerminalOperation,
+  ShipmentExamination,
+  ShipmentTransportation,
 } from '@/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -148,6 +161,18 @@ export default function ShipmentDetailPage() {
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [customsRecord, setCustomsRecord] = useState<ShipmentCustoms | null>(null);
+  const [terminalRecord, setTerminalRecord] = useState<TerminalOperation | null>(null);
+  const [examinations, setExaminations] = useState<ShipmentExamination[]>([]);
+  const [transportLegs, setTransportLegs] = useState<ShipmentTransportation[]>([]);
+  const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
+  const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
+  const [examinationDialog, setExaminationDialog] = useState<{ existing: ShipmentExamination | null } | null>(
+    null
+  );
+  const [transportDialog, setTransportDialog] = useState<{ existing: ShipmentTransportation | null } | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -201,6 +226,38 @@ export default function ShipmentDetailPage() {
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
       setDocuments((docs as DocumentRecord[]) ?? []);
+
+      // Customs, Terminal, Examinations, Transportation
+      const [{ data: customs }, { data: terminal }, { data: exams }, { data: legs }] = await Promise.all([
+        supabase
+          .from('shipment_customs')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        supabase
+          .from('terminal_operations')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        supabase
+          .from('shipment_examinations')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('shipment_transportation')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+      ]);
+      setCustomsRecord((customs as ShipmentCustoms) ?? null);
+      setTerminalRecord((terminal as TerminalOperation) ?? null);
+      setExaminations((exams as ShipmentExamination[]) ?? []);
+      setTransportLegs((legs as ShipmentTransportation[]) ?? []);
     } finally {
       setLoading(false);
     }
@@ -575,7 +632,9 @@ export default function ShipmentDetailPage() {
         </div>
       </div>
 
-      {/* Status Workflow Visualizer */}
+      {/* Lifecycle timeline: Booking through Completed, spanning customs,
+          terminal, examination, release readiness, and transportation —
+          not just the base shipment status. */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -584,79 +643,11 @@ export default function ShipmentDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isCancelled ? (
-            <div className="flex items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 py-6">
-              <X className="h-5 w-5 text-red-500" />
-              <div>
-                <p className="font-medium text-red-700">
-                  Shipment Cancelled
-                </p>
-                <p className="text-sm text-red-600">
-                  This shipment has been cancelled and is no longer in active
-                  transit.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center overflow-x-auto pb-2">
-              {SHIPMENT_STATUS_FLOW.map((status, idx) => {
-                const meta = SHIPMENT_STATUS_META[status];
-                const isComplete = meta.step <= currentStep;
-                const isCurrent = meta.step === currentStep;
-                const isLast = idx === SHIPMENT_STATUS_FLOW.length - 1;
-                return (
-                  <div
-                    key={status}
-                    className="flex items-center"
-                  >
-                    <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                          isCurrent
-                            ? 'border-blue-600 bg-blue-600 text-white'
-                            : isComplete
-                            ? 'border-blue-300 bg-blue-50 text-blue-600'
-                            : 'border-gray-200 bg-white text-gray-400'
-                        }`}
-                      >
-                        {isComplete && !isCurrent ? (
-                          <Check className="h-5 w-5" />
-                        ) : (
-                          <span className="text-sm font-semibold">
-                            {meta.step + 1}
-                          </span>
-                        )}
-                      </div>
-                      <span
-                        className={`text-xs font-medium text-center ${
-                          isCurrent
-                            ? 'text-blue-700'
-                            : isComplete
-                            ? 'text-blue-600'
-                            : 'text-muted-foreground'
-                        }`}
-                      >
-                        {meta.label}
-                      </span>
-                    </div>
-                    {!isLast && (
-                      <div
-                        className={`h-0.5 w-12 mx-1 transition-colors ${
-                          isComplete
-                            ? 'bg-blue-300'
-                            : 'bg-gray-200'
-                        }`}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <LifecycleTimeline shipment={shipment} />
         </CardContent>
       </Card>
 
-      {/* Tabs: Overview | Timeline | Documents */}
+      {/* Tabs: Overview | Timeline | Documents | Customs | Terminal | Examination | Transportation */}
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview" className="gap-1.5">
@@ -670,6 +661,24 @@ export default function ShipmentDetailPage() {
           <TabsTrigger value="documents" className="gap-1.5">
             <FolderOpen className="h-4 w-4" />
             Documents
+          </TabsTrigger>
+          <TabsTrigger value="customs" className="gap-1.5">
+            <Landmark className="h-4 w-4" />
+            Customs
+          </TabsTrigger>
+          <TabsTrigger value="terminal" className="gap-1.5">
+            <Building2 className="h-4 w-4" />
+            Terminal
+          </TabsTrigger>
+          {customsRecord?.inspection_channel === 'red' && (
+            <TabsTrigger value="examination" className="gap-1.5">
+              <FileSearch className="h-4 w-4" />
+              Examination
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="transportation" className="gap-1.5">
+            <Truck className="h-4 w-4" />
+            Transportation
           </TabsTrigger>
         </TabsList>
 
@@ -1027,7 +1036,234 @@ export default function ShipmentDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* --- Customs Tab --- */}
+        <TabsContent value="customs">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Customs</CardTitle>
+              <Button size="sm" onClick={() => setCustomsDialogOpen(true)}>
+                {customsRecord ? (
+                  <>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Add Customs Record
+                  </>
+                )}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!customsRecord ? (
+                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                  No customs record for this shipment yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+                  <InfoRow label="Declaration Number" value={customsRecord.declaration_number} />
+                  <InfoRow label="HS Code" value={customsRecord.hs_code} />
+                  <InfoRow label="Customs Office" value={customsRecord.customs_office} />
+                  <InfoRow label="Officer" value={customsRecord.officer} />
+                  <InfoRow
+                    label="Duty Amount"
+                    value={formatCurrency(customsRecord.duty_amount, 'NGN')}
+                  />
+                  <InfoRow
+                    label="Duty Paid"
+                    value={customsRecord.duty_paid ? `Yes${customsRecord.duty_paid_date ? ` (${formatDate(customsRecord.duty_paid_date)})` : ''}` : 'No'}
+                  />
+                  <InfoRow
+                    label="Inspection Channel"
+                    value={customsRecord.inspection_channel ?? 'Not yet assessed'}
+                  />
+                  <InfoRow label="Status" value={customsRecord.status.replace(/_/g, ' ')} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --- Terminal Tab --- */}
+        <TabsContent value="terminal">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Terminal Operations</CardTitle>
+              <Button size="sm" onClick={() => setTerminalDialogOpen(true)}>
+                {terminalRecord ? (
+                  <>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Add Terminal Record
+                  </>
+                )}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!terminalRecord ? (
+                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                  No terminal record for this shipment yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+                  <InfoRow label="Terminal Name" value={terminalRecord.terminal_name} />
+                  <InfoRow
+                    label="Arrival Date"
+                    value={terminalRecord.arrival_date ? formatDate(terminalRecord.arrival_date) : null}
+                  />
+                  <InfoRow label="Container Position" value={terminalRecord.container_position} />
+                  <InfoRow label="Holding Bay" value={terminalRecord.holding_bay} />
+                  <InfoRow label="Stack Number" value={terminalRecord.stack_number} />
+                  <InfoRow label="Gate Pass Number" value={terminalRecord.gate_pass_number} />
+                  <InfoRow label="Exit Note Number" value={terminalRecord.exit_note_number} />
+                  <InfoRow
+                    label="Release Date"
+                    value={terminalRecord.release_date ? formatDate(terminalRecord.release_date) : null}
+                  />
+                  <InfoRow label="Status" value={terminalRecord.status} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --- Examination Tab (only rendered when Customs selected Red channel) --- */}
+        {customsRecord?.inspection_channel === 'red' && (
+          <TabsContent value="examination">
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle className="text-lg font-semibold">Physical Examination</CardTitle>
+                <Button size="sm" onClick={() => setExaminationDialog({ existing: null })}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Log Examination
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {examinations.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                    No examinations logged yet.
+                  </div>
+                ) : (
+                  examinations.map((exam) => (
+                    <div
+                      key={exam.id}
+                      className="cursor-pointer rounded-lg border border-border p-4 transition-colors hover:border-primary/40"
+                      onClick={() => setExaminationDialog({ existing: exam })}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          {exam.inspection_date ? formatDate(exam.inspection_date) : 'Date not set'}
+                        </span>
+                        {exam.result && (
+                          <Badge variant="secondary" className="capitalize">
+                            {exam.result.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                        <span>Inspection Officer: {exam.inspection_officer ?? '—'}</span>
+                        <span>Terminal Officer: {exam.terminal_officer ?? '—'}</span>
+                        <span>Shipping Line Rep: {exam.shipping_line_representative ?? '—'}</span>
+                        <span>Freight Forwarder: {exam.freight_forwarder_representative ?? '—'}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* --- Transportation Tab --- */}
+        <TabsContent value="transportation">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Transportation</CardTitle>
+              <Button size="sm" onClick={() => setTransportDialog({ existing: null })}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                New Leg
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {transportLegs.length === 0 ? (
+                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                  No transportation legs yet.
+                </div>
+              ) : (
+                transportLegs.map((leg) => (
+                  <div
+                    key={leg.id}
+                    className="cursor-pointer rounded-lg border border-border p-4 transition-colors hover:border-primary/40"
+                    onClick={() => setTransportDialog({ existing: leg })}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {[leg.truck_number, leg.driver_name].filter(Boolean).join(' · ') || 'Leg details pending'}
+                      </span>
+                      <Badge variant="secondary" className="capitalize">
+                        {leg.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                      <span>Pickup: {leg.pickup_date ? formatDate(leg.pickup_date) : '—'}</span>
+                      <span>Departure: {leg.departure_date ? formatDate(leg.departure_date) : '—'}</span>
+                      <span>Arrival: {leg.arrival_date ? formatDate(leg.arrival_date) : '—'}</span>
+                      <span>Delivery: {leg.delivery_date ? formatDate(leg.delivery_date) : '—'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {shipment && (
+        <>
+          <CustomsFormDialog
+            open={customsDialogOpen}
+            onOpenChange={setCustomsDialogOpen}
+            shipmentId={shipment.id}
+            branchId={shipment.branch_id}
+            existing={customsRecord}
+            onSaved={loadData}
+          />
+          <TerminalFormDialog
+            open={terminalDialogOpen}
+            onOpenChange={setTerminalDialogOpen}
+            shipmentId={shipment.id}
+            branchId={shipment.branch_id}
+            existing={terminalRecord}
+            onSaved={loadData}
+          />
+          {examinationDialog && (
+            <ExaminationFormDialog
+              open={!!examinationDialog}
+              onOpenChange={(open) => !open && setExaminationDialog(null)}
+              shipmentId={shipment.id}
+              branchId={shipment.branch_id}
+              existing={examinationDialog.existing}
+              onSaved={loadData}
+            />
+          )}
+          {transportDialog && (
+            <TransportationFormDialog
+              open={!!transportDialog}
+              onOpenChange={(open) => !open && setTransportDialog(null)}
+              shipmentId={shipment.id}
+              branchId={shipment.branch_id}
+              existing={transportDialog.existing}
+              onSaved={loadData}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -1039,13 +1275,13 @@ function InfoRow({
   label,
   value,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null;
 }) {
   return (
     <div className="flex items-start gap-2.5">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      {Icon && <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">{label}</p>
         {value ? (

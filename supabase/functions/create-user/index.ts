@@ -32,7 +32,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance"]);
+const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance", "customs"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

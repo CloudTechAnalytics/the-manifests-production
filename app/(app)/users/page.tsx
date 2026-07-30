@@ -89,6 +89,7 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   sales: { label: 'Sales', color: 'bg-amber-100 text-amber-700' },
   branch_manager: { label: 'Branch Manager', color: 'bg-cyan-100 text-cyan-700' },
   finance: { label: 'Finance', color: 'bg-emerald-100 text-emerald-700' },
+  customs: { label: 'Customs', color: 'bg-orange-100 text-orange-700' },
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -97,6 +98,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'sales', label: 'Sales' },
   { value: 'branch_manager', label: 'Branch Manager' },
   { value: 'finance', label: 'Finance' },
+  { value: 'customs', label: 'Customs' },
 ];
 
 // --- Form types ------------------------------------------------------------

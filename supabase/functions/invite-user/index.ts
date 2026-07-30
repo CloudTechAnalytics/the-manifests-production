@@ -31,7 +31,7 @@ function corsHeaders(req: Request) {
 
 // platform_admin is deliberately absent: it is never scoped to one
 // organization, so it cannot be granted through an org invitation.
-const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance"]);
+const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance", "customs"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_TTL_DAYS = 7;

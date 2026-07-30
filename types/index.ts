@@ -6,7 +6,8 @@ export type UserRole =
   | 'operations'
   | 'sales'
   | 'branch_manager'
-  | 'finance';
+  | 'finance'
+  | 'customs';
 
 export type CustomerType = 'individual' | 'corporate';
 
@@ -39,6 +40,28 @@ export type DocumentCategory =
   | 'customs'
   | 'proof_of_delivery'
   | 'other';
+
+export type CustomsStatus =
+  | 'draft'
+  | 'submitted'
+  | 'awaiting_assessment'
+  | 'duty_payment'
+  | 'customs_processing'
+  | 'released'
+  | 'rejected';
+
+export type CustomsInspectionChannel = 'green' | 'yellow' | 'red';
+
+export type TerminalStatus = 'waiting' | 'positioned' | 'scheduled' | 'examined' | 'released';
+
+export type ExaminationResult = 'passed' | 'held' | 'additional_duty' | 'further_inspection';
+
+export type TransportationStatus =
+  | 'assigned'
+  | 'loaded'
+  | 'in_transit'
+  | 'delivered'
+  | 'failed_delivery';
 
 export interface Branch {
   id: string;
@@ -262,6 +285,7 @@ export interface DocumentRecord {
   shipment_id: string | null;
   customer_id: string | null;
   plan_id: string | null;
+  examination_id: string | null;
   name: string;
   category: DocumentCategory;
   file_path: string;
@@ -272,6 +296,93 @@ export interface DocumentRecord {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+export interface ShipmentCustoms {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  declaration_number: string | null;
+  hs_code: string | null;
+  duty_amount: number;
+  duty_paid: boolean;
+  duty_paid_date: string | null;
+  customs_office: string | null;
+  inspection_channel: CustomsInspectionChannel | null;
+  officer: string | null;
+  status: CustomsStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+}
+
+export interface TerminalOperation {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  terminal_name: string | null;
+  arrival_date: string | null;
+  container_position: string | null;
+  holding_bay: string | null;
+  stack_number: string | null;
+  examination_scheduled_date: string | null;
+  gate_pass_number: string | null;
+  exit_note_number: string | null;
+  release_date: string | null;
+  status: TerminalStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+}
+
+export interface ShipmentExamination {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  inspection_date: string | null;
+  inspection_officer: string | null;
+  terminal_officer: string | null;
+  shipping_line_representative: string | null;
+  freight_forwarder_representative: string | null;
+  result: ExaminationResult | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+}
+
+export interface ShipmentTransportation {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  truck_number: string | null;
+  trailer_number: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  pickup_date: string | null;
+  departure_date: string | null;
+  arrival_date: string | null;
+  delivery_date: string | null;
+  proof_of_delivery_document_id: string | null;
+  status: TransportationStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
 }
 
 export type ThemePreference = 'light' | 'dark' | 'system';

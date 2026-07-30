@@ -29,6 +29,9 @@ import {
   Bell,
   CheckCircle2,
   History,
+  Landmark,
+  FileSearch,
+  Truck,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -64,6 +67,7 @@ type NavItem = {
 const OPERATIONS_ROLES: UserRole[] = ['admin', 'branch_manager', 'operations'];
 const SALES_ROLES: UserRole[] = ['admin', 'branch_manager', 'sales'];
 const FINANCE_ROLES: UserRole[] = ['admin', 'branch_manager', 'finance'];
+const CUSTOMS_ROLES: UserRole[] = ['admin', 'branch_manager', 'customs'];
 
 // Professionally grouped navigation. Only real, existing routes are
 // included — dead-end links are never added. `roles` restricts a track
@@ -79,6 +83,10 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: '/planning', label: 'Planning', icon: ClipboardList, roles: OPERATIONS_ROLES },
       { href: '/tracking', label: 'Tracking', icon: Radar, roles: OPERATIONS_ROLES },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: OPERATIONS_ROLES },
+      { href: '/customs', label: 'Customs', icon: Landmark, roles: CUSTOMS_ROLES },
+      { href: '/terminal', label: 'Terminal', icon: Building2, roles: CUSTOMS_ROLES },
+      { href: '/examination', label: 'Examination', icon: FileSearch, roles: CUSTOMS_ROLES },
+      { href: '/transportation', label: 'Transportation', icon: Truck, roles: OPERATIONS_ROLES },
     ],
   },
   {
