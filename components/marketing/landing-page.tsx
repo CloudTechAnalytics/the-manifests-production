@@ -33,6 +33,7 @@ import {
   SheetClose,
 } from '@/components/ui/sheet';
 import { Reveal } from '@/components/marketing/reveal';
+import { cn } from '@/lib/utils';
 
 const CONTACT_EMAIL = 'cloudtechanalytics.consultant@gmail.com';
 const CONTACT_PHONE = '+2348133860243';
@@ -273,7 +274,14 @@ export function LandingPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
               <Ship className="h-4.5 w-4.5 text-primary-foreground" strokeWidth={2.25} />
             </div>
-            <span className="font-serif text-lg font-bold tracking-tight">The Manifest</span>
+            <span
+              className={cn(
+                'font-serif text-lg font-bold tracking-tight transition-colors',
+                scrolled ? 'text-foreground' : 'text-white'
+              )}
+            >
+              The Manifest
+            </span>
           </div>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -281,7 +289,12 @@ export function LandingPage() {
               <a
                 key={l.href}
                 href={l.href}
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                className={cn(
+                  'text-sm font-medium transition-colors',
+                  scrolled
+                    ? 'text-muted-foreground hover:text-foreground'
+                    : 'text-white/80 hover:text-white'
+                )}
               >
                 {l.label}
               </a>
@@ -289,7 +302,11 @@ export function LandingPage() {
           </nav>
 
           <div className="hidden items-center gap-3 md:flex">
-            <Button variant="ghost" asChild>
+            <Button
+              variant="ghost"
+              asChild
+              className={cn(!scrolled && 'text-white hover:bg-white/10 hover:text-white')}
+            >
               <Link href="/login">Sign In</Link>
             </Button>
             <Button asChild>
@@ -334,7 +351,10 @@ export function LandingPage() {
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground md:hidden"
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-md transition-colors md:hidden',
+                scrolled ? 'text-foreground' : 'text-white'
+              )}
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
@@ -347,26 +367,27 @@ export function LandingPage() {
       {/* Hero */}
       {/* ---------------------------------------------------------------- */}
       <section className="relative overflow-hidden pt-32 pb-20 sm:pt-40 sm:pb-28">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.05]"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle at 15% 25%, hsl(var(--primary)) 1px, transparent 1px), radial-gradient(circle at 80% 60%, hsl(var(--primary)) 1px, transparent 1px)',
-            backgroundSize: '46px 46px, 64px 64px',
-          }}
-        />
+        <div aria-hidden className="absolute inset-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/hero-port.jpg"
+            alt=""
+            className="h-full w-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/85 to-brand-dark/45" />
+          <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/80 via-transparent to-brand-dark/40" />
+        </div>
         <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <div className="animate-fade-up">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-brand-gold-soft backdrop-blur-sm">
               <Layers className="h-3.5 w-3.5" />
               Freight Operations Platform
             </div>
-            <h1 className="mt-5 font-serif text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+            <h1 className="mt-5 font-serif text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
               The operating system for modern{' '}
-              <span className="text-primary">freight forwarders.</span>
+              <span className="text-brand-gold-soft">freight forwarders.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-brand-dark-muted sm:text-lg">
               Quotations, shipments, planning, tracking, warehouse, invoicing, and
               documents — one workspace for your whole operation, with every
               branch and role scoped to exactly what it needs.
@@ -378,7 +399,12 @@ export function LandingPage() {
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </a>
               </Button>
-              <Button size="lg" variant="outline" asChild>
+              <Button
+                size="lg"
+                variant="outline"
+                asChild
+                className="border-brand-dark-border bg-transparent text-white hover:bg-white/10 hover:text-white"
+              >
                 <Link href="/login">Sign In</Link>
               </Button>
             </div>
