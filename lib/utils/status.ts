@@ -115,6 +115,9 @@ export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, { label: string }> =
   rent: { label: 'Rent' },
   salaries_benefits: { label: 'Salaries & Benefits' },
   utilities: { label: 'Utilities' },
+  demurrage: { label: 'Demurrage' },
+  storage: { label: 'Storage' },
+  re_examination_penalty: { label: 'Re-examination Penalty' },
   other: { label: 'Other' },
 };
 

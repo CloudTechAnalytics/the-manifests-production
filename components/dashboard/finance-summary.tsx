@@ -51,6 +51,11 @@ export function FinanceSummary({ finance, loading, restricted }: FinanceSummaryP
           value: finance.expensesByCurrency[currency] ?? 0,
           tone: 'text-red-600',
         },
+        {
+          label: 'Cost of Delay',
+          value: finance.costOfDelayByCurrency[currency] ?? 0,
+          tone: 'text-red-600',
+        },
       ]
     : [];
 

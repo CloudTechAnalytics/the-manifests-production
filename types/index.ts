@@ -443,6 +443,9 @@ export type ExpenseCategory =
   | 'rent'
   | 'salaries_benefits'
   | 'utilities'
+  | 'demurrage'
+  | 'storage'
+  | 're_examination_penalty'
   | 'other';
 
 export type ExpenseStatus = 'pending' | 'approved' | 'rejected';

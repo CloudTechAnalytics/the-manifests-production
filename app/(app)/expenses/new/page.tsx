@@ -44,7 +44,17 @@ import type { ExpenseCategory, Shipment } from '@/types';
 
 const expenseSchema = z.object({
   description: z.string().min(1, 'Description is required'),
-  category: z.enum(['transport', 'customs', 'rent', 'salaries_benefits', 'utilities', 'other']),
+  category: z.enum([
+    'transport',
+    'customs',
+    'rent',
+    'salaries_benefits',
+    'utilities',
+    'demurrage',
+    'storage',
+    're_examination_penalty',
+    'other',
+  ]),
   shipment_id: z.string().optional().or(z.literal('')),
   amount: z.coerce.number().positive('Amount must be greater than 0'),
   currency: z.string().min(1),

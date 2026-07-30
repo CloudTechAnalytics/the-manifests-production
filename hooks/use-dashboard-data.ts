@@ -62,6 +62,10 @@ export interface FinanceSummaryData {
   outstandingByCurrency: Record<string, number>;
   collectedByCurrency: Record<string, number>;
   expensesByCurrency: Record<string, number>;
+  /** Approved expenses in the demurrage/storage/re_examination_penalty
+   *  categories — a subset of expensesByCurrency, broken out so the
+   *  financial cost of customs-clearance delays is visible on its own. */
+  costOfDelayByCurrency: Record<string, number>;
   primaryCurrency: string | null;
   outstandingCount: number;
   overdueCount: number;
@@ -141,6 +145,7 @@ const EMPTY_FINANCE: FinanceSummaryData = {
   outstandingByCurrency: {},
   collectedByCurrency: {},
   expensesByCurrency: {},
+  costOfDelayByCurrency: {},
   primaryCurrency: null,
   outstandingCount: 0,
   overdueCount: 0,
@@ -292,10 +297,12 @@ export function useDashboardData(): DashboardData {
           .is('deleted_at', null);
         if (branchFilter) invQuery = invQuery.eq('branch_id', branchFilter);
 
-        // Expenses: approved spend, for the Finance Summary.
+        // Expenses: approved spend, for the Finance Summary. category is
+        // included to break out the Cost of Delay figure (demurrage,
+        // storage, re-examination penalties).
         let expQuery = supabase
           .from('expenses')
-          .select('amount, currency, status')
+          .select('amount, currency, status, category')
           .is('deleted_at', null);
         if (branchFilter) expQuery = expQuery.eq('branch_id', branchFilter);
 
@@ -559,11 +566,17 @@ export function useDashboardData(): DashboardData {
           }
         });
 
+        const DELAY_COST_CATEGORIES = new Set(['demurrage', 'storage', 're_examination_penalty']);
         const expensesByCurrency: Record<string, number> = {};
+        const costOfDelayByCurrency: Record<string, number> = {};
         (expRows ?? []).forEach((e) => {
           if (e.status !== 'approved') return;
           expensesByCurrency[e.currency] =
             (expensesByCurrency[e.currency] ?? 0) + Number(e.amount);
+          if (DELAY_COST_CATEGORIES.has(e.category)) {
+            costOfDelayByCurrency[e.currency] =
+              (costOfDelayByCurrency[e.currency] ?? 0) + Number(e.amount);
+          }
         });
 
         const planningData: PlanningOverviewData = {
@@ -644,6 +657,7 @@ export function useDashboardData(): DashboardData {
           outstandingByCurrency,
           collectedByCurrency: collected,
           expensesByCurrency,
+          costOfDelayByCurrency,
           primaryCurrency: pickPrimaryCurrency(invoicedByCurrency),
           outstandingCount,
           overdueCount,
