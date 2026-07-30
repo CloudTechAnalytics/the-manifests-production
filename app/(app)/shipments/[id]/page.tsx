@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -393,6 +394,14 @@ export default function ShipmentDetailPage() {
     if (!shipment || !profile) return;
     setDeleting(true);
     try {
+      if (profile.role === 'admin') {
+        const result = await adminForceDelete('shipment', shipmentId);
+        if (!result.success) throw new Error(result.error);
+        toast.success('Shipment permanently deleted');
+        router.push('/shipments');
+        return;
+      }
+
       const { error } = await supabase
         .from('shipments')
         .update({
@@ -606,10 +615,21 @@ export default function ShipmentDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete shipment?</DialogTitle>
                 <DialogDescription>
-                  This will soft-delete shipment{' '}
-                  &quot;{shipment.reference_number}&quot;. The record is
-                  retained but hidden from lists. This action can be undone by
-                  an admin.
+                  {profile?.role === 'admin' ? (
+                    <>
+                      This permanently deletes shipment{' '}
+                      &quot;{shipment.reference_number}&quot; and everything under
+                      it — timeline, documents, customs, terminal, examination, and
+                      transportation records. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will soft-delete shipment{' '}
+                      &quot;{shipment.reference_number}&quot;. The record is
+                      retained but hidden from lists. This action can be undone by
+                      an admin.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

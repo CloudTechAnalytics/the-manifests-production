@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -129,6 +130,14 @@ export default function InvoiceDetailPage() {
     if (!invoice || !profile) return;
     setDeleting(true);
     try {
+      if (profile.role === 'admin') {
+        const result = await adminForceDelete('invoice', invoiceId);
+        if (!result.success) throw new Error(result.error);
+        toast.success('Invoice permanently deleted');
+        router.push('/invoices');
+        return;
+      }
+
       // Remove allocations first so the sync trigger recalculates the
       // affected payments' allocated/unallocated amounts before this
       // invoice disappears — otherwise a payment would keep counting
@@ -311,9 +320,19 @@ export default function InvoiceDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete invoice?</DialogTitle>
                 <DialogDescription>
-                  This will soft-delete invoice &quot;{invoice.invoice_number}&quot;. The
-                  record is retained but hidden from lists. This action can be undone by
-                  an admin.
+                  {profile?.role === 'admin' ? (
+                    <>
+                      This permanently deletes invoice &quot;{invoice.invoice_number}&quot;
+                      and releases any payment allocations against it. This cannot be
+                      undone.
+                    </>
+                  ) : (
+                    <>
+                      This will soft-delete invoice &quot;{invoice.invoice_number}&quot;. The
+                      record is retained but hidden from lists. This action can be undone by
+                      an admin.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

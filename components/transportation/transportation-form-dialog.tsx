@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import { checkReleaseReadiness } from '@/lib/utils/release-readiness';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,7 @@ export function TransportationFormDialog({
   const [status, setStatus] = useState<TransportationStatus>('assigned');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [blockers, setBlockers] = useState<string[]>([]);
 
   useEffect(() => {
@@ -155,6 +157,22 @@ export function TransportationFormDialog({
       toast.error(getErrorMessage(err, 'Failed to save transportation leg'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!existing) return;
+    setDeleting(true);
+    try {
+      const result = await adminForceDelete('shipment_transportation', existing.id);
+      if (!result.success) throw new Error(result.error);
+      toast.success('Transportation leg permanently deleted');
+      onOpenChange(false);
+      onSaved();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete transportation leg'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -262,14 +280,32 @@ export function TransportationFormDialog({
             </p>
           </div>
         </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {existing ? 'Save Changes' : 'Create Leg'}
-          </Button>
+        <DialogFooter className={existing && profile?.role === 'admin' ? 'sm:justify-between' : undefined}>
+          {existing && profile?.role === 'admin' && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleDelete}
+              disabled={deleting || submitting}
+            >
+              {deleting ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-4 w-4" />
+              )}
+              Delete Permanently
+            </Button>
+          )}
+          <div className="flex gap-2">
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {existing ? 'Save Changes' : 'Create Leg'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

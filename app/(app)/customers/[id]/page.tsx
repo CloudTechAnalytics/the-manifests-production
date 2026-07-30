@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -169,6 +170,18 @@ export default function CustomerDetailPage() {
     if (!customer || !profile) return;
     setDeleting(true);
     try {
+      // Admins get a true permanent delete that cascades through
+      // whatever's linked to this customer (quotations, shipments,
+      // invoices, payments, shipment plans) — everyone else keeps the
+      // ordinary reversible soft-delete below.
+      if (profile.role === 'admin') {
+        const result = await adminForceDelete('customer', customerId);
+        if (!result.success) throw new Error(result.error);
+        toast.success('Customer permanently deleted');
+        router.push('/customers');
+        return;
+      }
+
       const { error } = await supabase
         .from('customers')
         .update({
@@ -303,9 +316,19 @@ export default function CustomerDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete customer?</DialogTitle>
                 <DialogDescription>
-                  This will soft-delete &quot;{customer.company_name}&quot;.
-                  The record is retained but hidden from lists. This action
-                  can be undone by an admin.
+                  {profile?.role === 'admin' ? (
+                    <>
+                      This permanently deletes &quot;{customer.company_name}&quot;
+                      and everything linked to it — quotations, shipments,
+                      invoices, and payments. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will soft-delete &quot;{customer.company_name}&quot;.
+                      The record is retained but hidden from lists. This action
+                      can be undone by an admin.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

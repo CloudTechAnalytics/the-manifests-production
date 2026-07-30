@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -139,6 +140,14 @@ export default function ExpenseDetailPage() {
     if (!expense || !profile) return;
     setDeleting(true);
     try {
+      if (profile.role === 'admin') {
+        const result = await adminForceDelete('expense', expenseId);
+        if (!result.success) throw new Error(result.error);
+        toast.success('Expense permanently deleted');
+        router.push('/expenses');
+        return;
+      }
+
       const { error } = await supabase
         .from('expenses')
         .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
@@ -274,8 +283,17 @@ export default function ExpenseDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete expense?</DialogTitle>
                 <DialogDescription>
-                  This will soft-delete expense &quot;{expense.expense_number}&quot;. The
-                  record is retained but hidden from lists.
+                  {profile?.role === 'admin' ? (
+                    <>
+                      This permanently deletes expense &quot;{expense.expense_number}&quot;.
+                      This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will soft-delete expense &quot;{expense.expense_number}&quot;. The
+                      record is retained but hidden from lists.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

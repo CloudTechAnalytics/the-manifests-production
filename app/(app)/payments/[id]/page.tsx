@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Trash2, Wallet, User, Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -232,6 +233,14 @@ export default function PaymentDetailPage() {
     if (!payment || !profile) return;
     setDeleting(true);
     try {
+      if (profile.role === 'admin') {
+        const result = await adminForceDelete('payment', paymentId);
+        if (!result.success) throw new Error(result.error);
+        toast.success('Payment permanently deleted');
+        router.push('/payments');
+        return;
+      }
+
       // Remove allocations first so the sync trigger recalculates the
       // affected invoices' amount_paid/status back down before we soft
       // delete the payment itself — otherwise those invoices would stay
@@ -460,9 +469,19 @@ export default function PaymentDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete payment?</DialogTitle>
                 <DialogDescription>
-                  This will soft-delete payment &quot;{payment.payment_number}&quot; and remove
-                  its allocations, updating any linked invoices&apos; outstanding balances back
-                  up. This action can be undone by an admin.
+                  {profile?.role === 'admin' ? (
+                    <>
+                      This permanently deletes payment &quot;{payment.payment_number}&quot;
+                      and its allocations, updating any linked invoices&apos; outstanding
+                      balances back up. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will soft-delete payment &quot;{payment.payment_number}&quot; and remove
+                      its allocations, updating any linked invoices&apos; outstanding balances back
+                      up. This action can be undone by an admin.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
