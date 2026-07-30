@@ -251,7 +251,7 @@ export default function OrganizationDetailPage() {
           body: JSON.stringify({
             email: createAdminEmail.trim(),
             full_name: createAdminName.trim(),
-            role: 'admin',
+            roles: ['admin'],
             organization_id: orgId,
             password: createAdminPassword,
           }),
