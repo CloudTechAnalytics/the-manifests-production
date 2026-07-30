@@ -151,7 +151,7 @@ export default function LoginPage() {
                 The Manifest
               </span>
               <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
-                Freight Management Platform
+                CloudTech Logistics Suite
               </span>
             </div>
           </div>

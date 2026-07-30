@@ -18,7 +18,7 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'The Manifest — Freight Operations Management',
+  title: 'The Manifest — CloudTech Logistics Suite',
   description:
     'Cloud-based freight operations platform for forwarding companies. Manage customers, quotations, shipments, and documents.',
 };
