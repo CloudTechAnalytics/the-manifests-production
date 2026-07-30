@@ -58,15 +58,13 @@ type ExpenseDetail = Expense & {
 export default function ExpenseDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const expenseId = params.id;
   const isAdmin = profile?.role === 'admin';
-  // Mirrors can_manage_finance() (migration 024's RLS for expenses UPDATE):
-  // admin, branch_manager, and finance can all approve/reject, not just admin.
-  const canApprove =
-    profile?.role === 'admin' ||
-    profile?.role === 'branch_manager' ||
-    profile?.role === 'finance';
+  // Mirrors can_manage_finance() (migration 034's RLS for expenses UPDATE):
+  // admin, branch_manager, and finance can all approve/reject, not just
+  // admin — and a user can hold more than one of those at once.
+  const canApprove = hasRole('admin') || hasRole('branch_manager') || hasRole('finance');
 
   const [expense, setExpense] = useState<ExpenseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,7 +138,7 @@ export default function ExpenseDetailPage() {
     if (!expense || !profile) return;
     setDeleting(true);
     try {
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('expense', expenseId);
         if (!result.success) throw new Error(result.error);
         toast.success('Expense permanently deleted');
@@ -283,7 +281,7 @@ export default function ExpenseDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete expense?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes expense &quot;{expense.expense_number}&quot;.
                       This cannot be undone.

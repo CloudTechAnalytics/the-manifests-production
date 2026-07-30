@@ -32,12 +32,11 @@ interface ActivityRow {
 const PAGE_SIZE = 25;
 
 export default function ActivityLogPage() {
-  const { profile } = useAuth();
+  const { hasRole } = useAuth();
   // Mirrors select_activities_branch (migration 028): only admin and
   // branch_manager see everyone's activity — everyone else only sees
   // their own, enforced at the database level, not just here.
-  const seesEveryonesActivity =
-    profile?.role === 'admin' || profile?.role === 'branch_manager';
+  const seesEveryonesActivity = hasRole('admin') || hasRole('branch_manager');
 
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);

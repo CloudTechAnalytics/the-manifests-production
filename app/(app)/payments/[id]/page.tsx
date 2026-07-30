@@ -59,7 +59,7 @@ type AllocationRow = PaymentAllocation & {
 export default function PaymentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const paymentId = params.id;
 
   const [payment, setPayment] = useState<PaymentDetail | null>(null);
@@ -233,7 +233,7 @@ export default function PaymentDetailPage() {
     if (!payment || !profile) return;
     setDeleting(true);
     try {
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('payment', paymentId);
         if (!result.success) throw new Error(result.error);
         toast.success('Payment permanently deleted');
@@ -469,7 +469,7 @@ export default function PaymentDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete payment?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes payment &quot;{payment.payment_number}&quot;
                       and its allocations, updating any linked invoices&apos; outstanding

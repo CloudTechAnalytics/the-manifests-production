@@ -63,7 +63,7 @@ export function CustomsFormDialog({
   existing,
   onSaved,
 }: CustomsFormDialogProps) {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const [declarationNumber, setDeclarationNumber] = useState('');
   const [hsCode, setHsCode] = useState('');
   const [dutyAmount, setDutyAmount] = useState('0');
@@ -285,8 +285,8 @@ export function CustomsFormDialog({
             <Textarea id="cf-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
-        <DialogFooter className={existing && profile?.role === 'admin' ? 'sm:justify-between' : undefined}>
-          {existing && profile?.role === 'admin' && (
+        <DialogFooter className={existing && hasRole('admin') ? 'sm:justify-between' : undefined}>
+          {existing && hasRole('admin') && (
             <Button
               type="button"
               variant="ghost"

@@ -53,7 +53,7 @@ export function ExaminationFormDialog({
   existing,
   onSaved,
 }: ExaminationFormDialogProps) {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const [inspectionDate, setInspectionDate] = useState('');
   const [inspectionOfficer, setInspectionOfficer] = useState('');
   const [terminalOfficer, setTerminalOfficer] = useState('');
@@ -233,8 +233,8 @@ export function ExaminationFormDialog({
             </p>
           </div>
         </div>
-        <DialogFooter className={existing && profile?.role === 'admin' ? 'sm:justify-between' : undefined}>
-          {existing && profile?.role === 'admin' && (
+        <DialogFooter className={existing && hasRole('admin') ? 'sm:justify-between' : undefined}>
+          {existing && hasRole('admin') && (
             <Button
               type="button"
               variant="ghost"

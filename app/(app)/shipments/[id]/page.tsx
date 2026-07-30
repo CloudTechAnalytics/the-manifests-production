@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -152,12 +152,20 @@ type TimelineEntry = ShipmentTimelineEntry & {
   user: { id: string; full_name: string } | null;
 };
 
+const KNOWN_TABS = new Set([
+  'overview', 'timeline', 'documents', 'customs', 'terminal', 'examination', 'transportation',
+]);
+
 export default function ShipmentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const searchParams = useSearchParams();
+  const { profile, hasRole } = useAuth();
 
   const shipmentId = params.id;
+  // A department queue links straight into the right tab, e.g. ?tab=customs.
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab && KNOWN_TABS.has(requestedTab) ? requestedTab : 'overview';
 
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -394,7 +402,7 @@ export default function ShipmentDetailPage() {
     if (!shipment || !profile) return;
     setDeleting(true);
     try {
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('shipment', shipmentId);
         if (!result.success) throw new Error(result.error);
         toast.success('Shipment permanently deleted');
@@ -615,7 +623,7 @@ export default function ShipmentDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete shipment?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes shipment{' '}
                       &quot;{shipment.reference_number}&quot; and everything under
@@ -668,7 +676,7 @@ export default function ShipmentDetailPage() {
       </Card>
 
       {/* Tabs: Overview | Timeline | Documents | Customs | Terminal | Examination | Transportation */}
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="overview" className="gap-1.5">
             <Package className="h-4 w-4" />

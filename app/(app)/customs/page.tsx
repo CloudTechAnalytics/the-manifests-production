@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Landmark, Search, ExternalLink } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Landmark, Search, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
-import { formatCurrency, formatDate } from '@/lib/utils/status';
+import { formatCurrency } from '@/lib/utils/status';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,13 +20,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
 import type { CustomsInspectionChannel, CustomsStatus, ShipmentCustoms } from '@/types';
+
+/*
+ * Customs queue — every department works from the shipment record
+ * itself (permissions control what each can see/edit there); this page
+ * is a filtered work list for Customs, not a second place to edit
+ * customs data. Every row opens the shipment's Customs tab directly.
+ */
 
 interface Row {
   id: string;
   reference_number: string | null;
-  branch_id: string;
   customer: { company_name: string } | null;
   customs: ShipmentCustoms | null;
 }
@@ -47,7 +52,8 @@ const CHANNEL_META: Record<CustomsInspectionChannel, { label: string; color: str
   red: { label: 'Red', color: 'bg-red-50 text-red-700' },
 };
 
-export default function CustomsPage() {
+export default function CustomsQueuePage() {
+  const router = useRouter();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -55,7 +61,6 @@ export default function CustomsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [dialogTarget, setDialogTarget] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -72,21 +77,22 @@ export default function CustomsPage() {
       const { data: shipmentRows, error } = await query;
       if (error) throw error;
 
-      const shipments = (shipmentRows as unknown as Omit<Row, 'customs'>[]) ?? [];
+      const shipments = (shipmentRows as unknown as (Omit<Row, 'customs'> & { branch_id: string })[]) ?? [];
       const shipmentIds = shipments.map((s) => s.id);
 
       const { data: customsRows } = shipmentIds.length
-        ? await supabase
-            .from('shipment_customs')
-            .select('*')
-            .in('shipment_id', shipmentIds)
-            .is('deleted_at', null)
+        ? await supabase.from('shipment_customs').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
         : { data: [] };
 
       const customsByShipment = new Map<string, ShipmentCustoms>();
       (customsRows as ShipmentCustoms[] | null)?.forEach((c) => customsByShipment.set(c.shipment_id, c));
 
-      setRows(shipments.map((s) => ({ ...s, customs: customsByShipment.get(s.id) ?? null })));
+      // Outstanding work: no customs record yet, or not released.
+      const outstanding = shipments
+        .map((s) => ({ ...s, customs: customsByShipment.get(s.id) ?? null }))
+        .filter((s) => !s.customs || s.customs.status !== 'released');
+
+      setRows(outstanding);
     } finally {
       setLoading(false);
     }
@@ -111,10 +117,10 @@ export default function CustomsPage() {
       <div>
         <h1 className="flex items-center gap-2 page-title">
           <Landmark className="h-6 w-6 text-primary" />
-          Customs
+          Customs Queue
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Declarations, duty, and inspection channel for every active shipment.
+          Shipments awaiting customs clearance. Open a shipment to declare, assess, and release it.
         </p>
       </div>
 
@@ -141,7 +147,7 @@ export default function CustomsPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState icon={Landmark} title="No shipments found" />
+            <EmptyState icon={Landmark} title="Nothing outstanding" message="Every shipment is cleared through customs." />
           ) : (
             <Table>
               <TableHeader>
@@ -149,23 +155,23 @@ export default function CustomsPage() {
                   <TableHead>Shipment</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Declaration #</TableHead>
-                  <TableHead>HS Code</TableHead>
                   <TableHead>Duty</TableHead>
                   <TableHead>Channel</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-32" />
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow
+                    key={r.id}
+                    className="cursor-pointer hover:bg-accent/60"
+                    onClick={() => router.push(`/shipments/${r.id}?tab=customs`)}
+                  >
                     <TableCell className="font-medium">{r.reference_number ?? '—'}</TableCell>
                     <TableCell className="text-sm">{r.customer?.company_name ?? '—'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {r.customs?.declaration_number ?? '—'}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {r.customs?.hs_code ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.customs ? (
@@ -192,16 +198,9 @@ export default function CustomsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="outline" size="sm" onClick={() => setDialogTarget(r)}>
-                          {r.customs ? 'Edit' : 'Add Record'}
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                          <Link href={`/shipments/${r.id}`} title="Open shipment">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -210,17 +209,6 @@ export default function CustomsPage() {
           )}
         </CardContent>
       </Card>
-
-      {dialogTarget && (
-        <CustomsFormDialog
-          open={!!dialogTarget}
-          onOpenChange={(open) => !open && setDialogTarget(null)}
-          shipmentId={dialogTarget.id}
-          branchId={dialogTarget.branch_id}
-          existing={dialogTarget.customs}
-          onSaved={load}
-        />
-      )}
     </div>
   );
 }

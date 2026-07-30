@@ -30,7 +30,7 @@ import { WarehouseSummary } from '@/components/warehouse/warehouse-summary';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const data = useDashboardData();
   const warehouse = useWarehouseData();
 
@@ -39,20 +39,24 @@ export default function DashboardPage() {
     data.pipeline.find((p) => p.key === key)?.count ?? 0;
 
   // Mirrors can_manage_finance() (the RLS gate on invoices/payments/expenses
-  // — migration 024): for operations/sales, those tables return zero rows
+  // — migration 034): for operations/sales, those tables return zero rows
   // rather than an error, so without this check the dashboard would show
   // "Outstanding Invoices: 0" and "No invoices yet" as if the org had no
-  // invoices, instead of "you don't have permission to see them."
-  const canSeeFinance =
-    profile?.role === 'admin' ||
-    profile?.role === 'branch_manager' ||
-    profile?.role === 'finance';
+  // invoices, instead of "you don't have permission to see them." A user
+  // can hold multiple roles, so this checks the full set, not just primary.
+  const canSeeFinance = hasRole('admin') || hasRole('branch_manager') || hasRole('finance');
+
+  // Mirrors can_manage_operations()/can_manage_sales() — the quick-action
+  // shortcuts below only make sense for roles that can actually create
+  // these records; a customs/finance-only account would just hit an RLS
+  // error clicking them.
+  const canManageOperations = hasRole('admin') || hasRole('branch_manager') || hasRole('operations');
+  const canManageSales = hasRole('admin') || hasRole('branch_manager') || hasRole('sales');
 
   // Mirrors select_activities_branch (migration 028): only admin and
   // branch_manager see everyone's activity — everyone else only sees
   // their own (enforced by RLS; this just keeps the copy honest about it).
-  const seesEveryonesActivity =
-    profile?.role === 'admin' || profile?.role === 'branch_manager';
+  const seesEveryonesActivity = hasRole('admin') || hasRole('branch_manager');
 
   // Eight operational KPIs. Every value is read from a real column —
   // nothing here is derived from a placeholder or a synthetic field.
@@ -147,30 +151,40 @@ export default function DashboardPage() {
 
         {/* asChild renders the Button *as* the link — nesting a <button>
             inside an <a> is invalid HTML and swallows the navigation. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:ml-auto">
-          <Button asChild size="sm">
-            <Link href="/shipments/new">
-              <Plus className="mr-1.5 h-4 w-4" />
-              New Shipment
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/customers/new">
-              <UserPlus className="mr-1.5 h-4 w-4" />
-              New Customer
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/quotations/new">
-              <FilePlus className="mr-1.5 h-4 w-4" />
-              New Quotation
-            </Link>
-          </Button>
-        </div>
+        {(canManageOperations || canManageSales) && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 xl:ml-auto">
+            {canManageOperations && (
+              <Button asChild size="sm">
+                <Link href="/shipments/new">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  New Shipment
+                </Link>
+              </Button>
+            )}
+            {canManageSales && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/customers/new">
+                  <UserPlus className="mr-1.5 h-4 w-4" />
+                  New Customer
+                </Link>
+              </Button>
+            )}
+            {canManageSales && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/quotations/new">
+                  <FilePlus className="mr-1.5 h-4 w-4" />
+                  New Quotation
+                </Link>
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 3. Eight compact KPI cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+      {/* Compact KPI cards — auto-fit so the row always fills the width
+          regardless of how many tiles a role sees (e.g. finance-gated
+          "Outstanding Invoices" drops the count from 8 to 7). */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
         {kpis.map((kpi) => (
           <KpiCard
             key={kpi.label}

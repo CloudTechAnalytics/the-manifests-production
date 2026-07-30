@@ -55,7 +55,7 @@ export function TransportationFormDialog({
   existing,
   onSaved,
 }: TransportationFormDialogProps) {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const [truckNumber, setTruckNumber] = useState('');
   const [trailerNumber, setTrailerNumber] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -280,8 +280,8 @@ export function TransportationFormDialog({
             </p>
           </div>
         </div>
-        <DialogFooter className={existing && profile?.role === 'admin' ? 'sm:justify-between' : undefined}>
-          {existing && profile?.role === 'admin' && (
+        <DialogFooter className={existing && hasRole('admin') ? 'sm:justify-between' : undefined}>
+          {existing && hasRole('admin') && (
             <Button
               type="button"
               variant="ghost"

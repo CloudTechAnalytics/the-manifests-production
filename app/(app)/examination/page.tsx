@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { FileSearch, Search, ExternalLink, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { FileSearch, Search, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
-import { formatDate } from '@/lib/utils/status';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,25 +19,29 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
 import type { ExaminationResult, ShipmentExamination } from '@/types';
+
+/*
+ * Examination queue — a filtered work list for Examination, not a second
+ * place to edit examination data. Every row opens the shipment's tab.
+ */
 
 interface Row {
   id: string;
   reference_number: string | null;
-  branch_id: string;
   customer: { company_name: string } | null;
-  exams: ShipmentExamination[];
+  examination: ShipmentExamination | null;
 }
 
 const RESULT_META: Record<ExaminationResult, { label: string; color: string }> = {
   passed: { label: 'Passed', color: 'bg-emerald-50 text-emerald-700' },
   held: { label: 'Held', color: 'bg-red-50 text-red-700' },
   additional_duty: { label: 'Additional Duty', color: 'bg-amber-50 text-amber-700' },
-  further_inspection: { label: 'Further Inspection', color: 'bg-amber-50 text-amber-700' },
+  further_inspection: { label: 'Further Inspection', color: 'bg-purple-50 text-purple-700' },
 };
 
-export default function ExaminationPage() {
+export default function ExaminationQueuePage() {
+  const router = useRouter();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -46,57 +49,38 @@ export default function ExaminationPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [addTarget, setAddTarget] = useState<Row | null>(null);
-  const [editTarget, setEditTarget] = useState<{ row: Row; exam: ShipmentExamination } | null>(null);
 
   const load = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
     try {
-      let customsQuery = supabase
-        .from('shipment_customs')
-        .select('shipment_id, branch_id')
-        .eq('inspection_channel', 'red')
-        .is('deleted_at', null);
-      if (!isAdmin && branchId) customsQuery = customsQuery.eq('branch_id', branchId);
-
-      const { data: redCustoms, error: customsError } = await customsQuery;
-      if (customsError) throw customsError;
-
-      const shipmentIds = (redCustoms ?? []).map((c) => c.shipment_id);
-      if (shipmentIds.length === 0) {
-        setRows([]);
-        return;
-      }
-
-      const { data: shipmentRows, error } = await supabase
+      let query = supabase
         .from('shipments')
         .select('id, reference_number, branch_id, customer:customers(company_name)')
-        .in('id', shipmentIds)
         .is('deleted_at', null)
+        .neq('status', 'cancelled')
         .order('created_at', { ascending: false });
+      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
+
+      const { data: shipmentRows, error } = await query;
       if (error) throw error;
 
-      const { data: examRows } = await supabase
-        .from('shipment_examinations')
-        .select('*')
-        .in('shipment_id', shipmentIds)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+      const shipments = (shipmentRows as unknown as (Omit<Row, 'examination'> & { branch_id: string })[]) ?? [];
+      const shipmentIds = shipments.map((s) => s.id);
 
-      const examsByShipment = new Map<string, ShipmentExamination[]>();
-      (examRows as ShipmentExamination[] | null)?.forEach((e) => {
-        const list = examsByShipment.get(e.shipment_id) ?? [];
-        list.push(e);
-        examsByShipment.set(e.shipment_id, list);
-      });
+      const { data: examinationRows } = shipmentIds.length
+        ? await supabase.from('shipment_examinations').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
+        : { data: [] };
 
-      setRows(
-        ((shipmentRows as unknown as Omit<Row, 'exams'>[]) ?? []).map((s) => ({
-          ...s,
-          exams: examsByShipment.get(s.id) ?? [],
-        }))
-      );
+      const examinationByShipment = new Map<string, ShipmentExamination>();
+      (examinationRows as ShipmentExamination[] | null)?.forEach((e) => examinationByShipment.set(e.shipment_id, e));
+
+      // Outstanding work: no examination record yet, or no result recorded.
+      const outstanding = shipments
+        .map((s) => ({ ...s, examination: examinationByShipment.get(s.id) ?? null }))
+        .filter((s) => !s.examination || !s.examination.result);
+
+      setRows(outstanding);
     } finally {
       setLoading(false);
     }
@@ -109,7 +93,11 @@ export default function ExaminationPage() {
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;
     const q = search.trim().toLowerCase();
-    return r.reference_number?.toLowerCase().includes(q) || r.customer?.company_name.toLowerCase().includes(q);
+    return (
+      r.reference_number?.toLowerCase().includes(q) ||
+      r.customer?.company_name.toLowerCase().includes(q) ||
+      r.examination?.inspection_officer?.toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -117,10 +105,10 @@ export default function ExaminationPage() {
       <div>
         <h1 className="flex items-center gap-2 page-title">
           <FileSearch className="h-6 w-6 text-primary" />
-          Physical Examination
+          Examination Queue
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Shipments Customs flagged for the Red inspection channel.
+          Shipments awaiting cargo examination. Open a shipment to schedule or record its inspection.
         </p>
       </div>
 
@@ -129,7 +117,7 @@ export default function ExaminationPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by reference or customer…"
+              placeholder="Search by reference, customer, or inspecting officer…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -147,101 +135,59 @@ export default function ExaminationPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState
-              icon={FileSearch}
-              title="No shipments awaiting examination"
-              message="Shipments appear here once Customs selects the Red inspection channel."
-            />
+            <EmptyState icon={FileSearch} title="Nothing outstanding" message="Every shipment has completed examination." />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Shipment</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Latest Inspection</TableHead>
-                  <TableHead>Officer</TableHead>
+                  <TableHead>Inspection Date</TableHead>
+                  <TableHead>Inspecting Officer</TableHead>
                   <TableHead>Result</TableHead>
-                  <TableHead className="w-44" />
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => {
-                  const latest = r.exams[0];
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.reference_number ?? '—'}</TableCell>
-                      <TableCell className="text-sm">{r.customer?.company_name ?? '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {latest?.inspection_date ? formatDate(latest.inspection_date) : '—'}
-                        {r.exams.length > 1 && (
-                          <span className="ml-1.5 text-xs">({r.exams.length} exams)</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {latest?.inspection_officer ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        {latest?.result ? (
-                          <Badge className={RESULT_META[latest.result].color}>
-                            {RESULT_META[latest.result].label}
-                          </Badge>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            {latest ? 'Pending' : 'Not started'}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          {latest && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditTarget({ row: r, exam: latest })}
-                            >
-                              Edit
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" onClick={() => setAddTarget(r)}>
-                            <Plus className="mr-1 h-3.5 w-3.5" />
-                            New
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                            <Link href={`/shipments/${r.id}`} title="Open shipment">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {filtered.map((r) => (
+                  <TableRow
+                    key={r.id}
+                    className="cursor-pointer hover:bg-accent/60"
+                    onClick={() => router.push(`/shipments/${r.id}?tab=examination`)}
+                  >
+                    <TableCell className="font-medium">{r.reference_number ?? '—'}</TableCell>
+                    <TableCell className="text-sm">{r.customer?.company_name ?? '—'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.examination?.inspection_date
+                        ? new Date(r.examination.inspection_date).toLocaleDateString()
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.examination?.inspection_officer ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      {r.examination?.result ? (
+                        <Badge className={RESULT_META[r.examination.result].color}>
+                          {RESULT_META[r.examination.result].label}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-muted text-muted-foreground">
+                          {r.examination ? 'Scheduled' : 'Not started'}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
-
-      {addTarget && (
-        <ExaminationFormDialog
-          open={!!addTarget}
-          onOpenChange={(open) => !open && setAddTarget(null)}
-          shipmentId={addTarget.id}
-          branchId={addTarget.branch_id}
-          existing={null}
-          onSaved={load}
-        />
-      )}
-      {editTarget && (
-        <ExaminationFormDialog
-          open={!!editTarget}
-          onOpenChange={(open) => !open && setEditTarget(null)}
-          shipmentId={editTarget.row.id}
-          branchId={editTarget.row.branch_id}
-          existing={editTarget.exam}
-          onSaved={load}
-        />
-      )}
     </div>
   );
 }

@@ -155,7 +155,7 @@ const STATUS_ACTION_TARGETS: Record<
 export default function QuotationDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
 
   const [quotation, setQuotation] = useState<QuotationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -278,7 +278,7 @@ export default function QuotationDetailPage() {
     if (!quotation || !profile) return;
     setDeleting(true);
     try {
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('quotation', quotationId);
         if (!result.success) throw new Error(result.error);
         toast.success('Quotation permanently deleted');
@@ -572,7 +572,7 @@ export default function QuotationDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete quotation?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes quotation{' '}
                       &quot;{quotation.quotation_number ?? 'Draft'}&quot; and its line

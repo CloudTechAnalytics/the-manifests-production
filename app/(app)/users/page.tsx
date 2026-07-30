@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -90,6 +91,12 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   branch_manager: { label: 'Branch Manager', color: 'bg-cyan-100 text-cyan-700' },
   finance: { label: 'Finance', color: 'bg-emerald-100 text-emerald-700' },
   customs: { label: 'Customs', color: 'bg-orange-100 text-orange-700' },
+  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700' },
+  documentation: { label: 'Documentation', color: 'bg-teal-100 text-teal-700' },
+  terminal: { label: 'Terminal', color: 'bg-rose-100 text-rose-700' },
+  examination: { label: 'Examination', color: 'bg-fuchsia-100 text-fuchsia-700' },
+  warehouse: { label: 'Warehouse', color: 'bg-lime-100 text-lime-700' },
+  transport: { label: 'Transport', color: 'bg-sky-100 text-sky-700' },
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -99,21 +106,62 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'branch_manager', label: 'Branch Manager' },
   { value: 'finance', label: 'Finance' },
   { value: 'customs', label: 'Customs' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'documentation', label: 'Documentation' },
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'examination', label: 'Examination' },
+  { value: 'warehouse', label: 'Warehouse' },
+  { value: 'transport', label: 'Transport' },
 ];
+
+/** A user can hold several roles at once — first one checked becomes
+ *  their primary role (profiles.role), the rest are additional. */
+function RoleCheckboxGroup({
+  selected,
+  onChange,
+  disabled,
+}: {
+  selected: UserRole[];
+  onChange: (roles: UserRole[]) => void;
+  disabled?: boolean;
+}) {
+  const toggle = (role: UserRole) => {
+    onChange(
+      selected.includes(role) ? selected.filter((r) => r !== role) : [...selected, role]
+    );
+  };
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-input p-3 sm:grid-cols-3">
+      {ROLE_OPTIONS.map((r) => (
+        <label
+          key={r.value}
+          className="flex items-center gap-1.5 text-sm font-normal"
+        >
+          <Checkbox
+            checked={selected.includes(r.value)}
+            onCheckedChange={() => toggle(r.value)}
+            disabled={disabled}
+          />
+          {r.label}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 // --- Form types ------------------------------------------------------------
 
 interface CreateForm {
   full_name: string;
   email: string;
-  role: UserRole;
+  roles: UserRole[];
   branch_id: string;
   password: string;
 }
 
 interface EditForm {
   full_name: string;
-  role: UserRole;
+  roles: UserRole[];
   branch_id: string;
   is_active: boolean;
 }
@@ -128,9 +176,12 @@ interface InviteForm {
 // --- Component -------------------------------------------------------------
 
 export default function UsersPage() {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
 
   const [users, setUsers] = useState<Profile[]>([]);
+  // Additional roles beyond each user's primary profiles.role — a user
+  // can hold several departments at once. Keyed by user id.
+  const [additionalRolesByUser, setAdditionalRolesByUser] = useState<Record<string, UserRole[]>>({});
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -146,7 +197,7 @@ export default function UsersPage() {
   const [createForm, setCreateForm] = useState<CreateForm>({
     full_name: '',
     email: '',
-    role: 'operations',
+    roles: ['operations'],
     branch_id: '',
     password: '',
   });
@@ -155,7 +206,7 @@ export default function UsersPage() {
 
   const [editForm, setEditForm] = useState<EditForm>({
     full_name: '',
-    role: 'operations',
+    roles: ['operations'],
     branch_id: '',
     is_active: true,
   });
@@ -183,7 +234,7 @@ export default function UsersPage() {
   const [revokeInviteTarget, setRevokeInviteTarget] = useState<Invitation | null>(null);
   const [revokingInvite, setRevokingInvite] = useState(false);
 
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = hasRole('admin');
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -234,9 +285,26 @@ export default function UsersPage() {
       if (error) {
         console.error('Error loading users:', error);
         setUsers([]);
+        setAdditionalRolesByUser({});
         return;
       }
-      setUsers((data as Profile[]) ?? []);
+      const loadedUsers = (data as Profile[]) ?? [];
+      setUsers(loadedUsers);
+
+      const userIds = loadedUsers.map((u) => u.id);
+      if (userIds.length > 0) {
+        const { data: roleRows } = await supabase
+          .from('user_roles')
+          .select('user_id, role')
+          .in('user_id', userIds);
+        const map: Record<string, UserRole[]> = {};
+        (roleRows ?? []).forEach((r) => {
+          map[r.user_id] = [...(map[r.user_id] ?? []), r.role as UserRole];
+        });
+        setAdditionalRolesByUser(map);
+      } else {
+        setAdditionalRolesByUser({});
+      }
     } finally {
       setLoading(false);
     }
@@ -331,7 +399,7 @@ export default function UsersPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.email.trim())) {
       errs.email = 'Invalid email address';
     }
-    if (!createForm.role) errs.role = 'Role is required';
+    if (createForm.roles.length === 0) errs.roles = 'At least one role is required';
     if (!createForm.branch_id) errs.branch_id = 'Branch is required';
     if (!createForm.password) {
       errs.password = 'Password is required';
@@ -367,7 +435,7 @@ export default function UsersPage() {
           body: JSON.stringify({
             email: createForm.email.trim(),
             full_name: createForm.full_name.trim(),
-            role: createForm.role,
+            roles: createForm.roles,
             branch_id: createForm.branch_id,
             password: createForm.password,
           }),
@@ -385,15 +453,18 @@ export default function UsersPage() {
       // Log activity client-side (edge function also logs, but we log for the
       // admin's own audit trail with richer metadata)
       const newUserId = result.user_id as string;
+      const roleLabels = createForm.roles
+        .map((r) => ROLE_META[r as keyof typeof ROLE_META]?.label ?? r)
+        .join(', ');
       await logActivity(
         'user.created',
         'profiles',
         newUserId,
-        `Created user "${createForm.email.trim()}" (${ROLE_META[createForm.role as keyof typeof ROLE_META].label})`,
+        `Created user "${createForm.email.trim()}" (${roleLabels})`,
         {
           email: createForm.email.trim(),
           full_name: createForm.full_name.trim(),
-          role: createForm.role,
+          roles: createForm.roles,
           branch_id: createForm.branch_id,
         },
         createForm.branch_id
@@ -404,7 +475,7 @@ export default function UsersPage() {
       setCreateForm({
         full_name: '',
         email: '',
-        role: 'operations',
+        roles: ['operations'],
         branch_id: '',
         password: '',
       });
@@ -525,7 +596,7 @@ export default function UsersPage() {
     setEditTarget(user);
     setEditForm({
       full_name: user.full_name,
-      role: user.role,
+      roles: [user.role, ...(additionalRolesByUser[user.id] ?? [])],
       branch_id: user.branch_id ?? '',
       is_active: user.is_active,
     });
@@ -535,23 +606,51 @@ export default function UsersPage() {
   const validateEditForm = (): boolean => {
     const errs: Partial<Record<keyof EditForm, string>> = {};
     if (!editForm.full_name.trim()) errs.full_name = 'Full name is required';
-    if (!editForm.role) errs.role = 'Role is required';
+    if (editForm.roles.length === 0) errs.roles = 'At least one role is required';
     if (!editForm.branch_id) errs.branch_id = 'Branch is required';
     setEditFormErrors(errs);
     return Object.keys(errs).length === 0;
+  };
+
+  /** Replaces a user's additional roles (beyond their primary
+   *  profiles.role) via the admin-only update-user-roles edge function —
+   *  user_roles has no client write policy, this is the only path in. */
+  const callUpdateUserRoles = async (userId: string, roles: UserRole[]) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData?.session;
+    if (!session) throw new Error('Your session has expired. Please sign in again.');
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-user-roles`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({ user_id: userId, roles }),
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(result.error ?? `Request failed (${response.status})`);
+    }
   };
 
   const handleEditUser = async () => {
     if (!editTarget || !profile) return;
     if (!validateEditForm()) return;
 
-    // An admin editing their own account can't change their own role or
+    // An admin editing their own account can't change their own roles or
     // active status here — the quick-toggle button already refuses this
     // (disabled={isSelf}) for the same reason: doing so from the Edit
     // dialog could lock them out with no admin left to undo it. Enforced
     // here too, not just by disabling the fields below, in case of any UI
     // bypass.
     const isEditingSelf = editTarget.id === profile.id;
+    const primaryRole = editForm.roles[0];
+    const additionalRoles = editForm.roles.slice(1);
 
     setEditing(true);
     try {
@@ -559,7 +658,7 @@ export default function UsersPage() {
         .from('profiles')
         .update({
           full_name: editForm.full_name.trim(),
-          role: isEditingSelf ? editTarget.role : editForm.role,
+          role: isEditingSelf ? editTarget.role : primaryRole,
           branch_id: editForm.branch_id,
           is_active: isEditingSelf ? editTarget.is_active : editForm.is_active,
           updated_by: profile.id,
@@ -571,14 +670,18 @@ export default function UsersPage() {
         throw new Error(error.message);
       }
 
+      if (!isEditingSelf) {
+        await callUpdateUserRoles(editTarget.id, additionalRoles);
+      }
+
       await logActivity(
         'user.updated',
         'profiles',
         editTarget.id,
-        `Updated user "${editTarget.email}" — name, role, branch, or status changed`,
+        `Updated user "${editTarget.email}" — name, roles, branch, or status changed`,
         {
           full_name: editForm.full_name.trim(),
-          role: editForm.role,
+          roles: editForm.roles,
           branch_id: editForm.branch_id,
           is_active: editForm.is_active,
         },
@@ -877,10 +980,7 @@ export default function UsersPage() {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => {
-                    const roleMeta = ROLE_META[user.role as keyof typeof ROLE_META] ?? {
-                      label: user.role,
-                      color: 'bg-gray-100 text-gray-700',
-                    };
+                    const allRoles = [user.role, ...(additionalRolesByUser[user.id] ?? [])];
                     const isSelf = user.id === profile.id;
                     return (
                       <TableRow key={user.id} className="transition-colors hover:bg-accent/60">
@@ -903,12 +1003,23 @@ export default function UsersPage() {
                           {user.email}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={`text-[11px] ${roleMeta.color}`}
-                          >
-                            {roleMeta.label}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {allRoles.map((r) => {
+                              const meta = ROLE_META[r as keyof typeof ROLE_META] ?? {
+                                label: r,
+                                color: 'bg-gray-100 text-gray-700',
+                              };
+                              return (
+                                <Badge
+                                  key={r}
+                                  variant="secondary"
+                                  className={`text-[11px] ${meta.color}`}
+                                >
+                                  {meta.label}
+                                </Badge>
+                              );
+                            })}
+                          </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {user.branch?.name ?? '—'}
@@ -1107,62 +1218,51 @@ export default function UsersPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="create-role">
-                  Role <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={createForm.role}
-                  onValueChange={(v) =>
-                    setCreateForm((f) => ({ ...f, role: v as UserRole }))
-                  }
-                >
-                  <SelectTrigger id="create-role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {createFormErrors.role && (
-                  <p className="text-xs text-destructive">
-                    {createFormErrors.role}
-                  </p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label>
+                Roles <span className="text-destructive">*</span>
+              </Label>
+              <RoleCheckboxGroup
+                selected={createForm.roles}
+                onChange={(roles) => setCreateForm((f) => ({ ...f, roles }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                A user can hold more than one role. The first one checked
+                becomes their primary role.
+              </p>
+              {createFormErrors.roles && (
+                <p className="text-xs text-destructive">
+                  {createFormErrors.roles}
+                </p>
+              )}
+            </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="create-branch">
-                  Branch <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={createForm.branch_id}
-                  onValueChange={(v) =>
-                    setCreateForm((f) => ({ ...f, branch_id: v }))
-                  }
-                >
-                  <SelectTrigger id="create-branch">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {createFormErrors.branch_id && (
-                  <p className="text-xs text-destructive">
-                    {createFormErrors.branch_id}
-                  </p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-branch">
+                Branch <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={createForm.branch_id}
+                onValueChange={(v) =>
+                  setCreateForm((f) => ({ ...f, branch_id: v }))
+                }
+              >
+                <SelectTrigger id="create-branch">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {createFormErrors.branch_id && (
+                <p className="text-xs text-destructive">
+                  {createFormErrors.branch_id}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1413,68 +1513,56 @@ export default function UsersPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-role">
-                  Role <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={editForm.role}
-                  onValueChange={(v) =>
-                    setEditForm((f) => ({ ...f, role: v as UserRole }))
-                  }
-                  disabled={editTarget?.id === profile?.id}
-                >
-                  <SelectTrigger id="edit-role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {editFormErrors.role && (
-                  <p className="text-xs text-destructive">
-                    {editFormErrors.role}
-                  </p>
-                )}
-                {editTarget?.id === profile?.id && (
-                  <p className="text-xs text-muted-foreground">
-                    You can't change your own role.
-                  </p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label>
+                Roles <span className="text-destructive">*</span>
+              </Label>
+              <RoleCheckboxGroup
+                selected={editForm.roles}
+                onChange={(roles) => setEditForm((f) => ({ ...f, roles }))}
+                disabled={editTarget?.id === profile?.id}
+              />
+              <p className="text-xs text-muted-foreground">
+                The first role checked is their primary role.
+              </p>
+              {editFormErrors.roles && (
+                <p className="text-xs text-destructive">
+                  {editFormErrors.roles}
+                </p>
+              )}
+              {editTarget?.id === profile?.id && (
+                <p className="text-xs text-muted-foreground">
+                  You can't change your own roles.
+                </p>
+              )}
+            </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-branch">
-                  Branch <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={editForm.branch_id}
-                  onValueChange={(v) =>
-                    setEditForm((f) => ({ ...f, branch_id: v }))
-                  }
-                >
-                  <SelectTrigger id="edit-branch">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {editFormErrors.branch_id && (
-                  <p className="text-xs text-destructive">
-                    {editFormErrors.branch_id}
-                  </p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-branch">
+                Branch <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={editForm.branch_id}
+                onValueChange={(v) =>
+                  setEditForm((f) => ({ ...f, branch_id: v }))
+                }
+              >
+                <SelectTrigger id="edit-branch">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editFormErrors.branch_id && (
+                <p className="text-xs text-destructive">
+                  {editFormErrors.branch_id}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">

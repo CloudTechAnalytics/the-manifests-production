@@ -7,7 +7,13 @@ export type UserRole =
   | 'sales'
   | 'branch_manager'
   | 'finance'
-  | 'customs';
+  | 'customs'
+  | 'planning'
+  | 'documentation'
+  | 'terminal'
+  | 'examination'
+  | 'warehouse'
+  | 'transport';
 
 export type CustomerType = 'individual' | 'corporate';
 

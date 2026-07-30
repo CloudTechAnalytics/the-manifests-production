@@ -35,4 +35,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   branch_manager: 'Branch Manager',
   finance: 'Finance',
   customs: 'Customs',
+  planning: 'Planning',
+  documentation: 'Documentation',
+  terminal: 'Terminal',
+  examination: 'Examination',
+  warehouse: 'Warehouse',
+  transport: 'Transport',
 };

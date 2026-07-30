@@ -54,7 +54,7 @@ export function TerminalFormDialog({
   existing,
   onSaved,
 }: TerminalFormDialogProps) {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const [terminalName, setTerminalName] = useState('');
   const [arrivalDate, setArrivalDate] = useState('');
   const [containerPosition, setContainerPosition] = useState('');
@@ -269,8 +269,8 @@ export function TerminalFormDialog({
             <Textarea id="tf-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
-        <DialogFooter className={existing && profile?.role === 'admin' ? 'sm:justify-between' : undefined}>
-          {existing && profile?.role === 'admin' && (
+        <DialogFooter className={existing && hasRole('admin') ? 'sm:justify-between' : undefined}>
+          {existing && hasRole('admin') && (
             <Button
               type="button"
               variant="ghost"

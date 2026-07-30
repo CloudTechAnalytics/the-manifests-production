@@ -3,13 +3,18 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
-import type { Profile } from '@/types';
+import type { Profile, UserRole } from '@/types';
 
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
+  /** Primary role (profile.role) plus every additional role from
+   *  user_roles, deduped. A user can hold more than one department. */
+  roles: UserRole[];
+  /** True if the current user holds this role, primary or additional. */
+  hasRole: (role: UserRole) => boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -21,7 +26,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [roles, setRoles] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const fetchRoles = async (uid: string, primaryRole: UserRole | undefined) => {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', uid);
+    if (error) {
+      console.error('Error fetching additional roles:', error);
+      return primaryRole ? [primaryRole] : [];
+    }
+    const additional = (data ?? []).map((r) => r.role as UserRole);
+    return primaryRole ? Array.from(new Set([primaryRole, ...additional])) : additional;
+  };
 
   const fetchProfile = async (uid: string) => {
     const { data, error } = await supabase
@@ -64,8 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).then((p) => {
-          if (isMounted) { setProfile(p); setLoading(false); }
+        fetchProfile(session.user.id).then(async (p) => {
+          if (!isMounted) return;
+          setProfile(p);
+          setRoles(await fetchRoles(session.user.id, p?.role));
+          setLoading(false);
         }).catch(() => { if (isMounted) setLoading(false); });
       } else {
         setLoading(false);
@@ -79,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setProfile(null);
+      setRoles([]);
       setLoading(false);
     });
 
@@ -91,8 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (session?.user) {
             const p = await fetchProfile(session.user.id);
             if (isMounted) setProfile(p);
+            const r = await fetchRoles(session.user.id, p?.role);
+            if (isMounted) setRoles(r);
           } else {
-            if (isMounted) setProfile(null);
+            if (isMounted) { setProfile(null); setRoles([]); }
           }
           if (isMounted) setLoading(false);
         })();
@@ -115,15 +140,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setUser(null);
     setSession(null);
+    setRoles([]);
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
+    if (!user) return;
+    const p = await fetchProfile(user.id);
+    setProfile(p);
+    setRoles(await fetchRoles(user.id, p?.role));
   };
+
+  const hasRole = (role: UserRole) => roles.includes(role);
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, session, loading, signIn, signOut, refreshProfile }}
+      value={{ user, profile, session, loading, roles, hasRole, signIn, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

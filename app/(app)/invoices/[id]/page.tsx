@@ -85,7 +85,7 @@ type AllocationRow = PaymentAllocation & {
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const invoiceId = params.id;
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
@@ -130,7 +130,7 @@ export default function InvoiceDetailPage() {
     if (!invoice || !profile) return;
     setDeleting(true);
     try {
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('invoice', invoiceId);
         if (!result.success) throw new Error(result.error);
         toast.success('Invoice permanently deleted');
@@ -320,7 +320,7 @@ export default function InvoiceDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete invoice?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes invoice &quot;{invoice.invoice_number}&quot;
                       and releases any payment allocations against it. This cannot be

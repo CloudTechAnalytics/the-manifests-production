@@ -8,12 +8,16 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * user must change it on first sign-in). Callable by an org admin (their
  * own organization only) or a platform_admin (any organization).
  *
- * branch_id is required for operations/sales/branch_manager, since their
- * RLS access is entirely branch-scoped. It's optional for role "admin":
- * a brand-new organization has no branches yet, so platform_admin needs
- * to be able to create that org's first admin — organization_id is
+ * branch_id is required unless "admin" is among the new user's roles: a
+ * brand-new organization has no branches yet, so platform_admin needs to
+ * be able to create that org's first admin — organization_id is
  * required instead in that case (an org admin creating another admin
  * still gets their own organization pinned, same as every other role).
+ *
+ * A user can hold more than one role: `roles` is a non-empty array,
+ * roles[0] becomes the primary profiles.role (login redirect, role
+ * badge, every existing single-role check), and any remaining entries
+ * are written to user_roles as additional roles.
  */
 
 function corsHeaders(req: Request) {
@@ -32,7 +36,10 @@ function corsHeaders(req: Request) {
   };
 }
 
-const VALID_ROLES = new Set(["admin", "operations", "sales", "branch_manager", "finance", "customs"]);
+const VALID_ROLES = new Set([
+  "admin", "operations", "sales", "branch_manager", "finance", "customs",
+  "planning", "documentation", "terminal", "examination", "warehouse", "transport",
+]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -84,7 +91,7 @@ Deno.serve(async (req: Request) => {
     let body: {
       email?: string;
       full_name?: string;
-      role?: string;
+      roles?: string[];
       branch_id?: string | null;
       organization_id?: string;
       password?: string;
@@ -95,17 +102,24 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "Invalid JSON body" });
     }
 
-    if (!body.email || !body.full_name || !body.role || !body.password) {
+    if (!body.email || !body.full_name || !body.roles?.length || !body.password) {
       return json(400, { error: "Missing required fields" });
     }
     if (!EMAIL_RE.test(body.email)) return json(400, { error: "Invalid email format" });
     if (body.full_name.length > 200) {
       return json(400, { error: "Full name must be 200 characters or fewer" });
     }
-    if (!VALID_ROLES.has(body.role)) return json(400, { error: "Invalid role" });
+    for (const r of body.roles) {
+      if (!VALID_ROLES.has(r)) return json(400, { error: `Invalid role: ${r}` });
+    }
     if (body.password.length < 8) {
       return json(400, { error: "Password must be at least 8 characters" });
     }
+
+    const roles = Array.from(new Set(body.roles));
+    const primaryRole = roles[0];
+    const additionalRoles = roles.slice(1);
+    const hasAdminRole = roles.includes("admin");
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -139,7 +153,7 @@ Deno.serve(async (req: Request) => {
       }
       organizationId = targetBranch.organization_id;
       branchId = body.branch_id;
-    } else if (body.role === "admin") {
+    } else if (hasAdminRole) {
       // No branch yet — only valid for a brand-new organization's first
       // admin. A platform_admin must say which org; an org admin creating
       // another admin gets their own organization pinned, same as always.
@@ -178,7 +192,7 @@ Deno.serve(async (req: Request) => {
       id: newUserId,
       email: body.email,
       full_name: body.full_name,
-      role: body.role,
+      role: primaryRole,
       organization_id: organizationId,
       branch_id: branchId,
       is_active: true,
@@ -192,6 +206,17 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "Failed to create user profile" });
     }
 
+    if (additionalRoles.length > 0) {
+      const { error: rolesError } = await admin
+        .from("user_roles")
+        .insert(additionalRoles.map((role) => ({ user_id: newUserId, role })));
+      if (rolesError) {
+        console.error("additional roles insert error:", rolesError.message);
+        // Not fatal — the user exists with their primary role; the admin
+        // can add the rest afterward from the Users page.
+      }
+    }
+
     await admin.from("activities").insert({
       user_id: callerId,
       branch_id: branchId,
@@ -199,7 +224,7 @@ Deno.serve(async (req: Request) => {
       action: "user.created",
       entity_type: "profiles",
       entity_id: newUserId,
-      description: `Created user ${body.email} (${body.role})`,
+      description: `Created user ${body.email} (${roles.join(", ")})`,
     });
 
     return json(200, { success: true, user_id: newUserId });

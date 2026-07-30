@@ -83,6 +83,12 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   branch_manager: { label: 'Branch Manager', color: 'bg-cyan-100 text-cyan-700' },
   finance: { label: 'Finance', color: 'bg-emerald-100 text-emerald-700' },
   customs: { label: 'Customs', color: 'bg-orange-100 text-orange-700' },
+  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700' },
+  documentation: { label: 'Documentation', color: 'bg-teal-100 text-teal-700' },
+  terminal: { label: 'Terminal', color: 'bg-rose-100 text-rose-700' },
+  examination: { label: 'Examination', color: 'bg-fuchsia-100 text-fuchsia-700' },
+  warehouse: { label: 'Warehouse', color: 'bg-lime-100 text-lime-700' },
+  transport: { label: 'Transport', color: 'bg-sky-100 text-sky-700' },
 };
 
 interface BranchForm {

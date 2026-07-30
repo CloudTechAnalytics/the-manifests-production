@@ -219,19 +219,21 @@ function NavGroup({
   label,
   items,
   pathname,
-  role,
+  roles,
   onNavigate,
 }: {
   label: string;
   items: NavItem[];
   pathname: string;
-  role?: string;
+  roles: UserRole[];
   onNavigate?: () => void;
 }) {
   const visibleItems = items.filter((item) => {
-    if (item.adminOnly && role !== 'admin') return false;
-    if (item.platformAdminOnly && role !== 'platform_admin') return false;
-    if (item.roles && !item.roles.includes(role as UserRole)) return false;
+    if (item.adminOnly && !roles.includes('admin')) return false;
+    if (item.platformAdminOnly && !roles.includes('platform_admin')) return false;
+    // A user can hold several departments — a nav item scoped to a set
+    // of roles shows as soon as any one of them matches.
+    if (item.roles && !item.roles.some((r) => roles.includes(r))) return false;
     return true;
   });
 
@@ -276,7 +278,7 @@ function NavGroup({
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { profile } = useAuth();
+  const { roles } = useAuth();
 
   return (
     <nav className="flex flex-1 flex-col overflow-y-auto scrollbar-thin px-3 py-4">
@@ -287,7 +289,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             label={group.label}
             items={group.items}
             pathname={pathname}
-            role={profile?.role}
+            roles={roles}
             onNavigate={onNavigate}
           />
         ))}
@@ -298,7 +300,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         label="Administration"
         items={administrationItems}
         pathname={pathname}
-        role={profile?.role}
+        roles={roles}
         onNavigate={onNavigate}
       />
     </nav>

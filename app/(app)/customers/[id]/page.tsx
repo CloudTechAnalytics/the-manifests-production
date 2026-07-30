@@ -85,7 +85,7 @@ import type {
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [contacts, setContacts] = useState<CustomerContact[]>([]);
@@ -174,7 +174,7 @@ export default function CustomerDetailPage() {
       // whatever's linked to this customer (quotations, shipments,
       // invoices, payments, shipment plans) — everyone else keeps the
       // ordinary reversible soft-delete below.
-      if (profile.role === 'admin') {
+      if (hasRole('admin')) {
         const result = await adminForceDelete('customer', customerId);
         if (!result.success) throw new Error(result.error);
         toast.success('Customer permanently deleted');
@@ -316,7 +316,7 @@ export default function CustomerDetailPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete customer?</DialogTitle>
                 <DialogDescription>
-                  {profile?.role === 'admin' ? (
+                  {hasRole('admin') ? (
                     <>
                       This permanently deletes &quot;{customer.company_name}&quot;
                       and everything linked to it — quotations, shipments,
