@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Ship, Loader2, Eye, EyeOff, Lock, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export default function AcceptInvitePage() {
+function AcceptInviteForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
@@ -92,7 +92,7 @@ export default function AcceptInvitePage() {
               Set up your account
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              You've been invited to join The Manifest. Choose a password to finish setting up your account.
+              You&apos;ve been invited to join The Manifest. Choose a password to finish setting up your account.
             </p>
           </div>
         </div>
@@ -167,5 +167,13 @@ export default function AcceptInvitePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={null}>
+      <AcceptInviteForm />
+    </Suspense>
   );
 }

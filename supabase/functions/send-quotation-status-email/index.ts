@@ -28,6 +28,15 @@ function corsHeaders(req: Request) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const STATUS_COPY: Record<string, { subject: string; heading: string; body: string }> = {
   draft: {
     subject: "Your quotation is being prepared",
@@ -121,7 +130,7 @@ Deno.serve(async (req: Request) => {
     const html = `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
         <h2 style="margin-bottom: 4px;">${copy.heading}</h2>
-        <p>Hi ${customer.company_name},</p>
+        <p>Hi ${escapeHtml(customer.company_name)},</p>
         <p>${copy.body}</p>
         <table style="width:100%; border-collapse: collapse; margin-top: 16px;">
           <tr>

@@ -25,6 +25,10 @@ import {
 } from '@/components/ui/select';
 import type { DocumentCategory, DocumentTemplate } from '@/types';
 
+// Matches the limit enforced on the main Documents page and the storage
+// bucket itself — kept in sync across all three upload entry points.
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
 const CATEGORY_META: Record<DocumentCategory, string> = {
   invoice: 'Invoice',
   packing_list: 'Packing List',
@@ -81,6 +85,10 @@ export function DocumentUploadDialog({
 
   const handleUpload = async () => {
     if (!file || !profile) return;
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      toast.error(`"${file.name}" is over the 50 MB limit.`);
+      return;
+    }
     setUploading(true);
     try {
       const result = await uploadDocumentFile({

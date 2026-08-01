@@ -485,6 +485,7 @@ export default function PlansPricingPage() {
                 <Input
                   id="plan-monthly"
                   type="number"
+                  min="0"
                   value={form.monthly_price}
                   onChange={(e) => setForm((f) => ({ ...f, monthly_price: e.target.value }))}
                 />
@@ -497,6 +498,7 @@ export default function PlansPricingPage() {
                 <Input
                   id="plan-annual"
                   type="number"
+                  min="0"
                   value={form.annual_price}
                   onChange={(e) => setForm((f) => ({ ...f, annual_price: e.target.value }))}
                 />
@@ -512,6 +514,7 @@ export default function PlansPricingPage() {
                 <Input
                   id="plan-max-users"
                   type="number"
+                  min="0"
                   value={form.max_users}
                   onChange={(e) => setForm((f) => ({ ...f, max_users: e.target.value }))}
                   placeholder="Blank = ∞"
@@ -523,6 +526,7 @@ export default function PlansPricingPage() {
                 <Input
                   id="plan-storage"
                   type="number"
+                  min="0"
                   value={form.storage_gb}
                   onChange={(e) => setForm((f) => ({ ...f, storage_gb: e.target.value }))}
                   placeholder="Blank = ∞"

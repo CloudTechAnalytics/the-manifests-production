@@ -135,6 +135,29 @@ Deno.serve(async (req: Request) => {
       return json(403, { error: `That ${label} belongs to another organization` });
     }
 
+    // documents.shipment_id/customer_id cascade on delete — the rows
+    // disappear automatically, but the files they pointed to don't clean
+    // themselves up. Remove them from storage first, while we still know
+    // which files belonged to this record.
+    if (body.entity_type === "shipment" || body.entity_type === "customer") {
+      const rpcName = body.entity_type === "shipment"
+        ? "documents_file_paths_for_shipment"
+        : "documents_file_paths_for_customer";
+      const rpcArg = body.entity_type === "shipment"
+        ? { p_shipment_id: body.id }
+        : { p_customer_id: body.id };
+      const { data: orphanedDocs } = await admin.rpc(rpcName, rpcArg);
+      const paths = (orphanedDocs ?? []).map((d: { file_path: string }) => d.file_path);
+      if (paths.length > 0) {
+        const { error: storageError } = await admin.storage.from("documents").remove(paths);
+        if (storageError) {
+          // Not fatal — better to leave a few orphaned files than block a
+          // deletion the admin explicitly requested over a storage hiccup.
+          console.error("admin-delete-record storage cleanup error:", storageError.message);
+        }
+      }
+    }
+
     // Logged before the delete — nothing left to reference once the row
     // it's about is actually gone.
     await admin.from("activities").insert({

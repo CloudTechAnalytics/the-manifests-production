@@ -14,6 +14,7 @@ import {
   UserPlus,
   Building2,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
@@ -105,6 +106,7 @@ export default function NewCustomerPage() {
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [branchError, setBranchError] = useState('');
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const {
     needsSelection: needsBranchSelection,
     branches,
@@ -150,6 +152,29 @@ export default function NewCustomerPage() {
       phone: '',
       is_primary: contactFields.length === 0,
     });
+
+  // Soft check only — RLS already scopes this to customers the caller can
+  // see, and a same-named company in a different org is invisible here,
+  // which is correct. This warns, it never blocks: duplicates can be
+  // legitimate (a sister company, a branch office under the same name).
+  const checkDuplicateCompanyName = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setDuplicateWarning(null);
+      return;
+    }
+    const { data } = await supabase
+      .from('customers')
+      .select('company_name')
+      .ilike('company_name', trimmed)
+      .is('deleted_at', null)
+      .limit(1);
+    setDuplicateWarning(
+      data && data.length > 0
+        ? `A customer named "${data[0].company_name}" already exists.`
+        : null
+    );
+  };
 
   const onSubmit = async (values: CustomerFormValues) => {
     if (!profile) return;
@@ -306,11 +331,19 @@ export default function NewCustomerPage() {
                 <Input
                   id="company_name"
                   placeholder="Acme Logistics Ltd."
-                  {...register('company_name')}
+                  {...register('company_name', {
+                    onBlur: (e) => checkDuplicateCompanyName(e.target.value),
+                  })}
                 />
                 {errors.company_name && (
                   <p className="text-xs text-destructive">
                     {errors.company_name.message}
+                  </p>
+                )}
+                {duplicateWarning && (
+                  <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {duplicateWarning} You can still save if this is a different company.
                   </p>
                 )}
               </div>

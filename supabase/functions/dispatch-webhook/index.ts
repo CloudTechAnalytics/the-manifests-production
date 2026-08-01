@@ -77,6 +77,15 @@ function resolveEventType(payload: DbWebhookPayload): string | null {
   return null;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const STATUS_LABELS: Record<string, string> = {
   booking_received: "Booking Received",
   documentation: "Documentation",
@@ -124,8 +133,8 @@ async function sendStatusEmail(
       to: customer.email,
       subject: `Shipment ${reference} — ${statusLabel}`,
       html: `
-        <p>Hi ${customer.company_name ?? "there"},</p>
-        <p>Your shipment <strong>${reference}</strong> is now <strong>${statusLabel}</strong>.</p>
+        <p>Hi ${escapeHtml(customer.company_name ?? "there")},</p>
+        <p>Your shipment <strong>${escapeHtml(reference)}</strong> is now <strong>${escapeHtml(statusLabel)}</strong>.</p>
         ${trackingLine}
         <p>— The Manifest</p>
       `,
