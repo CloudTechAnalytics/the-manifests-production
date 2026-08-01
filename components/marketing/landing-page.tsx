@@ -664,6 +664,10 @@ export function LandingPage() {
             &copy; {new Date().getFullYear()} The Manifest. All rights reserved.
           </p>
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <Link href="/track" className="hover:text-foreground">
+              Track a Shipment
+            </Link>
+            <span className="hidden sm:inline">&middot;</span>
             <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-foreground">
               {CONTACT_EMAIL}
             </a>

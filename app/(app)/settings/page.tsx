@@ -24,6 +24,7 @@ import {
   Moon,
   Monitor,
   Trash2,
+  Webhook,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -72,6 +73,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/status';
 import { useTheme } from '@/contexts/theme-context';
+import { WebhookSettingsPanel } from '@/components/settings/webhook-settings-panel';
 import type { Branch, UserRole, UserPreferences } from '@/types';
 
 // --- Constants -------------------------------------------------------------
@@ -641,7 +643,7 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-5">
           <TabsTrigger value="company" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Company</span>
@@ -657,6 +659,10 @@ export default function SettingsPage() {
           <TabsTrigger value="preferences" className="gap-1.5">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Preferences</span>
+          </TabsTrigger>
+          <TabsTrigger value="webhooks" className="gap-1.5">
+            <Webhook className="h-4 w-4" />
+            <span className="hidden sm:inline">Webhooks</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1229,6 +1235,21 @@ export default function SettingsPage() {
         {/* ──────────────────────────────────────────────────────────── */}
         <TabsContent value="preferences" className="space-y-6">
           <PreferencesTab />
+        </TabsContent>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* Tab 5: Webhooks                                                */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        <TabsContent value="webhooks" className="space-y-6">
+          {!isAdmin && profile?.role !== 'branch_manager' ? (
+            <Card>
+              <CardContent className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                Only admins and branch managers can manage webhook subscriptions.
+              </CardContent>
+            </Card>
+          ) : (
+            <WebhookSettingsPanel />
+          )}
         </TabsContent>
       </Tabs>
 

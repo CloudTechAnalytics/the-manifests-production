@@ -65,6 +65,20 @@ export function ConvertToShipmentDialog({
           weight: plan.total_weight,
           volume: plan.total_volume,
           notes: plan.notes,
+          // Trade documentation captured at planning time — previously
+          // dropped on conversion, now carried onto the live shipment.
+          incoterm: plan.incoterm,
+          hs_code: plan.hs_code,
+          commodity: plan.commodity,
+          vessel_name: plan.vessel_name,
+          voyage_number: plan.voyage_number,
+          port_of_loading: plan.port_of_loading,
+          port_of_discharge: plan.port_of_discharge,
+          goods_value: plan.goods_value,
+          goods_value_currency: plan.goods_value_currency,
+          actual_weight: plan.actual_weight,
+          volumetric_weight: plan.volumetric_weight,
+          chargeable_weight: plan.chargeable_weight,
           created_by: profile.id,
           updated_by: profile.id,
         })
@@ -73,6 +87,24 @@ export function ConvertToShipmentDialog({
 
       if (shipmentError || !shipment) {
         throw new Error(shipmentError?.message ?? 'Failed to create shipment');
+      }
+
+      // A plan's container_type/quantity is a rollup ("2 x 40ft"); give the
+      // live shipment real per-container rows to add seals/weights to,
+      // rather than leaving that only as a free-text summary.
+      if (plan.container_type && plan.container_quantity && plan.container_quantity > 0) {
+        const containerRows = Array.from({ length: plan.container_quantity }, () => ({
+          shipment_id: shipment.id,
+          branch_id: plan.branch_id,
+          container_type: plan.container_type,
+          created_by: profile.id,
+        }));
+        const { error: containerError } = await supabase
+          .from('shipment_containers')
+          .insert(containerRows);
+        if (containerError) {
+          console.error('Container row seed error:', containerError);
+        }
       }
 
       await supabase.from('shipment_timeline').insert({

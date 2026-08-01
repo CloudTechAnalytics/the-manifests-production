@@ -1,12 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// '/' is the public marketing landing page for logged-out visitors — the
-// page itself (app/page.tsx) redirects an authenticated user away to their
-// dashboard/console client-side, so this only ever affects logged-out
-// traffic. The exact-match check below means this doesn't open up any
-// other path, just the root.
-const PUBLIC_PATHS = ['/', '/login', '/accept-invite'];
+// '/' is the marketing landing page, shown to every visitor regardless of
+// session (app/page.tsx no longer redirects an authenticated user away).
+// '/track' is the no-login shipment tracker customers use directly.
+// Everything else requires a session.
+const PUBLIC_PATHS = ['/', '/login', '/accept-invite', '/track'];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

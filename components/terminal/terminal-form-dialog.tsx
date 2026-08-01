@@ -64,6 +64,8 @@ export function TerminalFormDialog({
   const [gatePassNumber, setGatePassNumber] = useState('');
   const [exitNoteNumber, setExitNoteNumber] = useState('');
   const [releaseDate, setReleaseDate] = useState('');
+  const [freeTimeDays, setFreeTimeDays] = useState('');
+  const [freeTimeExpiry, setFreeTimeExpiry] = useState('');
   const [status, setStatus] = useState<TerminalStatus>('waiting');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +82,8 @@ export function TerminalFormDialog({
     setGatePassNumber(existing?.gate_pass_number ?? '');
     setExitNoteNumber(existing?.exit_note_number ?? '');
     setReleaseDate(existing?.release_date ?? '');
+    setFreeTimeDays(existing?.free_time_days != null ? String(existing.free_time_days) : '');
+    setFreeTimeExpiry(existing?.free_time_expiry ?? '');
     setStatus(existing?.status ?? 'waiting');
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
@@ -98,6 +102,8 @@ export function TerminalFormDialog({
         gate_pass_number: gatePassNumber.trim() || null,
         exit_note_number: exitNoteNumber.trim() || null,
         release_date: releaseDate || null,
+        free_time_days: freeTimeDays ? Number(freeTimeDays) : null,
+        free_time_expiry: freeTimeExpiry || null,
         status,
         notes: notes.trim() || null,
         updated_by: profile.id,
@@ -262,6 +268,48 @@ export function TerminalFormDialog({
               value={releaseDate}
               onChange={(e) => setReleaseDate(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Demurrage Free Time
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-free-days">Carrier Free Days</Label>
+                <Input
+                  id="tf-free-days"
+                  type="number"
+                  min="0"
+                  value={freeTimeDays}
+                  onChange={(e) => setFreeTimeDays(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-free-expiry">Free Time Expires</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    id="tf-free-expiry"
+                    type="date"
+                    value={freeTimeExpiry}
+                    onChange={(e) => setFreeTimeExpiry(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 px-2.5"
+                    disabled={!arrivalDate || !freeTimeDays}
+                    onClick={() => {
+                      const base = new Date(arrivalDate);
+                      base.setDate(base.getDate() + Number(freeTimeDays));
+                      setFreeTimeExpiry(base.toISOString().split('T')[0]);
+                    }}
+                  >
+                    From arrival
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-1.5">

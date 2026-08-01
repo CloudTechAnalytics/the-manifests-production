@@ -266,6 +266,31 @@ export interface Shipment {
   weight: number | null;
   volume: number | null;
   notes: string | null;
+  // Trade documentation — carried forward from the plan at conversion time.
+  incoterm: string | null;
+  hs_code: string | null;
+  commodity: string | null;
+  vessel_name: string | null;
+  voyage_number: string | null;
+  port_of_loading: string | null;
+  port_of_discharge: string | null;
+  mbl_number: string | null;
+  hbl_number: string | null;
+  awb_number: string | null;
+  goods_value: number | null;
+  goods_value_currency: string;
+  // Named cargo parties — the shipment's customer is the forwarder's
+  // client, which is often not the consignee on the bill of lading.
+  shipper_name: string | null;
+  shipper_address: string | null;
+  consignee_name: string | null;
+  consignee_address: string | null;
+  notify_party_name: string | null;
+  notify_party_address: string | null;
+  // Chargeable weight — the greater of actual vs. volumetric.
+  actual_weight: number | null;
+  volumetric_weight: number | null;
+  chargeable_weight: number | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -275,6 +300,101 @@ export interface Shipment {
   branch?: Branch | null;
   assigned_user?: Profile | null;
   timeline?: ShipmentTimelineEntry[];
+}
+
+export type DGPackingGroup = 'I' | 'II' | 'III';
+
+export interface ShipmentContainer {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  container_number: string | null;
+  seal_number: string | null;
+  container_type: string | null;
+  tare_weight: number | null;
+  gross_weight: number | null;
+  is_dangerous_goods: boolean;
+  un_number: string | null;
+  imdg_class: string | null;
+  packing_group: DGPackingGroup | null;
+  status: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface CargoInsurancePolicy {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  insurer_name: string;
+  policy_number: string | null;
+  coverage_amount: number | null;
+  currency: string;
+  premium_amount: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface FreightRateCard {
+  id: string;
+  branch_id: string;
+  carrier: string | null;
+  shipment_type: ShipmentType | null;
+  trade_lane_origin: string;
+  trade_lane_destination: string;
+  container_type: string | null;
+  buy_rate: number;
+  sell_rate: number;
+  currency: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  branch_id: string;
+  name: string;
+  target_url: string;
+  signing_secret: string;
+  event_types: string[];
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface PublicTrackedShipment {
+  reference_number: string | null;
+  shipment_type: ShipmentType | null;
+  status: ShipmentStatus;
+  origin: string | null;
+  destination: string | null;
+  carrier: string | null;
+  vessel_name: string | null;
+  voyage_number: string | null;
+  estimated_departure: string | null;
+  estimated_arrival: string | null;
+  actual_departure: string | null;
+  actual_arrival: string | null;
+  updated_at: string;
 }
 
 export interface ShipmentTimelineEntry {
@@ -327,6 +447,11 @@ export interface ShipmentCustoms {
   inspection_channel: CustomsInspectionChannel | null;
   officer: string | null;
   status: CustomsStatus;
+  form_m_number: string | null;
+  form_m_date: string | null;
+  paar_number: string | null;
+  paar_date: string | null;
+  soncap_number: string | null;
   notes: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -349,6 +474,8 @@ export interface TerminalOperation {
   gate_pass_number: string | null;
   exit_note_number: string | null;
   release_date: string | null;
+  free_time_days: number | null;
+  free_time_expiry: string | null;
   status: TerminalStatus;
   notes: string | null;
   created_by: string | null;
@@ -632,6 +759,9 @@ export interface ShipmentPlan {
   total_packages: number | null;
   total_weight: number | null;
   total_volume: number | null;
+  actual_weight: number | null;
+  volumetric_weight: number | null;
+  chargeable_weight: number | null;
   hs_code: string | null;
   cargo_description: string | null;
 

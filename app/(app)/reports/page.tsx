@@ -98,7 +98,18 @@ type ActivityReportRow = Activity & {
   userName: string;
 };
 
-type ReportTab = 'customers' | 'shipments' | 'quotations' | 'operations';
+type ProfitabilityRow = {
+  id: string;
+  reference_number: string | null;
+  status: ShipmentStatus;
+  customer_name: string;
+  currency: string;
+  revenue: number;
+  cost: number;
+  margin: number;
+};
+
+type ReportTab = 'customers' | 'shipments' | 'quotations' | 'operations' | 'profitability';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,6 +142,7 @@ const TAB_META: Record<
   shipments: { label: 'Shipment Reports', icon: Package },
   quotations: { label: 'Quotation Reports', icon: FileText },
   operations: { label: 'Operations Reports', icon: ActivityIcon },
+  profitability: { label: 'Profitability', icon: TrendingUp },
 };
 
 // ---------------------------------------------------------------------------
@@ -265,6 +277,7 @@ export default function ReportsPage() {
   const [shipments, setShipments] = useState<ShipmentReportRow[]>([]);
   const [quotations, setQuotations] = useState<QuotationReportRow[]>([]);
   const [activities, setActivities] = useState<ActivityReportRow[]>([]);
+  const [profitability, setProfitability] = useState<ProfitabilityRow[]>([]);
 
   // Load branches for admin filter
   useEffect(() => {
@@ -444,6 +457,64 @@ export default function ReportsPage() {
     }));
   }, [effectiveBranchId, applyDateRange]);
 
+  // Revenue = billed invoice totals per shipment. Cost = approved expenses
+  // plus customs duty — the two real out-of-pocket costs already tracked
+  // elsewhere in the app. Computed from an already-loaded shipment list
+  // rather than its own filtered query, so it stays in sync with whatever
+  // date/branch filter produced that list.
+  const computeProfitability = useCallback(
+    async (shipmentRows: ShipmentReportRow[]): Promise<ProfitabilityRow[]> => {
+      if (shipmentRows.length === 0) return [];
+      const ids = shipmentRows.map((s) => s.id);
+
+      const [{ data: invoiceRows }, { data: expenseRows }, { data: customsRows }] = await Promise.all([
+        supabase.from('invoices').select('shipment_id, total, currency').in('shipment_id', ids).is('deleted_at', null),
+        supabase
+          .from('expenses')
+          .select('shipment_id, amount')
+          .in('shipment_id', ids)
+          .eq('status', 'approved')
+          .is('deleted_at', null),
+        supabase.from('shipment_customs').select('shipment_id, duty_amount').in('shipment_id', ids).is('deleted_at', null),
+      ]);
+
+      const revenueByShipment = new Map<string, number>();
+      const currencyByShipment = new Map<string, string>();
+      (invoiceRows ?? []).forEach((row: { shipment_id: string | null; total: number; currency: string }) => {
+        if (!row.shipment_id) return;
+        revenueByShipment.set(row.shipment_id, (revenueByShipment.get(row.shipment_id) ?? 0) + Number(row.total));
+        if (!currencyByShipment.has(row.shipment_id)) currencyByShipment.set(row.shipment_id, row.currency);
+      });
+
+      const costByShipment = new Map<string, number>();
+      (expenseRows ?? []).forEach((row: { shipment_id: string | null; amount: number }) => {
+        if (!row.shipment_id) return;
+        costByShipment.set(row.shipment_id, (costByShipment.get(row.shipment_id) ?? 0) + Number(row.amount));
+      });
+      (customsRows ?? []).forEach((row: { shipment_id: string; duty_amount: number }) => {
+        costByShipment.set(row.shipment_id, (costByShipment.get(row.shipment_id) ?? 0) + Number(row.duty_amount));
+      });
+
+      return shipmentRows
+        .filter((s) => revenueByShipment.has(s.id) || costByShipment.has(s.id))
+        .map((s) => {
+          const revenue = revenueByShipment.get(s.id) ?? 0;
+          const cost = costByShipment.get(s.id) ?? 0;
+          return {
+            id: s.id,
+            reference_number: s.reference_number,
+            status: s.status,
+            customer_name: s.customer?.company_name ?? '—',
+            currency: currencyByShipment.get(s.id) ?? 'NGN',
+            revenue,
+            cost,
+            margin: revenue - cost,
+          };
+        });
+    },
+    []
+  );
+
   // Load all report data when filters change
   const loadAllReports = useCallback(async () => {
     if (!profile) return;
@@ -459,6 +530,7 @@ export default function ReportsPage() {
       setShipments(shipData);
       setQuotations(quotData);
       setActivities(actData);
+      setProfitability(await computeProfitability(shipData));
     } finally {
       setLoading(false);
     }
@@ -469,6 +541,7 @@ export default function ReportsPage() {
     loadShipmentsReport,
     loadQuotationsReport,
     loadActivitiesReport,
+    computeProfitability,
   ]);
 
   useEffect(() => {
@@ -518,6 +591,14 @@ export default function ReportsPage() {
     });
     return { total, byType };
   }, [activities]);
+
+  const profitabilitySummary = useMemo(() => {
+    const totalRevenue = profitability.reduce((sum, p) => sum + p.revenue, 0);
+    const totalCost = profitability.reduce((sum, p) => sum + p.cost, 0);
+    const totalMargin = totalRevenue - totalCost;
+    const marginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
+    return { count: profitability.length, totalRevenue, totalCost, totalMargin, marginPct };
+  }, [profitability]);
 
   // -------------------------------------------------------------------------
   // Export handlers
@@ -594,7 +675,7 @@ export default function ReportsPage() {
         formatDate(q.created_at),
       ]);
       exportToCsv(headers, rows, `quotation-report_${dateStr}.csv`);
-    } else {
+    } else if (activeTab === 'operations') {
       const headers = ['Date', 'Activity', 'User', 'Description'];
       const rows = activities.map((a) => [
         formatDateTime(a.created_at),
@@ -603,10 +684,22 @@ export default function ReportsPage() {
         a.description,
       ]);
       exportToCsv(headers, rows, `operations-report_${dateStr}.csv`);
+    } else {
+      const headers = ['Shipment', 'Customer', 'Status', 'Revenue', 'Cost', 'Margin', 'Currency'];
+      const rows = profitability.map((p) => [
+        p.reference_number ?? '',
+        p.customer_name,
+        SHIPMENT_STATUS_META[p.status]?.label ?? p.status,
+        p.revenue,
+        p.cost,
+        p.margin,
+        p.currency,
+      ]);
+      exportToCsv(headers, rows, `profitability-report_${dateStr}.csv`);
     }
 
     toast.success('Excel export downloaded successfully.');
-  }, [activeTab, customers, shipments, quotations, activities]);
+  }, [activeTab, customers, shipments, quotations, activities, profitability]);
 
   const handleExportPdf = useCallback(() => {
     toast.info('Preparing print dialog…');
@@ -749,7 +842,7 @@ export default function ReportsPage() {
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as ReportTab)}
       >
-        <TabsList className="no-print grid w-full grid-cols-2 lg:grid-cols-4">
+        <TabsList className="no-print grid w-full grid-cols-2 lg:grid-cols-5">
           {(Object.keys(TAB_META) as ReportTab[]).map((tab) => {
             const meta = TAB_META[tab];
             const Icon = meta.icon;
@@ -762,7 +855,11 @@ export default function ReportsPage() {
                 <Icon className="h-4 w-4" />
                 <span className="hidden sm:inline">{meta.label}</span>
                 <span className="sm:hidden">
-                  {tab === 'operations' ? 'Ops' : tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
+                  {tab === 'operations'
+                    ? 'Ops'
+                    : tab === 'profitability'
+                      ? 'Margin'
+                      : tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
                 </span>
               </TabsTrigger>
             );
@@ -1344,6 +1441,92 @@ export default function ReportsPage() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {a.description}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ===================== Profitability Reports ===================== */}
+        <TabsContent value="profitability" className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <SummaryCard
+              label="Shipments Billed"
+              value={profitabilitySummary.count}
+              icon={Package}
+              color="bg-blue-50 text-blue-600"
+            />
+            <SummaryCard
+              label="Total Revenue"
+              value={formatCurrency(profitabilitySummary.totalRevenue, 'NGN')}
+              icon={TrendingUp}
+              color="bg-emerald-50 text-emerald-600"
+            />
+            <SummaryCard
+              label="Total Cost"
+              value={formatCurrency(profitabilitySummary.totalCost, 'NGN')}
+              icon={XCircle}
+              color="bg-amber-50 text-amber-600"
+            />
+            <SummaryCard
+              label="Margin"
+              value={`${formatCurrency(profitabilitySummary.totalMargin, 'NGN')} (${profitabilitySummary.marginPct.toFixed(1)}%)`}
+              icon={CheckCircle2}
+              color={profitabilitySummary.totalMargin >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Profitability by Shipment</CardTitle>
+              <CardDescription>
+                Revenue is billed invoice totals; cost is approved expenses plus customs duty.
+                Only shipments with at least one invoice or cost are shown.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <TableSkeleton />
+              ) : profitability.length === 0 ? (
+                <EmptyState
+                  icon={TrendingUp}
+                  title="No billed shipments yet"
+                  message="Profitability appears once a shipment has an invoice or a cost recorded against it."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Shipment</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Revenue</TableHead>
+                        <TableHead className="text-right">Cost</TableHead>
+                        <TableHead className="text-right">Margin</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {profitability.map((p) => (
+                        <TableRow key={p.id} className="transition-colors hover:bg-accent/60">
+                          <TableCell className="font-medium">{p.reference_number ?? '—'}</TableCell>
+                          <TableCell className="text-muted-foreground">{p.customer_name}</TableCell>
+                          <TableCell>
+                            <Badge className={SHIPMENT_STATUS_META[p.status]?.color}>
+                              {SHIPMENT_STATUS_META[p.status]?.label ?? p.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(p.revenue, p.currency)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(p.cost, p.currency)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={p.margin >= 0 ? 'text-emerald-700' : 'text-destructive'}>
+                              {formatCurrency(p.margin, p.currency)}
+                            </span>
                           </TableCell>
                         </TableRow>
                       ))}

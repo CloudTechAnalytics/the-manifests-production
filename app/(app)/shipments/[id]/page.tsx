@@ -31,9 +31,12 @@ import {
   Building2,
   FileSearch,
   ListChecks,
+  AlertTriangle,
+  Shield,
+  Container as ContainerIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -104,6 +107,10 @@ import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
 import { TerminalFormDialog } from '@/components/terminal/terminal-form-dialog';
 import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
 import { TransportationFormDialog } from '@/components/transportation/transportation-form-dialog';
+import { ShipmentDocumentationDialog } from '@/components/shipments/shipment-documentation-dialog';
+import { ShipmentPartiesDialog } from '@/components/shipments/shipment-parties-dialog';
+import { ShipmentContainersPanel } from '@/components/shipments/shipment-containers-panel';
+import { CargoInsurancePanel } from '@/components/shipments/cargo-insurance-panel';
 import {
   SHIPMENT_STATUS_META,
   SHIPMENT_STATUS_FLOW,
@@ -124,6 +131,8 @@ import type {
   TerminalOperation,
   ShipmentExamination,
   ShipmentTransportation,
+  ShipmentContainer,
+  CargoInsurancePolicy,
 } from '@/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -156,7 +165,7 @@ type TimelineEntry = ShipmentTimelineEntry & {
 };
 
 const KNOWN_TABS = new Set([
-  'overview', 'timeline', 'workflow', 'documents', 'customs', 'terminal', 'examination', 'transportation',
+  'overview', 'timeline', 'workflow', 'documents', 'cargo', 'customs', 'terminal', 'examination', 'transportation',
 ]);
 
 export default function ShipmentDetailPage() {
@@ -177,8 +186,12 @@ export default function ShipmentDetailPage() {
   const [terminalRecord, setTerminalRecord] = useState<TerminalOperation | null>(null);
   const [examinations, setExaminations] = useState<ShipmentExamination[]>([]);
   const [transportLegs, setTransportLegs] = useState<ShipmentTransportation[]>([]);
+  const [containers, setContainers] = useState<ShipmentContainer[]>([]);
+  const [insurancePolicies, setInsurancePolicies] = useState<CargoInsurancePolicy[]>([]);
   const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
   const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
+  const [documentationDialogOpen, setDocumentationDialogOpen] = useState(false);
+  const [partiesDialogOpen, setPartiesDialogOpen] = useState(false);
   const [examinationDialog, setExaminationDialog] = useState<{ existing: ShipmentExamination | null } | null>(
     null
   );
@@ -240,8 +253,15 @@ export default function ShipmentDetailPage() {
         .order('created_at', { ascending: false });
       setDocuments((docs as DocumentRecord[]) ?? []);
 
-      // Customs, Terminal, Examinations, Transportation
-      const [{ data: customs }, { data: terminal }, { data: exams }, { data: legs }] = await Promise.all([
+      // Customs, Terminal, Examinations, Transportation, Containers, Insurance
+      const [
+        { data: customs },
+        { data: terminal },
+        { data: exams },
+        { data: legs },
+        { data: containerRows },
+        { data: insuranceRows },
+      ] = await Promise.all([
         supabase
           .from('shipment_customs')
           .select('*')
@@ -266,11 +286,25 @@ export default function ShipmentDetailPage() {
           .eq('shipment_id', shipmentId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('shipment_containers')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('cargo_insurance_policies')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
       ]);
       setCustomsRecord((customs as ShipmentCustoms) ?? null);
       setTerminalRecord((terminal as TerminalOperation) ?? null);
       setExaminations((exams as ShipmentExamination[]) ?? []);
       setTransportLegs((legs as ShipmentTransportation[]) ?? []);
+      setContainers((containerRows as ShipmentContainer[]) ?? []);
+      setInsurancePolicies((insuranceRows as CargoInsurancePolicy[]) ?? []);
     } finally {
       setLoading(false);
     }
@@ -698,6 +732,10 @@ export default function ShipmentDetailPage() {
             <FolderOpen className="h-4 w-4" />
             Documents
           </TabsTrigger>
+          <TabsTrigger value="cargo" className="gap-1.5">
+            <ContainerIcon className="h-4 w-4" />
+            Cargo &amp; Docs
+          </TabsTrigger>
           <TabsTrigger value="customs" className="gap-1.5">
             <Landmark className="h-4 w-4" />
             Customs
@@ -1051,6 +1089,94 @@ export default function ShipmentDetailPage() {
           />
         </TabsContent>
 
+        {/* --- Cargo & Docs Tab --- */}
+        <TabsContent value="cargo" className="space-y-6">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Trade Documentation</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setDocumentationDialogOpen(true)}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+                <InfoRow label="Incoterm" value={shipment.incoterm} />
+                <InfoRow label="HS Code" value={shipment.hs_code} />
+                <InfoRow label="Commodity" value={shipment.commodity} />
+                <InfoRow label="MBL Number" value={shipment.mbl_number} />
+                <InfoRow label="HBL Number" value={shipment.hbl_number} />
+                <InfoRow label="AWB Number" value={shipment.awb_number} />
+                <InfoRow label="Vessel" value={shipment.vessel_name} />
+                <InfoRow label="Voyage Number" value={shipment.voyage_number} />
+                <InfoRow label="Port of Loading" value={shipment.port_of_loading} />
+                <InfoRow label="Port of Discharge" value={shipment.port_of_discharge} />
+                <InfoRow
+                  label="Goods Value"
+                  value={
+                    shipment.goods_value != null
+                      ? formatCurrency(shipment.goods_value, shipment.goods_value_currency)
+                      : null
+                  }
+                />
+                <InfoRow
+                  label="Chargeable Weight"
+                  value={shipment.chargeable_weight != null ? `${shipment.chargeable_weight} kg` : null}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Cargo Parties</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setPartiesDialogOpen(true)}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Shipper
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{shipment.shipper_name || '—'}</p>
+                  <p className="text-sm text-muted-foreground">{shipment.shipper_address}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Consignee
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{shipment.consignee_name || '—'}</p>
+                  <p className="text-sm text-muted-foreground">{shipment.consignee_address}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Notify Party
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{shipment.notify_party_name || '—'}</p>
+                  <p className="text-sm text-muted-foreground">{shipment.notify_party_address}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <ShipmentContainersPanel
+            shipmentId={shipmentId}
+            branchId={shipment.branch_id}
+            containers={containers}
+            onReload={loadData}
+          />
+
+          <CargoInsurancePanel
+            shipmentId={shipmentId}
+            branchId={shipment.branch_id}
+            policies={insurancePolicies}
+            onReload={loadData}
+          />
+        </TabsContent>
+
         {/* --- Customs Tab --- */}
         <TabsContent value="customs">
           <Card>
@@ -1094,6 +1220,23 @@ export default function ShipmentDetailPage() {
                     value={customsRecord.inspection_channel ?? 'Not yet assessed'}
                   />
                   <InfoRow label="Status" value={customsRecord.status.replace(/_/g, ' ')} />
+                  <InfoRow
+                    label="Form M"
+                    value={
+                      customsRecord.form_m_number
+                        ? `${customsRecord.form_m_number}${customsRecord.form_m_date ? ` (${formatDate(customsRecord.form_m_date)})` : ''}`
+                        : null
+                    }
+                  />
+                  <InfoRow
+                    label="PAAR"
+                    value={
+                      customsRecord.paar_number
+                        ? `${customsRecord.paar_number}${customsRecord.paar_date ? ` (${formatDate(customsRecord.paar_date)})` : ''}`
+                        : null
+                    }
+                  />
+                  <InfoRow label="SONCAP Number" value={customsRecord.soncap_number} />
                 </div>
               )}
             </CardContent>
@@ -1119,29 +1262,50 @@ export default function ShipmentDetailPage() {
                 )}
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {!terminalRecord ? (
                 <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
                   No terminal record for this shipment yet.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
-                  <InfoRow label="Terminal Name" value={terminalRecord.terminal_name} />
-                  <InfoRow
-                    label="Arrival Date"
-                    value={terminalRecord.arrival_date ? formatDate(terminalRecord.arrival_date) : null}
-                  />
-                  <InfoRow label="Container Position" value={terminalRecord.container_position} />
-                  <InfoRow label="Holding Bay" value={terminalRecord.holding_bay} />
-                  <InfoRow label="Stack Number" value={terminalRecord.stack_number} />
-                  <InfoRow label="Gate Pass Number" value={terminalRecord.gate_pass_number} />
-                  <InfoRow label="Exit Note Number" value={terminalRecord.exit_note_number} />
-                  <InfoRow
-                    label="Release Date"
-                    value={terminalRecord.release_date ? formatDate(terminalRecord.release_date) : null}
-                  />
-                  <InfoRow label="Status" value={terminalRecord.status} />
-                </div>
+                <>
+                  {terminalRecord.free_time_expiry && terminalRecord.status !== 'released' && (
+                    <DemurrageAlert expiry={terminalRecord.free_time_expiry} />
+                  )}
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
+                    <InfoRow label="Terminal Name" value={terminalRecord.terminal_name} />
+                    <InfoRow
+                      label="Arrival Date"
+                      value={terminalRecord.arrival_date ? formatDate(terminalRecord.arrival_date) : null}
+                    />
+                    <InfoRow label="Container Position" value={terminalRecord.container_position} />
+                    <InfoRow label="Holding Bay" value={terminalRecord.holding_bay} />
+                    <InfoRow label="Stack Number" value={terminalRecord.stack_number} />
+                    <InfoRow label="Gate Pass Number" value={terminalRecord.gate_pass_number} />
+                    <InfoRow label="Exit Note Number" value={terminalRecord.exit_note_number} />
+                    <InfoRow
+                      label="Release Date"
+                      value={terminalRecord.release_date ? formatDate(terminalRecord.release_date) : null}
+                    />
+                    <InfoRow label="Status" value={terminalRecord.status} />
+                    <InfoRow
+                      label="Free Time"
+                      value={
+                        terminalRecord.free_time_days != null
+                          ? `${terminalRecord.free_time_days} days`
+                          : null
+                      }
+                    />
+                    <InfoRow
+                      label="Free Time Expires"
+                      value={
+                        terminalRecord.free_time_expiry
+                          ? formatDate(terminalRecord.free_time_expiry)
+                          : null
+                      }
+                    />
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -1240,6 +1404,18 @@ export default function ShipmentDetailPage() {
 
       {shipment && (
         <>
+          <ShipmentDocumentationDialog
+            open={documentationDialogOpen}
+            onOpenChange={setDocumentationDialogOpen}
+            shipment={shipment}
+            onSaved={loadData}
+          />
+          <ShipmentPartiesDialog
+            open={partiesDialogOpen}
+            onOpenChange={setPartiesDialogOpen}
+            shipment={shipment}
+            onSaved={loadData}
+          />
           <CustomsFormDialog
             open={customsDialogOpen}
             onOpenChange={setCustomsDialogOpen}
@@ -1283,6 +1459,33 @@ export default function ShipmentDetailPage() {
 }
 
 // --- Small presentational helpers ----------------------------------------
+
+function DemurrageAlert({ expiry }: { expiry: string }) {
+  const daysLeft = Math.ceil(
+    (new Date(expiry).getTime() - new Date(new Date().toDateString()).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+  if (daysLeft > 3) return null;
+
+  const overdue = daysLeft < 0;
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border px-4 py-3 text-sm',
+        overdue
+          ? 'border-destructive/30 bg-destructive/10 text-destructive'
+          : 'border-warning/30 bg-warning/10 text-warning-foreground'
+      )}
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <p className="font-medium">
+        {overdue
+          ? `Free time expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago — demurrage is accruing.`
+          : `Free time expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — arrange release or gate-out soon.`}
+      </p>
+    </div>
+  );
+}
 
 function InfoRow({
   icon: Icon,

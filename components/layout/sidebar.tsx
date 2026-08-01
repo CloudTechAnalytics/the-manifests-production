@@ -32,6 +32,7 @@ import {
   Landmark,
   FileSearch,
   Truck,
+  BadgeDollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -94,6 +95,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/quotations', label: 'Quotations', icon: FileText, roles: SALES_ROLES },
       { href: '/sales', label: 'Sales', icon: TrendingUp, roles: SALES_ROLES },
+      { href: '/rates', label: 'Rate Cards', icon: BadgeDollarSign, roles: SALES_ROLES },
     ],
   },
   {

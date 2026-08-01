@@ -73,6 +73,11 @@ export function CustomsFormDialog({
   const [inspectionChannel, setInspectionChannel] = useState<CustomsInspectionChannel | ''>('');
   const [officer, setOfficer] = useState('');
   const [status, setStatus] = useState<CustomsStatus>('draft');
+  const [formMNumber, setFormMNumber] = useState('');
+  const [formMDate, setFormMDate] = useState('');
+  const [paarNumber, setPaarNumber] = useState('');
+  const [paarDate, setPaarDate] = useState('');
+  const [soncapNumber, setSoncapNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -88,6 +93,11 @@ export function CustomsFormDialog({
     setInspectionChannel(existing?.inspection_channel ?? '');
     setOfficer(existing?.officer ?? '');
     setStatus(existing?.status ?? 'draft');
+    setFormMNumber(existing?.form_m_number ?? '');
+    setFormMDate(existing?.form_m_date ?? '');
+    setPaarNumber(existing?.paar_number ?? '');
+    setPaarDate(existing?.paar_date ?? '');
+    setSoncapNumber(existing?.soncap_number ?? '');
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
@@ -105,6 +115,11 @@ export function CustomsFormDialog({
         inspection_channel: inspectionChannel || null,
         officer: officer.trim() || null,
         status,
+        form_m_number: formMNumber.trim() || null,
+        form_m_date: formMDate || null,
+        paar_number: paarNumber.trim() || null,
+        paar_date: paarDate || null,
+        soncap_number: soncapNumber.trim() || null,
         notes: notes.trim() || null,
         updated_by: profile.id,
       };
@@ -191,6 +206,55 @@ export function CustomsFormDialog({
             <div className="space-y-1.5">
               <Label htmlFor="cf-hs">HS Code</Label>
               <Input id="cf-hs" value={hsCode} onChange={(e) => setHsCode(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Nigerian Import Compliance
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-form-m">Form M Number</Label>
+                <Input
+                  id="cf-form-m"
+                  value={formMNumber}
+                  onChange={(e) => setFormMNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-form-m-date">Form M Date</Label>
+                <Input
+                  id="cf-form-m-date"
+                  type="date"
+                  value={formMDate}
+                  onChange={(e) => setFormMDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-paar">PAAR Number</Label>
+                <Input id="cf-paar" value={paarNumber} onChange={(e) => setPaarNumber(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-paar-date">PAAR Date</Label>
+                <Input
+                  id="cf-paar-date"
+                  type="date"
+                  value={paarDate}
+                  onChange={(e) => setPaarDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-soncap">SONCAP Number</Label>
+              <Input
+                id="cf-soncap"
+                value={soncapNumber}
+                onChange={(e) => setSoncapNumber(e.target.value)}
+                placeholder="If cargo is a regulated product category"
+              />
             </div>
           </div>
 
