@@ -15,6 +15,8 @@ import {
   Loader2,
   Wallet,
   Plus,
+  Printer,
+  Ship,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
@@ -65,12 +67,13 @@ import {
   formatDate,
   formatDateTime,
 } from '@/lib/utils/status';
-import type { Invoice, Customer, Shipment, Quotation, PaymentAllocation } from '@/types';
+import type { Invoice, Customer, Shipment, Quotation, PaymentAllocation, Branch } from '@/types';
 
 type InvoiceDetail = Invoice & {
   customer: Customer | null;
   shipment: Shipment | null;
   quotation: Quotation | null;
+  branch: Branch | null;
 };
 
 type AllocationRow = PaymentAllocation & {
@@ -100,7 +103,7 @@ export default function InvoiceDetailPage() {
     try {
       const { data: inv, error: invErr } = await supabase
         .from('invoices')
-        .select('*, customer:customers(*), shipment:shipments(*), quotation:quotations(*)')
+        .select('*, customer:customers(*), shipment:shipments(*), quotation:quotations(*), branch:branches(*)')
         .eq('id', invoiceId)
         .is('deleted_at', null)
         .maybeSingle();
@@ -178,6 +181,10 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const handleCancel = async () => {
     if (!invoice || !profile) return;
     try {
@@ -250,6 +257,7 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
+      <div className="no-print space-y-6">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -286,6 +294,10 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="mr-1.5 h-4 w-4" />
+            Print
+          </Button>
           {canRecordPayment && (
             <Link href={`/payments/new?invoice_id=${invoiceId}`}>
               <Button size="sm">
@@ -534,6 +546,165 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
       </div>
+      </div>
+
+      <div className="print-only hidden">
+        <PrintInvoice invoice={invoice} allocations={allocations} />
+      </div>
+    </div>
+  );
+}
+
+// --- Print layout ----------------------------------------------------------
+
+function PrintInvoice({
+  invoice,
+  allocations,
+}: {
+  invoice: InvoiceDetail;
+  allocations: AllocationRow[];
+}) {
+  const statusMeta = INVOICE_STATUS_META[invoice.status];
+  const outstanding = invoice.total - invoice.amount_paid;
+
+  return (
+    <div className="space-y-6">
+      {/* Letterhead */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
+          <Ship className="h-4.5 w-4.5 text-primary-foreground" />
+        </div>
+        <div>
+          <p className="font-serif text-base font-bold leading-tight">
+            {invoice.branch?.name ?? 'The Manifest'}
+          </p>
+          {invoice.branch?.address && (
+            <p className="text-xs text-muted-foreground">{invoice.branch.address}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {[invoice.branch?.phone, invoice.branch?.email].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      </div>
+
+      {/* Print header */}
+      <div className="flex items-start justify-between border-b border-border pb-4">
+        <div>
+          <h1 className="text-2xl font-bold">INVOICE</h1>
+          <p className="text-sm text-muted-foreground">{invoice.invoice_number ?? 'Draft'}</p>
+        </div>
+        <div className="text-right">
+          <Badge variant="secondary" className={statusMeta.color}>
+            {statusMeta.label}
+          </Badge>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Issued: {formatDate(invoice.issue_date)}
+          </p>
+          <p className="text-xs text-muted-foreground">Due: {formatDate(invoice.due_date)}</p>
+        </div>
+      </div>
+
+      {/* Bill To */}
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Bill To</p>
+        <p className="text-sm font-medium">{invoice.customer?.company_name ?? '—'}</p>
+        {invoice.customer?.address && (
+          <p className="text-sm text-muted-foreground">{invoice.customer.address}</p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {[invoice.customer?.email, invoice.customer?.phone].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+
+      {/* Reference */}
+      {(invoice.shipment || invoice.quotation) && (
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          {invoice.shipment && (
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Shipment</p>
+              <p className="font-medium">{invoice.shipment.reference_number}</p>
+            </div>
+          )}
+          {invoice.quotation && (
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Quotation</p>
+              <p className="font-medium">{invoice.quotation.quotation_number}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Totals */}
+      <div className="ml-auto w-64 space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="font-medium">{formatCurrency(invoice.subtotal, invoice.currency)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Tax</span>
+          <span className="font-medium">{formatCurrency(invoice.tax_amount, invoice.currency)}</span>
+        </div>
+        <Separator />
+        <div className="flex justify-between text-base font-bold">
+          <span>Total</span>
+          <span>{formatCurrency(invoice.total, invoice.currency)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Paid</span>
+          <span className="font-medium">{formatCurrency(invoice.amount_paid, invoice.currency)}</span>
+        </div>
+        <div className="flex justify-between text-base font-bold">
+          <span>Balance Due</span>
+          <span>{formatCurrency(outstanding, invoice.currency)}</span>
+        </div>
+      </div>
+
+      {/* Payment history */}
+      {allocations.length > 0 && (
+        <div className="border-t border-border pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+            Payments Received
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="pb-1 font-medium">Reference</th>
+                <th className="pb-1 font-medium">Date</th>
+                <th className="pb-1 text-right font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocations.map((a) => (
+                <tr key={a.id}>
+                  <td className="py-0.5">{a.payment?.payment_number ?? '—'}</td>
+                  <td className="py-0.5">{a.payment ? formatDate(a.payment.payment_date) : '—'}</td>
+                  <td className="py-0.5 text-right">{formatCurrency(a.amount, invoice.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Notes */}
+      {(invoice.notes || invoice.terms) && (
+        <div className="space-y-3 border-t border-border pt-4 text-sm">
+          {invoice.notes && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Notes</p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{invoice.notes}</p>
+            </div>
+          )}
+          {invoice.terms && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                Terms &amp; Conditions
+              </p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{invoice.terms}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

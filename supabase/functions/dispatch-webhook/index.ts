@@ -20,6 +20,27 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * JSON body using that subscription's own `signing_secret`, sent as
  * `X-Signature: <hex>` — subscribers verify it to confirm the request
  * actually came from us.
+ *
+ * It also emails the customer directly on shipment.status_changed, via
+ * Resend (free tier, no card required — see RESEND_API_KEY below). This
+ * piggybacks on the same Database Webhook trigger so there's only one
+ * dashboard step to configure, not two.
+ *
+ * Required secrets (Supabase dashboard: Edge Functions → Secrets, or
+ * `supabase secrets set NAME=value`):
+ *   DB_WEBHOOK_SECRET   - shared secret the Database Webhook sends as
+ *                          "Authorization: Bearer <value>"; you choose it
+ *   RESEND_API_KEY       - from resend.com; omit to skip email entirely
+ *                          (webhook fan-out above still runs)
+ * Optional:
+ *   RESEND_FROM_EMAIL    - defaults to "The Manifest <onboarding@resend.dev>",
+ *                          which Resend only lets you send to your OWN
+ *                          verified email until you verify a sending
+ *                          domain in the Resend dashboard (free, just DNS
+ *                          records) — needed before this can reach real
+ *                          customers
+ *   APP_PUBLIC_URL        - used to link to the public tracking page;
+ *                          omitted from the email if not set
  */
 
 interface DbWebhookPayload {
@@ -54,6 +75,62 @@ function resolveEventType(payload: DbWebhookPayload): string | null {
     return null;
   }
   return null;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  booking_received: "Booking Received",
+  documentation: "Documentation",
+  processing: "Processing",
+  in_transit: "In Transit",
+  arrived: "Arrived",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+async function sendStatusEmail(
+  supabase: ReturnType<typeof createClient>,
+  record: Record<string, unknown>,
+): Promise<void> {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendApiKey) return; // Not configured — silently skip, webhook fan-out still runs.
+
+  const customerId = record.customer_id as string | undefined;
+  if (!customerId) return;
+
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("email, company_name")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (!customer?.email) return;
+
+  const status = String(record.status ?? "");
+  const statusLabel = STATUS_LABELS[status] ?? status;
+  const reference = String(record.reference_number ?? "your shipment");
+  const appUrl = Deno.env.get("APP_PUBLIC_URL");
+  const trackingLine = appUrl
+    ? `<p><a href="${appUrl}/track?ref=${encodeURIComponent(reference)}">Track this shipment</a></p>`
+    : "";
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: Deno.env.get("RESEND_FROM_EMAIL") ?? "The Manifest <onboarding@resend.dev>",
+      to: customer.email,
+      subject: `Shipment ${reference} — ${statusLabel}`,
+      html: `
+        <p>Hi ${customer.company_name ?? "there"},</p>
+        <p>Your shipment <strong>${reference}</strong> is now <strong>${statusLabel}</strong>.</p>
+        ${trackingLine}
+        <p>— The Manifest</p>
+      `,
+    }),
+  }).catch((err) => console.error("Resend send failed:", err));
 }
 
 async function signPayload(secret: string, body: string): Promise<string> {
@@ -100,6 +177,10 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  if (eventType === "shipment.status_changed") {
+    await sendStatusEmail(supabase, payload.record);
+  }
 
   const { data: subscriptions, error } = await supabase
     .from("webhook_subscriptions")

@@ -388,7 +388,7 @@ function SidebarFooter() {
  *  The account control lives in the TopBar now, not here. */
 export function Sidebar() {
   return (
-    <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
+    <aside className="no-print hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
       <Logo />
       <NavLinks />
       <SidebarFooter />
@@ -523,7 +523,7 @@ export function TopBar() {
   const { openSearch } = useSearchContext();
 
   return (
-    <header className="hidden h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6 lg:flex">
+    <header className="no-print hidden h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6 lg:flex">
       <button
         type="button"
         onClick={openSearch}
@@ -549,7 +549,7 @@ export function MobileTopBar() {
   const { openSearch } = useSearchContext();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:hidden">
+    <header className="no-print flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="-ml-2">

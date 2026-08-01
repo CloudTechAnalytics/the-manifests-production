@@ -843,6 +843,26 @@ function PrintQuotation({ quotation }: { quotation: QuotationDetail }) {
 
   return (
     <div className="space-y-6">
+      {/* Letterhead */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
+            <Ship className="h-4.5 w-4.5 text-primary-foreground" />
+          </div>
+          <div>
+            <p className="font-serif text-base font-bold leading-tight">
+              {quotation.branch?.name ?? 'The Manifest'}
+            </p>
+            {quotation.branch?.address && (
+              <p className="text-xs text-muted-foreground">{quotation.branch.address}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {[quotation.branch?.phone, quotation.branch?.email].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Print header */}
       <div className="flex items-start justify-between border-b border-border pb-4">
         <div>
@@ -872,6 +892,12 @@ function PrintQuotation({ quotation }: { quotation: QuotationDetail }) {
           </p>
           <p className="font-medium">
             {quotation.customer?.company_name ?? '—'}
+          </p>
+          {quotation.customer?.address && (
+            <p className="text-muted-foreground">{quotation.customer.address}</p>
+          )}
+          <p className="text-muted-foreground">
+            {[quotation.customer?.email, quotation.customer?.phone].filter(Boolean).join(' · ')}
           </p>
         </div>
         <div>

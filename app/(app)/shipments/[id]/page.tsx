@@ -107,6 +107,7 @@ import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
 import { TerminalFormDialog } from '@/components/terminal/terminal-form-dialog';
 import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
 import { TransportationFormDialog } from '@/components/transportation/transportation-form-dialog';
+import { checkShipmentStatusReadiness } from '@/lib/utils/workflow-rules';
 import { ShipmentDocumentationDialog } from '@/components/shipments/shipment-documentation-dialog';
 import { ShipmentPartiesDialog } from '@/components/shipments/shipment-parties-dialog';
 import { ShipmentContainersPanel } from '@/components/shipments/shipment-containers-panel';
@@ -203,6 +204,8 @@ export default function ShipmentDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [stagesVersion, setStagesVersion] = useState(0);
+  const [statusBlockers, setStatusBlockers] = useState<string[]>([]);
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
 
   // Add-to-timeline form state
   const [timelineStatus, setTimelineStatus] = useState<ShipmentStatus>(
@@ -314,10 +317,72 @@ export default function ShipmentDetailPage() {
     loadData();
   }, [loadData]);
 
+  // Next status in the flow — used both to gate what "Update Status" can do
+  // and to check readiness for it below.
+  const nextStatus: ShipmentStatus | null =
+    shipment && shipment.status !== 'cancelled'
+      ? SHIPMENT_STATUS_FLOW[SHIPMENT_STATUS_FLOW.indexOf(shipment.status) + 1] ?? null
+      : null;
+
+  // Re-checks whenever the shipment's status (or its related records)
+  // changes — loadData already reruns on every save elsewhere on this page,
+  // and stagesVersion bumps on workflow changes, so this stays current
+  // without its own polling.
+  useEffect(() => {
+    if (!shipmentId || !nextStatus) {
+      setStatusBlockers([]);
+      return;
+    }
+    let cancelled = false;
+    setCheckingReadiness(true);
+    checkShipmentStatusReadiness(shipmentId, nextStatus)
+      .then((readiness) => {
+        if (!cancelled) setStatusBlockers(readiness.blockers);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingReadiness(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipmentId, nextStatus, stagesVersion, timeline.length, documents.length]);
+
+  // Keep the Timeline tab's status picker defaulted to the next step
+  // rather than a fixed value unrelated to where the shipment actually is.
+  useEffect(() => {
+    if (nextStatus) setTimelineStatus(nextStatus);
+    else if (shipment) setTimelineStatus(shipment.status);
+  }, [nextStatus, shipment]);
+
   // --- Status update handler ------------------------------------------------
 
   const handleStatusChange = async (target: ShipmentStatus) => {
     if (!shipment || !profile) return;
+
+    // Enforced here too, not just in which buttons the UI offers — a
+    // direct call can't skip more than one step, and a forward step must
+    // pass its readiness check. Backward moves (corrections) and
+    // cancellation are never blocked.
+    const currentIdx = SHIPMENT_STATUS_FLOW.indexOf(shipment.status);
+    const targetIdx = SHIPMENT_STATUS_FLOW.indexOf(target);
+    const isForwardAdjacent = targetIdx === currentIdx + 1;
+    const isBackwardAdjacent = targetIdx !== -1 && targetIdx === currentIdx - 1;
+    if (target !== 'cancelled' && !isForwardAdjacent && !isBackwardAdjacent) {
+      toast.error('A shipment can only move one status at a time.');
+      return;
+    }
+    if (isForwardAdjacent) {
+      const readiness = await checkShipmentStatusReadiness(shipmentId, target);
+      if (!readiness.ready) {
+        toast.error(
+          `Can't mark as "${SHIPMENT_STATUS_META[target].label}" yet — ${readiness.blockers[0]}`
+        );
+        setStatusBlockers(readiness.blockers);
+        return;
+      }
+    }
+
     setUpdatingStatus(true);
     try {
       // 1. Update shipment status
@@ -382,6 +447,29 @@ export default function ShipmentDetailPage() {
 
   const handleAddTimeline = async () => {
     if (!shipment || !profile) return;
+
+    // Same one-step-at-a-time + readiness gate as the "Update Status"
+    // button — this form is another path to the same status field.
+    const currentIdx = SHIPMENT_STATUS_FLOW.indexOf(shipment.status);
+    const targetIdx = SHIPMENT_STATUS_FLOW.indexOf(timelineStatus);
+    const isForwardAdjacent = targetIdx === currentIdx + 1;
+    const isBackwardAdjacent = targetIdx !== -1 && targetIdx === currentIdx - 1;
+    const isSame = timelineStatus === shipment.status;
+    if (timelineStatus !== 'cancelled' && !isForwardAdjacent && !isBackwardAdjacent && !isSame) {
+      toast.error('A shipment can only move one status at a time.');
+      return;
+    }
+    if (isForwardAdjacent) {
+      const readiness = await checkShipmentStatusReadiness(shipmentId, timelineStatus);
+      if (!readiness.ready) {
+        toast.error(
+          `Can't mark as "${SHIPMENT_STATUS_META[timelineStatus].label}" yet — ${readiness.blockers[0]}`
+        );
+        setStatusBlockers(readiness.blockers);
+        return;
+      }
+    }
+
     setAddingTimeline(true);
     try {
       // 1. Update shipment status
@@ -532,13 +620,20 @@ export default function ShipmentDetailPage() {
     ? SHIPMENT_TYPE_ICONS[shipment.shipment_type]
     : null;
 
-  // Next status in the flow (for the primary action button)
-  const nextStatus: ShipmentStatus | null = (() => {
-    if (isCancelled) return null;
-    const idx = SHIPMENT_STATUS_FLOW.indexOf(shipment.status);
-    if (idx === -1 || idx >= SHIPMENT_STATUS_FLOW.length - 1) return null;
-    return SHIPMENT_STATUS_FLOW[idx + 1];
-  })();
+  // Previous status in the flow (for the "move back" correction action).
+  const previousStatus: ShipmentStatus | null =
+    !isCancelled && SHIPMENT_STATUS_FLOW.indexOf(shipment.status) > 0
+      ? SHIPMENT_STATUS_FLOW[SHIPMENT_STATUS_FLOW.indexOf(shipment.status) - 1]
+      : null;
+
+  // What the Timeline tab's status picker is allowed to offer — same
+  // one-step-at-a-time rule as the header dropdown, plus the current
+  // status itself (for a progress note with no status change).
+  const allowedTimelineStatuses: ShipmentStatus[] = [
+    shipment.status,
+    ...(nextStatus ? [nextStatus] : []),
+    ...(previousStatus ? [previousStatus] : []),
+  ];
 
   // --- Render ---------------------------------------------------------------
 
@@ -583,7 +678,8 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Status update dropdown */}
+          {/* Status update dropdown — one step at a time only; advancing
+              is gated by checkShipmentStatusReadiness (see handleStatusChange) */}
           {!isCancelled && shipment.status !== 'delivered' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -596,38 +692,33 @@ export default function ShipmentDetailPage() {
                 Update Status
               </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Advance to…</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {SHIPMENT_STATUS_FLOW.map((s) => {
-                  const meta = SHIPMENT_STATUS_META[s];
-                  const isCurrent = s === shipment.status;
-                  const isPast =
-                    !isCurrent && meta.step < currentStep;
-                  return (
+              <DropdownMenuContent align="end" className="w-64">
+                {nextStatus && (
+                  <>
+                    <DropdownMenuLabel>Next step</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      key={s}
-                      onClick={() => handleStatusChange(s)}
-                      disabled={isCurrent}
-                      className="flex items-center justify-between"
+                      onClick={() => handleStatusChange(nextStatus)}
+                      disabled={checkingReadiness || statusBlockers.length > 0}
+                      className="flex flex-col items-start gap-1 whitespace-normal"
                     >
-                      <span className="flex items-center gap-2">
-                        {isCurrent && (
-                          <Check className="h-3.5 w-3.5 text-blue-600" />
-                        )}
-                        {isPast && (
-                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                        {meta.label}
+                      <span className="flex items-center gap-2 font-medium">
+                        <ChevronRight className="h-3.5 w-3.5 text-primary" />
+                        Mark as {SHIPMENT_STATUS_META[nextStatus].label}
                       </span>
-                      {isCurrent && (
-                        <span className="text-xs text-muted-foreground">
-                          current
+                      {statusBlockers.length > 0 && (
+                        <span className="pl-5 text-xs text-muted-foreground">
+                          Blocked — see checklist below
                         </span>
                       )}
                     </DropdownMenuItem>
-                  );
-                })}
+                  </>
+                )}
+                {previousStatus && (
+                  <DropdownMenuItem onClick={() => handleStatusChange(previousStatus)}>
+                    Move back to {SHIPMENT_STATUS_META[previousStatus].label}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => handleStatusChange('cancelled')}
@@ -697,6 +788,45 @@ export default function ShipmentDetailPage() {
           </Dialog>
         </div>
       </div>
+
+      {/* What's next — always visible so requirements aren't a surprise
+          when someone tries (and fails) to advance the status. */}
+      {nextStatus && (
+        <div
+          className={cn(
+            'flex items-start gap-3 rounded-lg border px-4 py-3',
+            checkingReadiness
+              ? 'border-border bg-muted/40'
+              : statusBlockers.length > 0
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-emerald-300 bg-emerald-50'
+          )}
+        >
+          {checkingReadiness ? (
+            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : statusBlockers.length > 0 ? (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          ) : (
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {checkingReadiness
+                ? 'Checking what’s needed to advance…'
+                : statusBlockers.length > 0
+                  ? `Before this can be marked "${SHIPMENT_STATUS_META[nextStatus].label}":`
+                  : `Ready to mark as "${SHIPMENT_STATUS_META[nextStatus].label}".`}
+            </p>
+            {!checkingReadiness && statusBlockers.length > 0 && (
+              <ul className="ml-4 mt-1.5 list-disc space-y-0.5 text-sm text-amber-800">
+                {statusBlockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Lifecycle timeline: Booking through Completed, spanning customs,
           terminal, examination, release readiness, and transportation —
@@ -967,14 +1097,20 @@ export default function ShipmentDetailPage() {
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      {SHIPMENT_STATUS_FLOW.map((s) => (
+                      {allowedTimelineStatuses.map((s) => (
                         <SelectItem key={s} value={s}>
                           {SHIPMENT_STATUS_META[s].label}
+                          {s === shipment.status && ' (current)'}
                         </SelectItem>
                       ))}
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      {!isCancelled && <SelectItem value="cancelled">Cancelled</SelectItem>}
                     </SelectContent>
                   </Select>
+                  {timelineStatus === nextStatus && statusBlockers.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Not ready yet — see the checklist near the top of this page.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="timeline-notes">Notes (optional)</Label>
