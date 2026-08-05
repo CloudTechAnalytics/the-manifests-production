@@ -5,18 +5,32 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
  * admin-delete-record
  *
  * Permanently deletes a customer, quotation, shipment, invoice, payment,
- * expense, or customs/terminal/examination/transportation record — org
- * `admin` only, and only within the admin's own organization. This is a
- * true cascade with no "must be empty first" guard, same as
+ * expense, user, or customs/terminal/examination/transportation record —
+ * org `admin` only, and only within the admin's own organization. This is
+ * a true cascade with no "must be empty first" guard, same as
  * delete-organization: ordinary RLS soft-delete/DELETE is left
  * completely untouched for every other role.
  *
- * Every entity except `customer` cascades or nulls out correctly via
- * existing FK actions on the tables themselves, so a single service-role
- * .delete() is enough and already atomic. `customer` is the one case
- * where several tables (invoices, payments, quotations, shipments,
- * shipment_plans) RESTRICT on customer_id, so it goes through
+ * Every entity except `customer` and `user` cascades or nulls out
+ * correctly via existing FK actions on the tables themselves, so a single
+ * service-role .delete() is enough and already atomic. `customer` is the
+ * one case where several tables (invoices, payments, quotations,
+ * shipments, shipment_plans) RESTRICT on customer_id, so it goes through
  * admin_force_delete_customer() — one atomic transaction — instead.
+ *
+ * `user` is its own case for three reasons a plain .delete() on `profiles`
+ * doesn't cover:
+ *   1. It has to go through auth.admin.deleteUser() so the login itself is
+ *      revoked, not just the profile row (that cascades to profiles
+ *      automatically — see profiles.id's own FK).
+ *   2. A branch admin may only delete a user in their own branch — same
+ *      can_manage_user() rule as editing/disabling/resetting a password
+ *      (see migration 042). Every other entity type here already implies
+ *      "same org" is enough because branch admins don't reach this UI
+ *      action for them.
+ *   3. Deleting the organization's last active admin would orphan it —
+ *      blocked outright, there's no recovering from that short of
+ *      platform support.
  */
 
 function corsHeaders(req: Request) {
@@ -48,6 +62,7 @@ const ENTITY_TABLES: Record<string, string> = {
   terminal_operations: "terminal_operations",
   shipment_examinations: "shipment_examinations",
   shipment_transportation: "shipment_transportation",
+  user: "profiles",
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -61,6 +76,7 @@ const ENTITY_LABELS: Record<string, string> = {
   terminal_operations: "terminal record",
   shipment_examinations: "examination record",
   shipment_transportation: "transportation leg",
+  user: "user",
 };
 
 Deno.serve(async (req: Request) => {
@@ -117,6 +133,66 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Users have their own flow — see the comment at the top of this file
+    // for why a plain .delete() on profiles doesn't work here.
+    if (body.entity_type === "user") {
+      if (body.id === callerData.user.id) {
+        return json(400, { error: "You can't delete your own account" });
+      }
+
+      const { data: target } = await admin
+        .from("profiles")
+        .select("id, branch_id, organization_id, role, full_name")
+        .eq("id", body.id)
+        .maybeSingle();
+      if (!target) return json(404, { error: "User not found" });
+
+      const { data: canManage } = await supabaseClient.rpc("can_manage_user", {
+        p_target_branch_id: target.branch_id,
+        p_target_org_id: target.organization_id,
+      });
+      if (!canManage) {
+        return json(403, { error: "You don't have permission to delete this user" });
+      }
+
+      if (target.role === "admin") {
+        const { count: otherAdmins } = await admin
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", target.organization_id)
+          .eq("role", "admin")
+          .eq("is_active", true)
+          .is("deleted_at", null)
+          .neq("id", target.id);
+        if (!otherAdmins) {
+          return json(400, {
+            error: "This is the last admin in the organization — it can't be deleted",
+          });
+        }
+      }
+
+      await admin.from("activities").insert({
+        user_id: callerData.user.id,
+        branch_id: target.branch_id,
+        organization_id: target.branch_id ? null : target.organization_id,
+        action: "user.permanently_deleted",
+        entity_type: "profiles",
+        entity_id: target.id,
+        description: `Permanently deleted user "${target.full_name}"`,
+      });
+
+      // Cascades to profiles automatically (profiles.id references
+      // auth.users(id) ON DELETE CASCADE) and, as of migration 043, nulls
+      // out this user's attribution everywhere else instead of blocking.
+      const { error: authDeleteError } = await admin.auth.admin.deleteUser(target.id);
+      if (authDeleteError) {
+        console.error("admin-delete-record (user) error:", authDeleteError.message);
+        return json(400, { error: `Failed to delete this user: ${authDeleteError.message}` });
+      }
+
+      return json(200, { success: true });
+    }
 
     const { data: record } = await admin
       .from(table)

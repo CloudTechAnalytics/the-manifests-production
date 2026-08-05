@@ -15,10 +15,12 @@ import {
   UserPlus,
   Clock,
   X,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { adminForceDelete } from '@/lib/utils/admin-delete';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -848,6 +850,27 @@ export default function UsersPage() {
     }
   };
 
+  // --- Permanently delete user ---------------------------------------------
+
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeletingUser(true);
+    try {
+      const result = await adminForceDelete('user', deleteTarget.id);
+      if (!result.success) throw new Error(result.error);
+      toast.success(`"${deleteTarget.full_name}" was permanently deleted`);
+      setDeleteTarget(null);
+      loadUsers();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete user'));
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
   // --- Render ---------------------------------------------------------------
 
   // Access control: non-admins see "Access Denied"
@@ -1132,6 +1155,24 @@ export default function UsersPage() {
                                 }`}
                               />
                             </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title={
+                                  isSelf
+                                    ? "You can't delete your own account"
+                                    : !canManage
+                                      ? "Outside your branch — you can't delete this user"
+                                      : 'Delete permanently'
+                                }
+                                disabled={isSelf || !canManage}
+                                onClick={() => setDeleteTarget(user)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1772,6 +1813,45 @@ export default function UsersPage() {
             >
               {toggling && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               {toggleTarget?.is_active ? 'Disable' : 'Enable'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Permanent Delete Confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete User Permanently
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes &quot;{deleteTarget?.full_name}&quot; (
+              {deleteTarget?.email}) and revokes their login entirely — this cannot
+              be undone. Every shipment, invoice, and document they ever created or
+              touched stays exactly as it is; it just no longer names them as who
+              did it. If you only want to stop them from signing in but keep the
+              option to restore access later, use Disable instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingUser}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteUser();
+              }}
+              disabled={deletingUser}
+            >
+              {deletingUser && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

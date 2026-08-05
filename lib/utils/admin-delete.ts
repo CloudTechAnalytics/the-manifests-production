@@ -10,7 +10,8 @@ export type AdminDeleteEntityType =
   | 'shipment_customs'
   | 'terminal_operations'
   | 'shipment_examinations'
-  | 'shipment_transportation';
+  | 'shipment_transportation'
+  | 'user';
 
 /**
  * Calls the admin-delete-record edge function — a permanent, cascading
