@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerProfile } = await supabaseClient
       .from("profiles")
-      .select("role, is_active, organization_id")
+      .select("role, is_active, organization_id, branch_id")
       .eq("id", callerId)
       .maybeSingle();
 
@@ -87,6 +87,15 @@ Deno.serve(async (req: Request) => {
     ) {
       return json(403, { error: "Only active admins can create users" });
     }
+
+    // A "branch admin" is an org admin who is themselves tied to a branch;
+    // a "general admin" is an org admin with no branch (or platform_admin).
+    // A branch admin may only place users inside their own branch — the
+    // check itself is enforced further down once the target branch is known.
+    const callerIsBranchAdmin =
+      !callerIsPlatformAdmin &&
+      callerProfile.role === "admin" &&
+      !!callerProfile.branch_id;
 
     let body: {
       email?: string;
@@ -151,9 +160,23 @@ Deno.serve(async (req: Request) => {
       ) {
         return json(403, { error: "That branch belongs to another organization" });
       }
+      // A branch admin cannot create users outside their own branch, even
+      // within the same organization.
+      if (callerIsBranchAdmin && body.branch_id !== callerProfile.branch_id) {
+        return json(403, {
+          error: "You can only create users in your own branch",
+        });
+      }
       organizationId = targetBranch.organization_id;
       branchId = body.branch_id;
     } else if (hasAdminRole) {
+      // A branch-scoped admin must not mint a branchless (org-wide) admin —
+      // that would hand out access wider than their own.
+      if (callerIsBranchAdmin) {
+        return json(403, {
+          error: "You can only create users in your own branch",
+        });
+      }
       // No branch yet — only valid for a brand-new organization's first
       // admin. A platform_admin must say which org; an org admin creating
       // another admin gets their own organization pinned, same as always.

@@ -178,6 +178,15 @@ interface InviteForm {
 export default function UsersPage() {
   const { profile, hasRole } = useAuth();
 
+  // A "branch admin" is an org admin who is themselves attached to a branch.
+  // They may only create/invite users into that one branch, so the branch
+  // pickers below are locked to it. A "general admin" (admin with no branch)
+  // and platform_admin keep full choice of branch. The edge functions
+  // enforce the same rule server-side — this is just the matching UI.
+  const isBranchAdmin =
+    profile?.role === 'admin' && !!profile?.branch_id;
+  const lockedBranchId = isBranchAdmin ? profile!.branch_id! : null;
+
   const [users, setUsers] = useState<Profile[]>([]);
   // Additional roles beyond each user's primary profiles.role — a user
   // can hold several departments at once. Keyed by user id.
@@ -242,6 +251,25 @@ export default function UsersPage() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Only branches a branch admin is allowed to assign into. A general admin
+  // or platform_admin sees them all; a branch admin sees only their own.
+  const assignableBranches = lockedBranchId
+    ? branches.filter((b) => b.id === lockedBranchId)
+    : branches;
+
+  // When a branch admin opens the create/invite dialog, pin the branch to
+  // theirs so the (locked) picker isn't left empty.
+  useEffect(() => {
+    if (createOpen && lockedBranchId) {
+      setCreateForm((f) => ({ ...f, branch_id: lockedBranchId }));
+    }
+  }, [createOpen, lockedBranchId]);
+  useEffect(() => {
+    if (inviteOpen && lockedBranchId) {
+      setInviteForm((f) => ({ ...f, branch_id: lockedBranchId }));
+    }
+  }, [inviteOpen, lockedBranchId]);
 
   // --- Data loading --------------------------------------------------------
 
@@ -1246,18 +1274,24 @@ export default function UsersPage() {
                 onValueChange={(v) =>
                   setCreateForm((f) => ({ ...f, branch_id: v }))
                 }
+                disabled={isBranchAdmin}
               >
                 <SelectTrigger id="create-branch">
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((b) => (
+                  {assignableBranches.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {isBranchAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  As a branch admin you can only add users to your own branch.
+                </p>
+              )}
               {createFormErrors.branch_id && (
                 <p className="text-xs text-destructive">
                   {createFormErrors.branch_id}
@@ -1396,18 +1430,24 @@ export default function UsersPage() {
                   onValueChange={(v) =>
                     setInviteForm((f) => ({ ...f, branch_id: v }))
                   }
+                  disabled={isBranchAdmin}
                 >
                   <SelectTrigger id="invite-branch">
                     <SelectValue placeholder="Select branch" />
                   </SelectTrigger>
                   <SelectContent>
-                    {branches.map((b) => (
+                    {assignableBranches.map((b) => (
                       <SelectItem key={b.id} value={b.id}>
                         {b.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {isBranchAdmin && (
+                  <p className="text-xs text-muted-foreground">
+                    As a branch admin you can only invite users to your own branch.
+                  </p>
+                )}
                 {inviteFormErrors.branch_id && (
                   <p className="text-xs text-destructive">{inviteFormErrors.branch_id}</p>
                 )}

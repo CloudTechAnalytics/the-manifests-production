@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: caller } = await supabaseClient
       .from("profiles")
-      .select("id, role, is_active, organization_id")
+      .select("id, role, is_active, organization_id, branch_id")
       .eq("id", callerData.user.id)
       .maybeSingle();
 
@@ -103,6 +103,11 @@ Deno.serve(async (req: Request) => {
     if (!isPlatformAdmin && !isOrgAdmin) {
       return json(403, { error: "Only admins can invite users" });
     }
+
+    // A branch admin (org admin tied to a branch) may only invite into
+    // their own branch; a general admin (no branch) or platform_admin may
+    // invite anywhere in scope. Enforced once the target branch is known.
+    const isBranchAdmin = isOrgAdmin && !!caller.branch_id;
 
     let body: {
       email?: string;
@@ -143,6 +148,14 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!org) return json(404, { error: "Organization not found" });
     if (!org.is_active) return json(400, { error: "Organization is inactive" });
+
+    // A branch admin can only invite into their own branch — reject a
+    // mismatched or missing branch before any other branch handling.
+    if (isBranchAdmin && body.branch_id !== caller.branch_id) {
+      return json(403, {
+        error: "You can only invite users to your own branch",
+      });
+    }
 
     // A branch, when given, must belong to the invited organization —
     // otherwise an invite could straddle two tenants.
