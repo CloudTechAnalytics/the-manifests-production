@@ -102,6 +102,18 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "Cannot reset password for inactive user" });
     }
 
+    // Same rule as the RLS policy on profiles (can_manage_user) — an
+    // org-wide admin can reset anyone in their org, a branch admin only
+    // someone in their own branch. Checked via the caller's own client so
+    // it runs as the caller, not as service-role.
+    const { data: canManage } = await supabaseClient.rpc("can_manage_user", {
+      p_target_branch_id: targetProfile.branch_id,
+      p_target_org_id: targetProfile.organization_id,
+    });
+    if (!canManage) {
+      return json(403, { error: "You don't have permission to reset this user's password" });
+    }
+
     const { error: updateError } = await admin.auth.admin.updateUserById(
       body.user_id,
       { password: body.new_password },

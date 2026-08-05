@@ -104,12 +104,22 @@ Deno.serve(async (req: Request) => {
 
     const { data: target } = await admin
       .from("profiles")
-      .select("id, organization_id, full_name")
+      .select("id, organization_id, branch_id, full_name")
       .eq("id", body.user_id)
       .maybeSingle();
     if (!target) return json(404, { error: "User not found" });
     if (target.organization_id !== caller.organization_id) {
       return json(403, { error: "That user belongs to another organization" });
+    }
+
+    // Same rule as the RLS policy on profiles (can_manage_user) — a branch
+    // admin can only change roles for someone in their own branch.
+    const { data: canManage } = await supabaseClient.rpc("can_manage_user", {
+      p_target_branch_id: target.branch_id,
+      p_target_org_id: target.organization_id,
+    });
+    if (!canManage) {
+      return json(403, { error: "You don't have permission to change this user's roles" });
     }
 
     const { error: deleteError } = await admin

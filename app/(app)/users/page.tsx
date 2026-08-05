@@ -187,6 +187,14 @@ export default function UsersPage() {
     profile?.role === 'admin' && !!profile?.branch_id;
   const lockedBranchId = isBranchAdmin ? profile!.branch_id! : null;
 
+  // Matches can_manage_user() in the database exactly — a branch admin
+  // can only edit/disable/reset-password users in their own branch (which
+  // also means never the org-wide admin, whose branch_id is null). RLS and
+  // both edge functions enforce this too; this just keeps the UI from
+  // offering an action that would be rejected anyway.
+  const canManageUser = (target: Profile) =>
+    !isBranchAdmin || target.branch_id === profile?.branch_id;
+
   const [users, setUsers] = useState<Profile[]>([]);
   // Additional roles beyond each user's primary profiles.role — a user
   // can hold several departments at once. Keyed by user id.
@@ -1010,6 +1018,7 @@ export default function UsersPage() {
                   {users.map((user) => {
                     const allRoles = [user.role, ...(additionalRolesByUser[user.id] ?? [])];
                     const isSelf = user.id === profile.id;
+                    const canManage = canManageUser(user);
                     return (
                       <TableRow key={user.id} className="transition-colors hover:bg-accent/60">
                         <TableCell className="font-medium">
@@ -1073,7 +1082,12 @@ export default function UsersPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              title="Edit user"
+                              title={
+                                canManage
+                                  ? 'Edit user'
+                                  : "Outside your branch — you can't edit this user"
+                              }
+                              disabled={!canManage}
                               onClick={() => openEditDialog(user)}
                             >
                               <Pencil className="h-4 w-4" />
@@ -1082,7 +1096,12 @@ export default function UsersPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              title="Reset password"
+                              title={
+                                canManage
+                                  ? 'Reset password'
+                                  : "Outside your branch — you can't reset this user's password"
+                              }
+                              disabled={!canManage}
                               onClick={() => {
                                 setResetTarget(user);
                                 setResetPassword('');
@@ -1096,9 +1115,13 @@ export default function UsersPage() {
                               size="icon"
                               className="h-8 w-8"
                               title={
-                                user.is_active ? 'Disable user' : 'Enable user'
+                                !canManage
+                                  ? "Outside your branch — you can't disable this user"
+                                  : user.is_active
+                                    ? 'Disable user'
+                                    : 'Enable user'
                               }
-                              disabled={isSelf}
+                              disabled={isSelf || !canManage}
                               onClick={() => setToggleTarget(user)}
                             >
                               <Power
@@ -1572,7 +1595,7 @@ export default function UsersPage() {
               )}
               {editTarget?.id === profile?.id && (
                 <p className="text-xs text-muted-foreground">
-                  You can't change your own roles.
+                  You can&apos;t change your own roles.
                 </p>
               )}
             </div>
