@@ -936,7 +936,7 @@ export default function ShipmentDetailPage() {
                     label="Type"
                     value={
                       shipment.shipment_type
-                        ? SHIPMENT_TYPE_LABELS[shipment.shipment_type]
+                        ? SHIPMENT_TYPE_LABELS[shipment.shipment_type] ?? shipment.shipment_type
                         : null
                     }
                   />
@@ -1129,7 +1129,7 @@ export default function ShipmentDetailPage() {
                     <SelectContent>
                       {allowedTimelineStatuses.map((s) => (
                         <SelectItem key={s} value={s}>
-                          {SHIPMENT_STATUS_META[s].label}
+                          {SHIPMENT_STATUS_META[s]?.label ?? s}
                           {s === shipment.status && ' (current)'}
                         </SelectItem>
                       ))}

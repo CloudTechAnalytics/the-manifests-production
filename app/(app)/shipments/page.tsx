@@ -421,7 +421,7 @@ export default function ShipmentsPage() {
                           <div className="flex items-center gap-1.5">
                             <TypeIcon className="h-4 w-4 text-blue-500" />
                             <span className="text-muted-foreground">
-                              {SHIPMENT_TYPE_LABELS[s.shipment_type]}
+                              {SHIPMENT_TYPE_LABELS[s.shipment_type] ?? s.shipment_type}
                             </span>
                           </div>
                         ) : (

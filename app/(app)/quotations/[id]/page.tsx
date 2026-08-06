@@ -1094,14 +1094,14 @@ export default function QuotationDetailPage() {
                     quotation.shipment_direction
                       ? quotation.shipment_direction[0].toUpperCase() + quotation.shipment_direction.slice(1)
                       : null,
-                    quotation.cargo_type ? CARGO_TYPE_LABELS[quotation.cargo_type] : null,
+                    quotation.cargo_type ? CARGO_TYPE_LABELS[quotation.cargo_type] ?? quotation.cargo_type : null,
                   ]
                     .filter(Boolean)
                     .join(' · ') || null
                 }
               />
               {quotation.shipment_type && ShipmentIcon && (
-                <InfoRow icon={ShipmentIcon} label="Transport Mode" value={SHIPMENT_TYPE_LABELS[quotation.shipment_type]} />
+                <InfoRow icon={ShipmentIcon} label="Transport Mode" value={SHIPMENT_TYPE_LABELS[quotation.shipment_type] ?? quotation.shipment_type} />
               )}
               <InfoRow icon={FileText} label="Incoterm" value={quotation.incoterm} />
               <InfoRow icon={MapPin} label="Origin" value={quotation.origin_port ?? quotation.origin} />
@@ -1590,8 +1590,8 @@ function PrintQuotation({ quotation }: { quotation: QuotationDetail }) {
           {quotation.shipment_type && ShipmentIcon && (
             <p className="capitalize">
               {quotation.shipment_direction ? `${quotation.shipment_direction} · ` : ''}
-              {SHIPMENT_TYPE_LABELS[quotation.shipment_type]} Freight
-              {quotation.cargo_type ? ` · ${CARGO_TYPE_LABELS[quotation.cargo_type]}` : ''}
+              {SHIPMENT_TYPE_LABELS[quotation.shipment_type] ?? quotation.shipment_type} Freight
+              {quotation.cargo_type ? ` · ${CARGO_TYPE_LABELS[quotation.cargo_type] ?? quotation.cargo_type}` : ''}
             </p>
           )}
           {quotation.incoterm && <p className="text-muted-foreground">Incoterm: {quotation.incoterm}</p>}

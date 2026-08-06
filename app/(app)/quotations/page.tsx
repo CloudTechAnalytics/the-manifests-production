@@ -393,7 +393,7 @@ export default function QuotationsPage() {
                           <div className="flex items-center gap-1.5">
                             <ShipmentIcon className="h-4 w-4 text-blue-500" />
                             <span className="text-muted-foreground">
-                              {SHIPMENT_TYPE_LABELS[q.shipment_type]}
+                              {SHIPMENT_TYPE_LABELS[q.shipment_type] ?? q.shipment_type}
                             </span>
                           </div>
                         ) : (
