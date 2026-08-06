@@ -26,7 +26,9 @@ export type QuotationStatus =
   | 'sent'
   | 'accepted'
   | 'rejected'
-  | 'expired';
+  | 'expired'
+  | 'cancelled'
+  | 'archived';
 
 export type ShipmentType = 'air' | 'sea' | 'road' | 'rail' | 'multimodal';
 
@@ -83,6 +85,10 @@ export interface Branch {
   phone: string | null;
   email: string | null;
   is_active: boolean;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  bank_swift_code: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -118,6 +124,8 @@ export interface Organization {
   logo_url: string | null;
   is_active: boolean;
   quotation_approval_required: boolean;
+  quotation_discount_threshold_percent: number | null;
+  quotation_amount_threshold: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -290,6 +298,15 @@ export interface Quotation {
   converted_shipment_id: string | null;
   converted_at: string | null;
 
+  // Versioning: a version IS a quotation row, linked back to its chain
+  parent_quotation_id: string | null;
+  root_quotation_id: string | null;
+  version: number;
+  is_latest_version: boolean;
+
+  // Scope of service: "included" mirrors `services`, this is "not included"
+  excluded_services: string[];
+
   customer?: Customer | null;
   branch?: Branch | null;
   items?: QuotationItem[];
@@ -308,6 +325,9 @@ export interface QuotationItem {
   tax_rate: number;
   discount_rate: number;
   service_key: string | null;
+  unit: string | null;
+  notes: string | null;
+  sort_order: number;
   total: number;
   created_at: string;
   updated_at: string;
@@ -482,6 +502,7 @@ export interface DocumentRecord {
   customer_id: string | null;
   plan_id: string | null;
   examination_id: string | null;
+  quotation_id: string | null;
   name: string;
   category: DocumentCategory;
   file_path: string;

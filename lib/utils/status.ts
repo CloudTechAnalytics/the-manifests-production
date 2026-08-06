@@ -69,6 +69,8 @@ export const QUOTATION_STATUS_META: Record<
   accepted: { label: 'Accepted', color: 'bg-green-100 text-green-700' },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
   expired: { label: 'Expired', color: 'bg-gray-100 text-gray-500' },
+  cancelled: { label: 'Cancelled', color: 'bg-gray-200 text-gray-800' },
+  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600' },
 };
 
 export const CUSTOMER_STATUS_META: Record<

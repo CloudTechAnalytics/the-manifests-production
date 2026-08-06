@@ -36,6 +36,7 @@ import {
   RequiredDocumentsSection,
   ValiditySection,
 } from '@/components/quotations/payment-docs-validity-section';
+import { ScopeOfServiceSection } from '@/components/quotations/scope-of-service-section';
 import { QuotationSummaryPanel } from '@/components/quotations/quotation-summary-panel';
 import type { Customer, Profile } from '@/types';
 
@@ -162,6 +163,7 @@ export default function NewQuotationPage() {
           insurance_required: values.insurance_required,
           cargo_value: values.cargo_value ?? null,
           services: values.services,
+          excluded_services: values.excluded_services,
           payment_terms: values.payment_terms || null,
           payment_method: values.payment_method || null,
           required_documents: values.required_documents,
@@ -187,7 +189,7 @@ export default function NewQuotationPage() {
 
       const quotationId = quotationData.id;
 
-      const itemsPayload = values.items.map((item) => ({
+      const itemsPayload = values.items.map((item, index) => ({
         quotation_id: quotationId,
         service_key: item.service_key,
         description: item.description,
@@ -195,6 +197,9 @@ export default function NewQuotationPage() {
         unit_price: Number(item.unit_price),
         discount_rate: Number(item.discount_rate),
         tax_rate: Number(item.tax_rate),
+        unit: item.unit || null,
+        notes: item.notes || null,
+        sort_order: index,
         total: Math.round(computeLineTotal(item) * 100) / 100,
       }));
 
@@ -289,11 +294,12 @@ export default function NewQuotationPage() {
             <ShipmentInfoSection />
             <CargoInfoSection />
             <ServicesChargeSection />
+            <ScopeOfServiceSection />
             <PaymentTermsSection />
             <RequiredDocumentsSection />
             <ValiditySection />
 
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">
               <Link href="/quotations" className="sm:shrink-0">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Cancel
@@ -301,7 +307,7 @@ export default function NewQuotationPage() {
               </Link>
               <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
                 {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                Create Quotation
+                Save Draft
               </Button>
             </div>
           </div>

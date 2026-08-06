@@ -101,6 +101,10 @@ interface BranchForm {
   address: string;
   phone: string;
   email: string;
+  bank_name: string;
+  bank_account_name: string;
+  bank_account_number: string;
+  bank_swift_code: string;
 }
 
 const EMPTY_FORM: BranchForm = {
@@ -109,6 +113,10 @@ const EMPTY_FORM: BranchForm = {
   address: '',
   phone: '',
   email: '',
+  bank_name: '',
+  bank_account_name: '',
+  bank_account_number: '',
+  bank_swift_code: '',
 };
 
 type BranchFormErrors = Partial<Record<keyof BranchForm, string>>;
@@ -167,19 +175,63 @@ function SettingsPageInner() {
   const isAdmin = profile?.role === 'admin';
 
   // Section 9 (Quotations) — whether Draft quotations must pass through
-  // Pending Approval / Approved before they can be marked Sent.
+  // Pending Approval / Approved before they can be marked Sent, plus the
+  // discount-% and amount thresholds that force Branch Manager approval
+  // regardless of that toggle.
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [savingApproval, setSavingApproval] = useState(false);
+  const [discountThreshold, setDiscountThreshold] = useState('');
+  const [amountThreshold, setAmountThreshold] = useState('');
+  const [savingThresholds, setSavingThresholds] = useState(false);
 
   useEffect(() => {
     if (!profile?.organization_id) return;
     supabase
       .from('organizations')
-      .select('quotation_approval_required')
+      .select('quotation_approval_required, quotation_discount_threshold_percent, quotation_amount_threshold')
       .eq('id', profile.organization_id)
       .maybeSingle()
-      .then(({ data }) => setApprovalRequired(data?.quotation_approval_required ?? false));
+      .then(({ data }) => {
+        setApprovalRequired(data?.quotation_approval_required ?? false);
+        setDiscountThreshold(data?.quotation_discount_threshold_percent?.toString() ?? '');
+        setAmountThreshold(data?.quotation_amount_threshold?.toString() ?? '');
+      });
   }, [profile?.organization_id]);
+
+  const handleSaveThresholds = async () => {
+    if (!profile?.organization_id) return;
+    setSavingThresholds(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) throw new Error('Your session has expired. Please sign in again.');
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-org-quotation-settings`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            quotation_discount_threshold_percent: discountThreshold.trim() ? Number(discountThreshold) : null,
+            quotation_amount_threshold: amountThreshold.trim() ? Number(amountThreshold) : null,
+          }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error ?? `Request failed (${response.status})`);
+      }
+      toast.success('Approval thresholds updated');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update thresholds'));
+    } finally {
+      setSavingThresholds(false);
+    }
+  };
 
   const handleToggleApprovalRequired = async (checked: boolean) => {
     if (!profile?.organization_id) return;
@@ -324,6 +376,10 @@ function SettingsPageInner() {
           address: createForm.address.trim() || null,
           phone: createForm.phone.trim() || null,
           email: createForm.email.trim() || null,
+          bank_name: createForm.bank_name.trim() || null,
+          bank_account_name: createForm.bank_account_name.trim() || null,
+          bank_account_number: createForm.bank_account_number.trim() || null,
+          bank_swift_code: createForm.bank_swift_code.trim() || null,
           organization_id: profile.organization_id,
           is_active: true,
         })
@@ -373,6 +429,10 @@ function SettingsPageInner() {
       address: branch.address ?? '',
       phone: branch.phone ?? '',
       email: branch.email ?? '',
+      bank_name: branch.bank_name ?? '',
+      bank_account_name: branch.bank_account_name ?? '',
+      bank_account_number: branch.bank_account_number ?? '',
+      bank_swift_code: branch.bank_swift_code ?? '',
     });
     setEditFormErrors({});
   };
@@ -393,6 +453,10 @@ function SettingsPageInner() {
           address: editForm.address.trim() || null,
           phone: editForm.phone.trim() || null,
           email: editForm.email.trim() || null,
+          bank_name: editForm.bank_name.trim() || null,
+          bank_account_name: editForm.bank_account_name.trim() || null,
+          bank_account_number: editForm.bank_account_number.trim() || null,
+          bank_swift_code: editForm.bank_swift_code.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', editTarget.id);
@@ -890,6 +954,47 @@ function SettingsPageInner() {
                     onCheckedChange={handleToggleApprovalRequired}
                     disabled={savingApproval}
                   />
+                </div>
+
+                <div className="mt-4 space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <p className="text-sm font-medium">Escalation thresholds</p>
+                    <p className="text-sm text-muted-foreground">
+                      A quotation exceeding either value always requires Branch Manager
+                      approval, regardless of the toggle above. Leave blank to disable.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="discount-threshold">Discount % threshold</Label>
+                      <Input
+                        id="discount-threshold"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        placeholder="e.g. 15"
+                        value={discountThreshold}
+                        onChange={(e) => setDiscountThreshold(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="amount-threshold">Amount threshold</Label>
+                      <Input
+                        id="amount-threshold"
+                        type="number"
+                        min="0"
+                        step="1000"
+                        placeholder="e.g. 5000000"
+                        value={amountThreshold}
+                        onChange={(e) => setAmountThreshold(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={handleSaveThresholds} disabled={savingThresholds}>
+                    {savingThresholds && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Save Thresholds
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1455,6 +1560,46 @@ function SettingsPageInner() {
                 )}
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Bank Details (for quotation PDFs)
+              </Label>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="create-bank-name">Bank Name</Label>
+                <Input
+                  id="create-bank-name"
+                  value={createForm.bank_name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, bank_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="create-bank-account-name">Account Name</Label>
+                <Input
+                  id="create-bank-account-name"
+                  value={createForm.bank_account_name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, bank_account_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="create-bank-account-number">Account Number</Label>
+                <Input
+                  id="create-bank-account-number"
+                  value={createForm.bank_account_number}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, bank_account_number: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="create-bank-swift">SWIFT Code</Label>
+                <Input
+                  id="create-bank-swift"
+                  value={createForm.bank_swift_code}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, bank_swift_code: e.target.value }))}
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1585,6 +1730,46 @@ function SettingsPageInner() {
                     {editFormErrors.email}
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Bank Details (for quotation PDFs)
+              </Label>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bank-name">Bank Name</Label>
+                <Input
+                  id="edit-bank-name"
+                  value={editForm.bank_name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bank_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bank-account-name">Account Name</Label>
+                <Input
+                  id="edit-bank-account-name"
+                  value={editForm.bank_account_name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bank_account_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bank-account-number">Account Number</Label>
+                <Input
+                  id="edit-bank-account-number"
+                  value={editForm.bank_account_number}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bank_account_number: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bank-swift">SWIFT Code</Label>
+                <Input
+                  id="edit-bank-swift"
+                  value={editForm.bank_swift_code}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bank_swift_code: e.target.value }))}
+                />
               </div>
             </div>
           </div>

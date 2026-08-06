@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import {
   PAYMENT_TERMS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   REQUIRED_DOCUMENT_OPTIONS,
+  getDefaultRequiredDocuments,
 } from '@/lib/quotation-constants';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { QuotationPriority } from '@/types';
@@ -87,8 +89,21 @@ export function PaymentTermsSection() {
 
 /** Section 7 — Required Documents checklist. */
 export function RequiredDocumentsSection() {
-  const { watch, setValue } = useFormContext<QuotationFormValues>();
+  const { watch, getValues, setValue } = useFormContext<QuotationFormValues>();
   const selected = watch('required_documents') ?? [];
+  const direction = watch('shipment_direction');
+
+  // Pre-fill the standard checklist for the chosen direction the first
+  // time it's picked — guarded on "still empty" so it never clobbers a
+  // manual edit made afterwards.
+  const lastAppliedDirection = useRef<string | null>(null);
+  useEffect(() => {
+    if (!direction || direction === lastAppliedDirection.current) return;
+    if ((getValues('required_documents') ?? []).length === 0) {
+      setValue('required_documents', getDefaultRequiredDocuments(direction));
+    }
+    lastAppliedDirection.current = direction;
+  }, [direction, getValues, setValue]);
 
   const toggle = (doc: string, checked: boolean) => {
     setValue(

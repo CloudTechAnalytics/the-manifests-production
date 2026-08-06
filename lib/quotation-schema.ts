@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Organization } from '@/types';
 
 /**
  * Single source of truth for the quotation form — shared by New and Edit
@@ -18,6 +19,8 @@ export const chargeRowSchema = z.object({
   unit_price: z.coerce.number().min(0, 'Unit price must be ≥ 0'),
   discount_rate: z.coerce.number().min(0, 'Discount must be ≥ 0').max(100, 'Discount must be ≤ 100'),
   tax_rate: z.coerce.number().min(0, 'Tax rate must be ≥ 0').max(100, 'Tax rate must be ≤ 100'),
+  unit: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
 });
 
 export const quotationSchema = z.object({
@@ -58,6 +61,9 @@ export const quotationSchema = z.object({
 
   // Section 4: Services Required
   services: z.array(z.string()),
+
+  // Scope of Service: "Not Included" — "Included" mirrors `services` above
+  excluded_services: z.array(z.string()),
 
   // Section 5: Charge Breakdown
   items: z.array(chargeRowSchema).min(1, 'At least one charge is required'),
@@ -111,8 +117,18 @@ export const QUOTATION_FORM_DEFAULTS: QuotationFormValues = {
   insurance_required: false,
   cargo_value: undefined,
   services: [],
+  excluded_services: [],
   items: [
-    { service_key: null, description: '', quantity: 1, unit_price: 0, discount_rate: 0, tax_rate: 0 },
+    {
+      service_key: null,
+      description: '',
+      quantity: 1,
+      unit_price: 0,
+      discount_rate: 0,
+      tax_rate: 0,
+      unit: '',
+      notes: '',
+    },
   ],
   payment_terms: '',
   payment_method: '',
@@ -178,4 +194,58 @@ export function computeQuotationTotals(items: ChargeRowValues[]): QuotationTotal
     taxAmount: round(taxAmount),
     total: round(total),
   };
+}
+
+/**
+ * How "done" a draft quotation looks, for the Completion % bar — a
+ * weighted checklist of fields that are optional to save but expected
+ * on a real, customer-ready quote. Not validation (the zod schema
+ * already covers what's actually required to save).
+ */
+export function computeQuotationCompleteness(values: QuotationFormValues): number {
+  const checks: boolean[] = [
+    !!values.contact_person,
+    !!values.contact_email,
+    !!values.sales_rep_id,
+    !!values.incoterm,
+    !!values.expected_shipping_date,
+    !!values.expected_arrival_date,
+    !!values.commodity_description,
+    !!values.hs_code,
+    (values.weight ?? 0) > 0,
+    (values.cargo_value ?? 0) > 0,
+    values.services.length > 0,
+    !!values.payment_terms,
+    !!values.payment_method,
+    values.required_documents.length > 0,
+    !!values.notes,
+    !!values.terms,
+  ];
+  const done = checks.filter(Boolean).length;
+  return Math.round((done / checks.length) * 100);
+}
+
+/**
+ * Why a quotation needs escalated (Branch Manager, not just any admin)
+ * approval — org-configured discount-% and amount thresholds. Returns
+ * null when neither threshold is configured or neither is tripped.
+ */
+export function computeApprovalReason(
+  totals: QuotationTotals,
+  org: Pick<Organization, 'quotation_discount_threshold_percent' | 'quotation_amount_threshold'>
+): string | null {
+  const reasons: string[] = [];
+  const discountPercent = totals.subtotal > 0 ? (totals.discountAmount / totals.subtotal) * 100 : 0;
+
+  if (
+    org.quotation_discount_threshold_percent != null &&
+    discountPercent > org.quotation_discount_threshold_percent
+  ) {
+    reasons.push(`Exceeds ${org.quotation_discount_threshold_percent}% discount threshold`);
+  }
+  if (org.quotation_amount_threshold != null && totals.total > org.quotation_amount_threshold) {
+    reasons.push(`Exceeds ${org.quotation_amount_threshold.toLocaleString()} amount threshold`);
+  }
+
+  return reasons.length > 0 ? reasons.join(' · ') : null;
 }

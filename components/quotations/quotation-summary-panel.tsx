@@ -5,9 +5,9 @@ import { Ship, Plane, Truck, Package2, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { formatCurrency } from '@/lib/utils/status';
-import { QUOTATION_SERVICES } from '@/lib/quotation-constants';
-import { computeQuotationTotals } from '@/lib/quotation-schema';
+import { formatCurrency, formatDate } from '@/lib/utils/status';
+import { QUOTATION_SERVICES, paymentTermsLabel } from '@/lib/quotation-constants';
+import { computeQuotationTotals, computeQuotationCompleteness } from '@/lib/quotation-schema';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { Customer, QuotationStatus } from '@/types';
 import { QUOTATION_STATUS_META } from '@/lib/utils/status';
@@ -33,6 +33,8 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
   const totals = computeQuotationTotals(values.items ?? []);
   const ModeIcon = values.shipment_type ? MODE_ICON[values.shipment_type] : MapPin;
   const statusMeta = status ? QUOTATION_STATUS_META[status] : null;
+  const showCompleteness = !status || status === 'draft' || status === 'pending_approval';
+  const completeness = computeQuotationCompleteness(values);
 
   return (
     <Card className="sticky top-6 border-primary/20 bg-primary/[0.03]">
@@ -44,6 +46,21 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
           <Badge variant="secondary" className={statusMeta.color}>
             {statusMeta.label}
           </Badge>
+        )}
+
+        {showCompleteness && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Quotation Completion</span>
+              <span className="font-medium">{completeness}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${completeness}%` }}
+              />
+            </div>
+          </div>
         )}
 
         <div className="space-y-2 text-sm">
@@ -123,6 +140,21 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
           ) : (
             <p className="text-sm text-muted-foreground">None selected</p>
           )}
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Payment Terms</span>
+            <span className="max-w-[60%] truncate text-right font-medium">
+              {values.payment_terms ? paymentTermsLabel(values.payment_terms) : '—'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Validity</span>
+            <span className="font-medium">{values.valid_until ? formatDate(values.valid_until) : '—'}</span>
+          </div>
         </div>
 
         <Separator />

@@ -159,6 +159,8 @@ export default function SalesPage() {
       accepted: 0,
       rejected: 0,
       expired: 0,
+      cancelled: 0,
+      archived: 0,
     };
     quotations.forEach((q) => {
       counts[q.status] = (counts[q.status] ?? 0) + 1;

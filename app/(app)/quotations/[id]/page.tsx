@@ -29,6 +29,13 @@ import {
   ShieldCheck,
   Weight,
   Boxes,
+  Ban,
+  Archive,
+  Eye,
+  Download,
+  Mail,
+  GitBranch,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
@@ -87,8 +94,15 @@ import {
   formatDateTime,
   formatCurrency,
 } from '@/lib/utils/status';
-import { QUOTATION_SERVICES, paymentTermsLabel, paymentMethodLabel } from '@/lib/quotation-constants';
+import {
+  QUOTATION_SERVICES,
+  paymentTermsLabel,
+  paymentMethodLabel,
+} from '@/lib/quotation-constants';
+import { computeApprovalReason, type QuotationTotals } from '@/lib/quotation-schema';
 import { ConvertToShipmentDialog } from '@/components/quotations/convert-to-shipment-dialog';
+import { QuotationAttachmentsPanel } from '@/components/quotations/quotation-attachments-panel';
+import { VersionHistoryCard } from '@/components/quotations/version-history-card';
 import type {
   Quotation,
   QuotationItem,
@@ -97,6 +111,7 @@ import type {
   Customer,
   Branch,
   Profile,
+  Organization,
 } from '@/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -149,30 +164,39 @@ function getStatusActions(
   approvalRequired: boolean,
   canApprove: boolean
 ): StatusAction[] {
+  const cancelAction: StatusAction = { label: 'Cancel Quotation', target: 'cancelled', icon: Ban };
+
   switch (status) {
     case 'draft':
-      return approvalRequired
-        ? [{ label: 'Submit for Approval', target: 'pending_approval', icon: Send }]
-        : [{ label: 'Mark as Sent', target: 'sent', icon: Send }];
+      return [
+        approvalRequired
+          ? { label: 'Submit for Approval', target: 'pending_approval', icon: Send }
+          : { label: 'Mark as Sent', target: 'sent', icon: Send },
+        cancelAction,
+      ];
     case 'pending_approval':
       return canApprove
         ? [
             { label: 'Approve', target: 'approved', icon: Check },
             { label: 'Reject', target: 'rejected', icon: X },
+            cancelAction,
           ]
-        : [];
+        : [cancelAction];
     case 'approved':
-      return [{ label: 'Mark as Sent', target: 'sent', icon: Send }];
+      return [{ label: 'Mark as Sent', target: 'sent', icon: Send }, cancelAction];
     case 'sent':
       return [
         { label: 'Mark as Accepted', target: 'accepted', icon: Check },
         { label: 'Mark as Rejected', target: 'rejected', icon: X },
         { label: 'Revert to Draft', target: 'draft', icon: FileText },
+        cancelAction,
       ];
     case 'accepted':
       return [];
     case 'rejected':
     case 'expired':
+    case 'archived':
+    case 'cancelled':
       return [{ label: 'Revert to Draft', target: 'draft', icon: FileText }];
     default:
       return [];
@@ -189,15 +213,40 @@ export default function QuotationDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [approvalRequired, setApprovalRequired] = useState(false);
+  const [organization, setOrganization] = useState<Pick<
+    Organization,
+    'name' | 'logo_url' | 'quotation_approval_required' | 'quotation_discount_threshold_percent' | 'quotation_amount_threshold'
+  > | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
-  const [rejectTarget, setRejectTarget] = useState<QuotationStatus | null>(null);
+  // Reject and Cancel share one dialog — both are "terminal-ish" actions
+  // that ask for an optional reason before applying.
+  const [terminalActionTarget, setTerminalActionTarget] = useState<'rejected' | 'cancelled' | null>(null);
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const quotationId = params.id;
   const isAdmin = profile?.role === 'admin';
-  const canApprove = hasRole('admin') || hasRole('branch_manager');
+  const approvalRequired = organization?.quotation_approval_required ?? false;
+  const totals: QuotationTotals = quotation
+    ? {
+        subtotal: quotation.subtotal,
+        discountAmount: quotation.items.reduce(
+          (sum, i) => sum + i.quantity * i.unit_price * (i.discount_rate / 100),
+          0
+        ),
+        taxAmount: quotation.tax_amount,
+        total: quotation.total,
+      }
+    : { subtotal: 0, discountAmount: 0, taxAmount: 0, total: 0 };
+  const approvalReason = organization ? computeApprovalReason(totals, organization) : null;
+  const canApprove = hasRole('branch_manager') || (hasRole('admin') && !approvalReason);
 
   const loadData = useCallback(async () => {
     if (!quotationId) return;
@@ -240,16 +289,34 @@ export default function QuotationDetailPage() {
   }, [loadData]);
 
   // Section 9 gating: whether Draft can go straight to Sent, or must pass
-  // through Pending Approval / Approved first.
+  // through Pending Approval / Approved first — plus the discount/amount
+  // thresholds that force Branch Manager approval regardless, and the
+  // org name/logo the PDF needs.
   useEffect(() => {
     if (!profile?.organization_id) return;
     supabase
       .from('organizations')
-      .select('quotation_approval_required')
+      .select('name, logo_url, quotation_approval_required, quotation_discount_threshold_percent, quotation_amount_threshold')
       .eq('id', profile.organization_id)
       .maybeSingle()
-      .then(({ data }) => setApprovalRequired(data?.quotation_approval_required ?? false));
+      .then(({ data }) => setOrganization(data ?? null));
   }, [profile?.organization_id]);
+
+  // Log a view once per browser session per quotation — not every render.
+  useEffect(() => {
+    if (!quotation || !profile) return;
+    const key = `quotation-viewed-${quotation.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    supabase.from('activities').insert({
+      user_id: profile.id,
+      branch_id: quotation.branch_id,
+      action: 'quotation.viewed',
+      entity_type: 'quotation',
+      entity_id: quotation.id,
+      description: `Viewed quotation ${quotation.quotation_number ?? ''}`,
+    });
+  }, [quotation, profile]);
 
   const handleStatusChange = async (target: QuotationStatus, notes?: string) => {
     if (!quotation || !profile) return;
@@ -265,7 +332,7 @@ export default function QuotationDetailPage() {
         updatePayload.approval_date = new Date().toISOString();
         if (notes) updatePayload.approval_notes = notes;
       }
-      if (target === 'rejected' && notes) {
+      if ((target === 'rejected' || target === 'cancelled') && notes) {
         updatePayload.approval_notes = notes;
       }
 
@@ -283,11 +350,29 @@ export default function QuotationDetailPage() {
       });
 
       // Email the customer about the status change (best-effort — don't
-      // block the status update if this fails)
+      // block the status update if this fails), with the quotation PDF
+      // attached so every status email carries the document.
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const session = sessionData?.session;
         if (session) {
+          let pdfPayload: { pdf_base64?: string; pdf_filename?: string } = {};
+          try {
+            // Dynamically imported — @react-pdf/renderer is large and
+            // otherwise gets bundled into every visit to this page.
+            const { buildQuotationPdfData, renderQuotationPdfBlob, blobToBase64 } = await import(
+              '@/lib/pdf/generate-quotation-pdf'
+            );
+            const pdfData = await buildQuotationPdfData(quotation, organization);
+            const blob = await renderQuotationPdfBlob(pdfData);
+            pdfPayload = {
+              pdf_base64: await blobToBase64(blob),
+              pdf_filename: `${quotation.quotation_number ?? 'quotation'}.pdf`,
+            };
+          } catch (pdfErr) {
+            console.warn('PDF generation for status email failed:', pdfErr);
+          }
+
           const emailResponse = await fetch(
             `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-quotation-status-email`,
             {
@@ -297,7 +382,7 @@ export default function QuotationDetailPage() {
                 Authorization: `Bearer ${session.access_token}`,
                 apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
               },
-              body: JSON.stringify({ quotation_id: quotationId }),
+              body: JSON.stringify({ quotation_id: quotationId, ...pdfPayload }),
             }
           );
           if (!emailResponse.ok) {
@@ -310,7 +395,7 @@ export default function QuotationDetailPage() {
       }
 
       toast.success(`Quotation marked as ${QUOTATION_STATUS_META[target].label}`);
-      setRejectTarget(null);
+      setTerminalActionTarget(null);
       setApprovalNotes('');
       loadData();
     } catch (err) {
@@ -399,6 +484,7 @@ export default function QuotationDetailPage() {
           insurance_required: quotation.insurance_required,
           cargo_value: quotation.cargo_value,
           services: quotation.services,
+          excluded_services: quotation.excluded_services,
           payment_terms: quotation.payment_terms,
           payment_method: quotation.payment_method,
           required_documents: quotation.required_documents,
@@ -425,7 +511,7 @@ export default function QuotationDetailPage() {
       const newId = newQuotation.id;
 
       if (quotation.items && quotation.items.length > 0) {
-        const itemsPayload = quotation.items.map((item) => ({
+        const itemsPayload = quotation.items.map((item, index) => ({
           quotation_id: newId,
           service_key: item.service_key,
           description: item.description,
@@ -433,6 +519,9 @@ export default function QuotationDetailPage() {
           unit_price: item.unit_price,
           discount_rate: item.discount_rate,
           tax_rate: item.tax_rate,
+          unit: item.unit,
+          notes: item.notes,
+          sort_order: index,
           total: item.total,
         }));
 
@@ -466,7 +555,235 @@ export default function QuotationDetailPage() {
     }
   };
 
+  /**
+   * "Create New Version" — an edited revision of THIS deal, not a fresh
+   * unrelated quotation (that's what Duplicate is for). Clones quotation
+   * + items same as Duplicate, but links back via parent/root/version and
+   * flips the source row to no-longer-latest, then goes straight to the
+   * new version's edit form since the whole point is to change something.
+   */
+  const handleCreateVersion = async () => {
+    if (!quotation || !profile?.id) return;
+    setCreatingVersion(true);
+    try {
+      const rootId = quotation.root_quotation_id ?? quotation.id;
+
+      const { data: newQuotation, error: quoteError } = await supabase
+        .from('quotations')
+        .insert({
+          customer_id: quotation.customer_id,
+          branch_id: quotation.branch_id,
+          status: 'draft',
+          parent_quotation_id: quotation.id,
+          root_quotation_id: rootId,
+          version: quotation.version + 1,
+          is_latest_version: true,
+          contact_person: quotation.contact_person,
+          contact_email: quotation.contact_email,
+          contact_phone: quotation.contact_phone,
+          sales_rep_id: quotation.sales_rep_id,
+          shipment_direction: quotation.shipment_direction,
+          shipment_type: quotation.shipment_type,
+          cargo_type: quotation.cargo_type,
+          incoterm: quotation.incoterm,
+          origin: quotation.origin,
+          destination: quotation.destination,
+          origin_country: quotation.origin_country,
+          origin_port: quotation.origin_port,
+          destination_country: quotation.destination_country,
+          destination_port: quotation.destination_port,
+          expected_shipping_date: quotation.expected_shipping_date,
+          expected_arrival_date: quotation.expected_arrival_date,
+          commodity_description: quotation.commodity_description,
+          hs_code: quotation.hs_code,
+          container_count: quotation.container_count,
+          container_size: quotation.container_size,
+          weight: quotation.weight,
+          weight_unit: quotation.weight_unit,
+          cbm: quotation.cbm,
+          packages_count: quotation.packages_count,
+          package_type: quotation.package_type,
+          dangerous_cargo: quotation.dangerous_cargo,
+          temperature_controlled: quotation.temperature_controlled,
+          insurance_required: quotation.insurance_required,
+          cargo_value: quotation.cargo_value,
+          services: quotation.services,
+          excluded_services: quotation.excluded_services,
+          payment_terms: quotation.payment_terms,
+          payment_method: quotation.payment_method,
+          required_documents: quotation.required_documents,
+          priority: quotation.priority,
+          valid_until: quotation.valid_until,
+          subtotal: quotation.subtotal,
+          tax_amount: quotation.tax_amount,
+          total: quotation.total,
+          currency: quotation.currency,
+          notes: quotation.notes,
+          customer_notes: quotation.customer_notes,
+          terms: quotation.terms,
+          requested_by: profile.id,
+          created_by: profile.id,
+          updated_by: profile.id,
+        })
+        .select('id')
+        .single();
+
+      if (quoteError || !newQuotation) {
+        throw new Error(quoteError?.message ?? 'Failed to create new version');
+      }
+
+      const newId = newQuotation.id;
+
+      if (quotation.items && quotation.items.length > 0) {
+        const itemsPayload = quotation.items.map((item, index) => ({
+          quotation_id: newId,
+          service_key: item.service_key,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          discount_rate: item.discount_rate,
+          tax_rate: item.tax_rate,
+          unit: item.unit,
+          notes: item.notes,
+          sort_order: index,
+          total: item.total,
+        }));
+        const { error: itemsError } = await supabase.from('quotation_items').insert(itemsPayload);
+        if (itemsError) {
+          console.error('Items clone error:', itemsError);
+          toast.warning('New version created, but some charges failed to copy.');
+        }
+      }
+
+      const { error: flipError } = await supabase
+        .from('quotations')
+        .update({ is_latest_version: false, updated_by: profile.id })
+        .eq('id', quotation.id);
+      if (flipError) console.error('Failed to flip previous version:', flipError);
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: quotation.branch_id,
+        action: 'quotation.version_created',
+        entity_type: 'quotation',
+        entity_id: newId,
+        description: `Created version ${quotation.version + 1} of quotation ${quotation.quotation_number ?? ''}`,
+        metadata: { source_quotation_id: quotationId, new_quotation_id: newId, version: quotation.version + 1 },
+      });
+
+      toast.success(`Version ${quotation.version + 1} created`);
+      router.push(`/quotations/${newId}/edit`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to create new version'));
+    } finally {
+      setCreatingVersion(false);
+    }
+  };
+
   const handlePrint = () => window.print();
+
+  const buildPdfBlob = async () => {
+    if (!quotation) return null;
+    setGeneratingPdf(true);
+    try {
+      const { buildQuotationPdfData, renderQuotationPdfBlob } = await import('@/lib/pdf/generate-quotation-pdf');
+      const data = await buildQuotationPdfData(quotation, organization);
+      return await renderQuotationPdfBlob(data);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to generate PDF'));
+      return null;
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    const blob = await buildPdfBlob();
+    if (!blob) return;
+    setPreviewUrl(URL.createObjectURL(blob));
+    setPreviewOpen(true);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!quotation || !profile) return;
+    setDownloadingPdf(true);
+    try {
+      const blob = await buildPdfBlob();
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${quotation.quotation_number ?? 'quotation'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: quotation.branch_id,
+        action: 'quotation.pdf_downloaded',
+        entity_type: 'quotation',
+        entity_id: quotation.id,
+        description: `Downloaded PDF for quotation ${quotation.quotation_number ?? ''}`,
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleSendToCustomer = async () => {
+    if (!quotation || !profile) return;
+    if (!quotation.customer?.email) {
+      toast.error('This customer has no email on file.');
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      const blob = await buildPdfBlob();
+      if (!blob) return;
+      const { blobToBase64 } = await import('@/lib/pdf/generate-quotation-pdf');
+      const pdfBase64 = await blobToBase64(blob);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) throw new Error('Your session has expired. Please sign in again.');
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-quotation-status-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            quotation_id: quotationId,
+            pdf_base64: pdfBase64,
+            pdf_filename: `${quotation.quotation_number ?? 'quotation'}.pdf`,
+          }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error ?? `Request failed (${response.status})`);
+      }
+
+      toast.success(`Quotation sent to ${quotation.customer.email}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to send quotation'));
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    setArchiving(true);
+    try {
+      await handleStatusChange('archived');
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -506,6 +823,14 @@ export default function QuotationDetailPage() {
   const ShipmentIcon = quotation.shipment_type ? SHIPMENT_TYPE_ICONS[quotation.shipment_type] : null;
   const availableActions = getStatusActions(quotation.status, approvalRequired, canApprove);
   const canConvert = quotation.status === 'accepted' && !quotation.converted_shipment_id;
+  const canEditInPlace =
+    quotation.is_latest_version && ['draft', 'pending_approval'].includes(quotation.status);
+  const canCreateVersion =
+    quotation.is_latest_version &&
+    ['sent', 'approved', 'accepted', 'rejected', 'expired'].includes(quotation.status) &&
+    !quotation.converted_shipment_id;
+  const isVersioned = quotation.version > 1 || !!quotation.root_quotation_id;
+  const canArchive = ['accepted', 'rejected', 'expired', 'cancelled'].includes(quotation.status);
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -523,7 +848,7 @@ export default function QuotationDetailPage() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="no-print flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="no-print sticky top-0 z-10 flex flex-col gap-3 border-b border-border bg-background pb-3 pt-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link href="/quotations">
             <Button variant="ghost" size="icon">
@@ -536,6 +861,12 @@ export default function QuotationDetailPage() {
               <Badge variant="secondary" className={statusMeta.color}>
                 {statusMeta.label}
               </Badge>
+              {isVersioned && (
+                <Badge variant="outline" className="gap-1 text-[11px]">
+                  <GitBranch className="h-3 w-3" />
+                  V{quotation.version}
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               {quotation.customer?.company_name ?? 'Unknown customer'}
@@ -579,8 +910,8 @@ export default function QuotationDetailPage() {
                   <DropdownMenuItem
                     key={action.target}
                     onClick={() =>
-                      action.target === 'rejected'
-                        ? setRejectTarget('rejected')
+                      action.target === 'rejected' || action.target === 'cancelled'
+                        ? setTerminalActionTarget(action.target)
                         : handleStatusChange(action.target)
                     }
                   >
@@ -590,6 +921,27 @@ export default function QuotationDetailPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+
+          <Button variant="outline" size="sm" onClick={handlePreviewPdf} disabled={generatingPdf}>
+            {generatingPdf ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
+            Preview PDF
+          </Button>
+
+          <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf || generatingPdf}>
+            {downloadingPdf ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1.5 h-4 w-4" />
+            )}
+            Download PDF
+          </Button>
+
+          {quotation.status !== 'draft' && quotation.status !== 'accepted' && (
+            <Button variant="outline" size="sm" onClick={handleSendToCustomer} disabled={sendingEmail || generatingPdf}>
+              {sendingEmail ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Mail className="mr-1.5 h-4 w-4" />}
+              Send to Customer
+            </Button>
           )}
 
           <Button variant="outline" size="sm" onClick={handlePrint}>
@@ -606,12 +958,32 @@ export default function QuotationDetailPage() {
             Duplicate
           </Button>
 
-          <Link href={`/quotations/${quotationId}/edit`}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit
+          {canEditInPlace && (
+            <Link href={`/quotations/${quotationId}/edit`}>
+              <Button variant="outline" size="sm">
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          )}
+
+          {canCreateVersion && (
+            <Button variant="outline" size="sm" onClick={handleCreateVersion} disabled={creatingVersion}>
+              {creatingVersion ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <GitBranch className="mr-1.5 h-4 w-4" />
+              )}
+              Create New Version
             </Button>
-          </Link>
+          )}
+
+          {canArchive && (
+            <Button variant="outline" size="sm" onClick={handleArchive} disabled={archiving}>
+              {archiving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Archive className="mr-1.5 h-4 w-4" />}
+              Archive
+            </Button>
+          )}
 
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogTrigger asChild>
@@ -787,6 +1159,12 @@ export default function QuotationDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
+                {quotation.status === 'pending_approval' && approvalReason && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>Requires Branch Manager approval — {approvalReason}.</p>
+                  </div>
+                )}
                 <InfoRow icon={User} label="Requested By" value={quotation.requested_by_user?.full_name ?? null} />
                 <InfoRow icon={User} label="Approved By" value={quotation.approved_by_user?.full_name ?? null} />
                 <InfoRow
@@ -803,6 +1181,9 @@ export default function QuotationDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          <VersionHistoryCard quotation={quotation} />
+          <QuotationAttachmentsPanel quotationId={quotationId} branchId={quotation.branch_id} />
 
           <Card className="no-print">
             <CardHeader>
@@ -852,6 +1233,53 @@ export default function QuotationDetailPage() {
             </Card>
           )}
 
+          {(quotation.services.length > 0 || quotation.excluded_services.length > 0) && (
+            <Card className="no-print">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">Scope of Service</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Included
+                  </p>
+                  {quotation.services.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {quotation.services.map((key) => {
+                        const service = QUOTATION_SERVICES.find((s) => s.key === key);
+                        return (
+                          <li key={key} className="flex items-center gap-1.5">
+                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                            {service?.label ?? key}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Not Included
+                  </p>
+                  {quotation.excluded_services.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {quotation.excluded_services.map((item) => (
+                        <li key={item} className="flex items-center gap-1.5">
+                          <X className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="no-print">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -874,10 +1302,12 @@ export default function QuotationDetailPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Service</TableHead>
+                        <TableHead>Unit</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
                         <TableHead className="text-right">Unit Price</TableHead>
                         <TableHead className="text-right">Tax</TableHead>
                         <TableHead className="text-right">Discount</TableHead>
+                        <TableHead>Notes</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -885,12 +1315,16 @@ export default function QuotationDetailPage() {
                       {quotation.items.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.description}</TableCell>
+                          <TableCell className="text-muted-foreground">{item.unit || '—'}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{item.quantity}</TableCell>
                           <TableCell className="text-right text-muted-foreground">
                             {formatCurrency(item.unit_price, quotation.currency)}
                           </TableCell>
                           <TableCell className="text-right text-muted-foreground">{item.tax_rate}%</TableCell>
                           <TableCell className="text-right text-muted-foreground">{item.discount_rate}%</TableCell>
+                          <TableCell className="max-w-[160px] truncate text-muted-foreground" title={item.notes ?? undefined}>
+                            {item.notes || '—'}
+                          </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(item.total, quotation.currency)}
                           </TableCell>
@@ -948,15 +1382,19 @@ export default function QuotationDetailPage() {
         onConverted={loadData}
       />
 
-      {/* Reject reason dialog */}
-      <Dialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>
+      {/* Reject / Cancel reason dialog — same shape, different target status. */}
+      <Dialog open={!!terminalActionTarget} onOpenChange={(open) => !open && setTerminalActionTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <X className="h-5 w-5 text-red-600" />
-              Reject Quotation?
+              {terminalActionTarget === 'cancelled' ? (
+                <Ban className="h-5 w-5 text-red-600" />
+              ) : (
+                <X className="h-5 w-5 text-red-600" />
+              )}
+              {terminalActionTarget === 'cancelled' ? 'Cancel Quotation?' : 'Reject Quotation?'}
             </DialogTitle>
-            <DialogDescription>Optionally record why, for the approval trail.</DialogDescription>
+            <DialogDescription>Optionally record why, for the record.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="approval-notes">Notes</Label>
@@ -965,20 +1403,53 @@ export default function QuotationDetailPage() {
               rows={3}
               value={approvalNotes}
               onChange={(e) => setApprovalNotes(e.target.value)}
-              placeholder="Reason for rejection…"
+              placeholder={terminalActionTarget === 'cancelled' ? 'Reason for cancellation…' : 'Reason for rejection…'}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>
-              Cancel
+            <Button variant="outline" onClick={() => setTerminalActionTarget(null)}>
+              Back
             </Button>
             <Button
               variant="destructive"
               disabled={updatingStatus}
-              onClick={() => handleStatusChange('rejected', approvalNotes || undefined)}
+              onClick={() => terminalActionTarget && handleStatusChange(terminalActionTarget, approvalNotes || undefined)}
             >
               {updatingStatus && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Reject
+              {terminalActionTarget === 'cancelled' ? 'Cancel Quotation' : 'Reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF preview */}
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open);
+          if (!open && previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Quotation Preview</DialogTitle>
+            <DialogDescription>{quotation.quotation_number}</DialogDescription>
+          </DialogHeader>
+          {previewUrl && <iframe src={previewUrl} className="h-[75vh] w-full rounded-md border border-border" />}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={handleDownloadPdf} disabled={downloadingPdf}>
+              {downloadingPdf ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-1.5 h-4 w-4" />
+              )}
+              Download
             </Button>
           </DialogFooter>
         </DialogContent>

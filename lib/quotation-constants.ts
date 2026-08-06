@@ -65,17 +65,25 @@ export const QUOTATION_SERVICES: QuotationServiceDef[] = [
 
 export const PAYMENT_TERMS_OPTIONS = [
   { value: '100_advance', label: '100% Advance' },
+  { value: '70_30', label: '70% Advance / 30% Before Delivery' },
+  { value: '50_50', label: '50% Advance / 50% Delivery' },
   { value: '50_advance', label: '50% Advance' },
+  { value: 'net_7', label: 'Net 7' },
+  { value: 'net_14', label: 'Net 14' },
+  { value: 'net_30', label: 'Net 30' },
   { value: '30_days_credit', label: '30 Days Credit' },
   { value: '60_days_credit', label: '60 Days Credit' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'cod', label: 'Cash On Delivery' },
+  { value: 'custom', label: 'Custom Terms' },
 ];
 
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'cash', label: 'Cash' },
   { value: 'pos', label: 'POS' },
-  { value: 'online', label: 'Online' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'online', label: 'Online Payment' },
+  { value: 'multiple', label: 'Multiple' },
   { value: 'partial', label: 'Partial' },
 ];
 
@@ -89,7 +97,52 @@ export const REQUIRED_DOCUMENT_OPTIONS = [
   'NAFDAC',
   'Form M',
   'PAAR',
+  'Export Declaration',
+  'Shipping Instructions',
   'Others',
+];
+
+/**
+ * Default required-document checklist by shipment direction (Section 7)
+ * — pre-fills the checkbox grid above so staff don't have to hand-pick
+ * every document on every quotation; still fully editable afterwards.
+ */
+export const IMPORT_REQUIRED_DOCUMENTS = [
+  'Commercial Invoice',
+  'Packing List',
+  'Bill of Lading',
+  'Certificate of Origin',
+  'Insurance Certificate',
+  'Form M',
+  'PAAR',
+];
+
+export const EXPORT_REQUIRED_DOCUMENTS = [
+  'Commercial Invoice',
+  'Packing List',
+  'Export Declaration',
+  'Certificate of Origin',
+  'Shipping Instructions',
+];
+
+export function getDefaultRequiredDocuments(direction: ShipmentDirection | null): string[] {
+  if (direction === 'import') return IMPORT_REQUIRED_DOCUMENTS;
+  if (direction === 'export') return EXPORT_REQUIRED_DOCUMENTS;
+  return [];
+}
+
+/**
+ * "Not Included" checklist for the Scope of Service section — a
+ * developer-defined catalog, same precedent as QUOTATION_SERVICES /
+ * REQUIRED_DOCUMENT_OPTIONS (not admin-editable this pass).
+ */
+export const NOT_INCLUDED_SERVICE_OPTIONS = [
+  'Customs Duty',
+  'SON Fees',
+  'NAFDAC Fees',
+  'Storage Charges',
+  'Demurrage',
+  'Examination Charges',
 ];
 
 export const QUOTATION_PRIORITY_META: Record<QuotationPriority, { label: string; color: string }> = {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -34,6 +34,8 @@ import {
   RequiredDocumentsSection,
   ValiditySection,
 } from '@/components/quotations/payment-docs-validity-section';
+import { ScopeOfServiceSection } from '@/components/quotations/scope-of-service-section';
+import { QuotationAttachmentsPanel } from '@/components/quotations/quotation-attachments-panel';
 import { QuotationSummaryPanel } from '@/components/quotations/quotation-summary-panel';
 import type { Customer, Profile, Quotation, QuotationItem, QuotationStatus } from '@/types';
 
@@ -136,8 +138,10 @@ export default function EditQuotationPage() {
         insurance_required: q.insurance_required,
         cargo_value: q.cargo_value ?? undefined,
         services: q.services ?? [],
+        excluded_services: q.excluded_services ?? [],
         items: (q.items ?? [])
           .filter((i) => !i.deleted_at)
+          .sort((a, b) => a.sort_order - b.sort_order)
           .map((i) => ({
             id: i.id,
             service_key: i.service_key,
@@ -146,6 +150,8 @@ export default function EditQuotationPage() {
             unit_price: i.unit_price,
             discount_rate: i.discount_rate,
             tax_rate: i.tax_rate,
+            unit: i.unit ?? '',
+            notes: i.notes ?? '',
           })),
         payment_terms: q.payment_terms ?? '',
         payment_method: q.payment_method ?? '',
@@ -177,11 +183,12 @@ export default function EditQuotationPage() {
       .then(({ data }) => setSalesReps((data as Profile[]) ?? []));
   }, [quotation?.branch_id]);
 
-  const onSubmit = async (values: QuotationFormValues) => {
-    if (!profile || !quotation) return;
-    setSubmitting(true);
-    try {
-      const totals = computeQuotationTotals(values.items);
+  const performSave = useCallback(
+    async (values: QuotationFormValues, silent: boolean) => {
+      if (!profile || !quotation) return;
+      if (!silent) setSubmitting(true);
+      try {
+        const totals = computeQuotationTotals(values.items);
 
       const { error: quotationError } = await supabase
         .from('quotations')
@@ -217,6 +224,7 @@ export default function EditQuotationPage() {
           insurance_required: values.insurance_required,
           cargo_value: values.cargo_value ?? null,
           services: values.services,
+          excluded_services: values.excluded_services,
           payment_terms: values.payment_terms || null,
           payment_method: values.payment_method || null,
           required_documents: values.required_documents,
@@ -249,7 +257,7 @@ export default function EditQuotationPage() {
         if (delErr) console.error('Item delete error:', delErr);
       }
 
-      for (const item of values.items) {
+      for (const [index, item] of values.items.entries()) {
         const payload = {
           quotation_id: quotationId,
           service_key: item.service_key,
@@ -258,6 +266,9 @@ export default function EditQuotationPage() {
           unit_price: Number(item.unit_price),
           discount_rate: Number(item.discount_rate),
           tax_rate: Number(item.tax_rate),
+          unit: item.unit || null,
+          notes: item.notes || null,
+          sort_order: index,
           total: Math.round(computeLineTotal(item) * 100) / 100,
         };
 
@@ -283,14 +294,48 @@ export default function EditQuotationPage() {
         description: `Updated quotation for "${customer?.company_name ?? 'Unknown customer'}"`,
       });
 
-      toast.success('Quotation updated successfully');
-      router.push(`/quotations/${quotationId}`);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update quotation'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+        if (!silent) {
+          toast.success('Quotation updated successfully');
+          router.push(`/quotations/${quotationId}`);
+        }
+      } catch (err) {
+        if (silent) {
+          console.error('Auto-save failed:', err);
+        } else {
+          toast.error(getErrorMessage(err, 'Failed to update quotation'));
+        }
+      } finally {
+        if (!silent) setSubmitting(false);
+      }
+    },
+    [profile, quotation, quotationId, customers, existingItemIds, router]
+  );
+
+  const onSubmit = (values: QuotationFormValues) => performSave(values, false);
+
+  // Auto-save every 30s while there are unsaved changes — silent, no
+  // navigation, no toast, so it never interrupts active editing.
+  useEffect(() => {
+    if (!quotation) return;
+    const interval = setInterval(() => {
+      if (methods.formState.isDirty) {
+        handleSubmit((values) => performSave(values, true))();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [quotation, methods, handleSubmit, performSave]);
+
+  // Warn before leaving with unsaved changes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (methods.formState.isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [methods.formState.isDirty]);
 
   if (loading) {
     return (
@@ -350,6 +395,28 @@ export default function EditQuotationPage() {
     );
   }
 
+  if (!quotation.is_latest_version) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+          <FileText className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">This is an older version</h2>
+          <p className="text-sm text-muted-foreground">
+            A newer version of this quotation exists — edit that one instead.
+          </p>
+        </div>
+        <Link href={`/quotations/${quotationId}`}>
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back to Quotation
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
       <Breadcrumb>
@@ -405,11 +472,13 @@ export default function EditQuotationPage() {
             <ShipmentInfoSection />
             <CargoInfoSection />
             <ServicesChargeSection />
+            <ScopeOfServiceSection />
             <PaymentTermsSection />
             <RequiredDocumentsSection />
             <ValiditySection />
+            <QuotationAttachmentsPanel quotationId={quotationId} branchId={quotation.branch_id} />
 
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">
               <Link href={`/quotations/${quotationId}`} className="sm:shrink-0">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Cancel
@@ -417,7 +486,7 @@ export default function EditQuotationPage() {
               </Link>
               <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
                 {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                Save Changes
+                {quotation.status === 'draft' ? 'Save Draft' : 'Save Changes'}
               </Button>
             </div>
           </div>

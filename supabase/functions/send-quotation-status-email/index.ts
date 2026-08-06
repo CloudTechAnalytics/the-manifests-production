@@ -43,6 +43,16 @@ const STATUS_COPY: Record<string, { subject: string; heading: string; body: stri
     heading: "Quotation in progress",
     body: "We're preparing your freight quotation and will follow up shortly.",
   },
+  pending_approval: {
+    subject: "Your quotation is being reviewed",
+    heading: "Quotation under review",
+    body: "Your quotation is being reviewed internally and will be sent to you shortly.",
+  },
+  accepted: {
+    subject: "Thank you for accepting your quotation",
+    heading: "Quotation accepted",
+    body: "Thanks for confirming — we're moving ahead with your shipment.",
+  },
   sent: {
     subject: "Your quotation is ready for review",
     heading: "Quotation ready for review",
@@ -91,7 +101,7 @@ Deno.serve(async (req: Request) => {
     const { data: callerData, error: callerError } = await supabase.auth.getUser();
     if (callerError || !callerData.user) return json(401, { error: "Unauthorized" });
 
-    let body: { quotation_id?: string };
+    let body: { quotation_id?: string; pdf_base64?: string; pdf_filename?: string };
     try {
       body = await req.json();
     } catch {
@@ -157,18 +167,29 @@ Deno.serve(async (req: Request) => {
       </div>
     `;
 
+    const emailPayload: Record<string, unknown> = {
+      from: Deno.env.get("EMAIL_FROM") ?? "The Manifest <onboarding@resend.dev>",
+      to: customer.email,
+      subject: copy.subject,
+      html,
+    };
+
+    // Attached client-side (@react-pdf/renderer has Node dependencies not
+    // safe on the Deno edge runtime) — optional, so a missing/failed PDF
+    // never blocks the status email itself.
+    if (body.pdf_base64) {
+      emailPayload.attachments = [
+        { filename: body.pdf_filename ?? "quotation.pdf", content: body.pdf_base64 },
+      ];
+    }
+
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${resendApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: Deno.env.get("EMAIL_FROM") ?? "The Manifest <onboarding@resend.dev>",
-        to: customer.email,
-        subject: copy.subject,
-        html,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     if (!emailRes.ok) {

@@ -1,7 +1,10 @@
 'use client';
 
 import { useFieldArray, useFormContext } from 'react-hook-form';
-import { Plus, Trash2 } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,10 +37,21 @@ export function ServicesChargeSection() {
     formState: { errors },
   } = useFormContext<QuotationFormValues>();
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const { fields, append, remove, move } = useFieldArray({ control, name: 'items' });
   const services = watch('services') ?? [];
   const items = watch('items') ?? [];
   const currency = watch('currency');
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    move(oldIndex, newIndex);
+  };
 
   const toggleService = (key: string, checked: boolean) => {
     if (checked) {
@@ -50,6 +64,8 @@ export function ServicesChargeSection() {
         unit_price: 0,
         discount_rate: 0,
         tax_rate: 0,
+        unit: '',
+        notes: '',
       });
     } else {
       setValue(
@@ -72,6 +88,8 @@ export function ServicesChargeSection() {
       unit_price: 0,
       discount_rate: 0,
       tax_rate: 0,
+      unit: '',
+      notes: '',
     });
 
   const totals = computeQuotationTotals(items);
@@ -109,7 +127,7 @@ export function ServicesChargeSection() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-lg font-semibold">Charge Breakdown</CardTitle>
-            <CardDescription>Pricing for every service and charge on this quotation.</CardDescription>
+            <CardDescription>Pricing for every service and charge on this quotation. Drag the handle to reorder.</CardDescription>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={addManualCharge}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -126,88 +144,101 @@ export function ServicesChargeSection() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8" />
                     <TableHead className="min-w-[200px]">Service</TableHead>
+                    <TableHead className="w-20">Unit</TableHead>
                     <TableHead className="w-20 text-right">Qty</TableHead>
                     <TableHead className="w-28 text-right">Unit Price</TableHead>
                     <TableHead className="w-24 text-right">Tax %</TableHead>
                     <TableHead className="w-24 text-right">Discount %</TableHead>
+                    <TableHead className="min-w-[160px]">Notes</TableHead>
                     <TableHead className="w-32 text-right">Total</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {fields.map((field, index) => {
-                    const row = items[index];
-                    const lineTotal = row ? computeLineTotal(row) : 0;
-                    return (
-                      <TableRow key={field.id}>
-                        <TableCell>
-                          <Input
-                            {...register(`items.${index}.description`)}
-                            placeholder="Charge description"
-                          />
-                          {errors.items?.[index]?.description && (
-                            <p className="mt-1 text-xs text-destructive">
-                              {errors.items[index]?.description?.message}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            className="text-right"
-                            {...register(`items.${index}.quantity`)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            className="text-right"
-                            {...register(`items.${index}.unit_price`)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            max="100"
-                            className="text-right"
-                            {...register(`items.${index}.tax_rate`)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            max="100"
-                            className="text-right"
-                            {...register(`items.${index}.discount_rate`)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(lineTotal, currency)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => remove(index)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                    <TableBody>
+                      {fields.map((field, index) => {
+                        const row = items[index];
+                        const lineTotal = row ? computeLineTotal(row) : 0;
+                        return (
+                          <SortableChargeRow key={field.id} id={field.id}>
+                            <TableCell>
+                              <Input
+                                {...register(`items.${index}.description`)}
+                                placeholder="Charge description"
+                              />
+                              {errors.items?.[index]?.description && (
+                                <p className="mt-1 text-xs text-destructive">
+                                  {errors.items[index]?.description?.message}
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input {...register(`items.${index}.unit`)} placeholder="e.g. CBM" />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="any"
+                                min="0"
+                                className="text-right"
+                                {...register(`items.${index}.quantity`)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="any"
+                                min="0"
+                                className="text-right"
+                                {...register(`items.${index}.unit_price`)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="any"
+                                min="0"
+                                max="100"
+                                className="text-right"
+                                {...register(`items.${index}.tax_rate`)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="any"
+                                min="0"
+                                max="100"
+                                className="text-right"
+                                {...register(`items.${index}.discount_rate`)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input {...register(`items.${index}.notes`)} placeholder="Optional note" />
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(lineTotal, currency)}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => remove(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </SortableChargeRow>
+                        );
+                      })}
+                    </TableBody>
+                  </SortableContext>
+                </DndContext>
               </Table>
             </div>
           )}
@@ -245,5 +276,23 @@ export function ServicesChargeSection() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function SortableChargeRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell className="cursor-grab align-middle text-muted-foreground" {...attributes} {...listeners}>
+        <GripVertical className="h-4 w-4" />
+      </TableCell>
+      {children}
+    </TableRow>
   );
 }
