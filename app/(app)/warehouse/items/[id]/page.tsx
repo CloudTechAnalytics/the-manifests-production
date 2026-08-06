@@ -400,7 +400,10 @@ export default function StockItemDetailPage() {
                   </TableHeader>
                   <TableBody>
                     {movements.map((m) => {
-                      const typeMeta = STOCK_MOVEMENT_TYPE_META[m.movement_type];
+                      const typeMeta = STOCK_MOVEMENT_TYPE_META[m.movement_type] ?? {
+                        label: m.movement_type ?? 'Unknown',
+                        color: 'bg-muted text-muted-foreground',
+                      };
                       return (
                         <TableRow key={m.id}>
                           <TableCell className="text-muted-foreground">

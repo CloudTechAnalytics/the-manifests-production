@@ -65,7 +65,10 @@ export function RecentQuotationsTable({
               </TableHeader>
               <TableBody>
                 {quotations.map((q) => {
-                  const meta = QUOTATION_STATUS_META[q.status];
+                  const meta = QUOTATION_STATUS_META[q.status] ?? {
+                    label: q.status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   return (
                     <TableRow
                       key={q.id}

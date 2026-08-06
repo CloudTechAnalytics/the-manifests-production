@@ -244,7 +244,10 @@ export default function CustomersPage() {
               </TableHeader>
               <TableBody>
                 {customers.map((customer) => {
-                  const meta = CUSTOMER_STATUS_META[customer.status];
+                  const meta = CUSTOMER_STATUS_META[customer.status] ?? {
+                    label: customer.status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   return (
                     <TableRow
                       key={customer.id}

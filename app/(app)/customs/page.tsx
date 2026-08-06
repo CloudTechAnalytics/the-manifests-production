@@ -185,16 +185,28 @@ export default function CustomsQueuePage() {
                     </TableCell>
                     <TableCell>
                       {r.customs?.inspection_channel ? (
-                        <Badge className={CHANNEL_META[r.customs.inspection_channel].color}>
-                          {CHANNEL_META[r.customs.inspection_channel].label}
+                        <Badge
+                          className={
+                            (CHANNEL_META[r.customs.inspection_channel] ?? {
+                              color: 'bg-muted text-muted-foreground',
+                            }).color
+                          }
+                        >
+                          {CHANNEL_META[r.customs.inspection_channel]?.label ?? r.customs.inspection_channel}
                         </Badge>
                       ) : (
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={STATUS_META[r.customs?.status ?? 'draft'].color}>
-                        {r.customs ? STATUS_META[r.customs.status].label : 'Not started'}
+                      <Badge
+                        className={
+                          (STATUS_META[r.customs?.status ?? 'draft'] ?? {
+                            color: 'bg-muted text-muted-foreground',
+                          }).color
+                        }
+                      >
+                        {r.customs ? STATUS_META[r.customs.status]?.label ?? r.customs.status : 'Not started'}
                       </Badge>
                     </TableCell>
                     <TableCell>

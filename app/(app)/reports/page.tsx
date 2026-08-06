@@ -941,7 +941,10 @@ export default function ReportsPage() {
                     </TableHeader>
                     <TableBody>
                       {customers.map((c) => {
-                        const meta = CUSTOMER_STATUS_META[c.status];
+                        const meta = CUSTOMER_STATUS_META[c.status] ?? {
+                          label: c.status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                        };
                         return (
                           <TableRow key={c.id} className="transition-colors hover:bg-accent/60">
                             <TableCell className="font-medium">
@@ -1049,7 +1052,11 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(shipmentSummary.byStatus).map(([status, count]) => {
-                    const meta = SHIPMENT_STATUS_META[status as ShipmentStatus];
+                    const meta = SHIPMENT_STATUS_META[status as ShipmentStatus] ?? {
+                      label: status ?? 'Unknown',
+                      color: 'bg-muted text-muted-foreground',
+                      step: -1,
+                    };
                     if (!meta) return null;
                     return (
                       <Badge
@@ -1105,7 +1112,11 @@ export default function ReportsPage() {
                     </TableHeader>
                     <TableBody>
                       {shipments.map((s) => {
-                        const meta = SHIPMENT_STATUS_META[s.status];
+                        const meta = SHIPMENT_STATUS_META[s.status] ?? {
+                          label: s.status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                          step: -1,
+                        };
                         const TypeIcon = s.shipment_type
                           ? SHIPMENT_TYPE_ICONS[s.shipment_type]
                           : null;
@@ -1286,7 +1297,10 @@ export default function ReportsPage() {
                     </TableHeader>
                     <TableBody>
                       {quotations.map((q) => {
-                        const meta = QUOTATION_STATUS_META[q.status];
+                        const meta = QUOTATION_STATUS_META[q.status] ?? {
+                          label: q.status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                        };
                         return (
                           <TableRow key={q.id} className="transition-colors hover:bg-accent/60">
                             <TableCell className="font-medium">

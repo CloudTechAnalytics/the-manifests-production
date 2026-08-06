@@ -208,7 +208,10 @@ export default function ExpenseDetailPage() {
     );
   }
 
-  const statusMeta = EXPENSE_STATUS_META[expense.status];
+  const statusMeta = EXPENSE_STATUS_META[expense.status] ?? {
+    label: expense.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6 lg:p-8">
@@ -321,7 +324,7 @@ export default function ExpenseDetailPage() {
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Category</span>
-            <span className="font-medium">{EXPENSE_CATEGORY_META[expense.category].label}</span>
+            <span className="font-medium">{EXPENSE_CATEGORY_META[expense.category]?.label ?? expense.category}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Date</span>

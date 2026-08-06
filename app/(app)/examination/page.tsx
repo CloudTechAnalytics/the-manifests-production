@@ -167,8 +167,14 @@ export default function ExaminationQueuePage() {
                     </TableCell>
                     <TableCell>
                       {r.examination?.result ? (
-                        <Badge className={RESULT_META[r.examination.result].color}>
-                          {RESULT_META[r.examination.result].label}
+                        <Badge
+                          className={
+                            (RESULT_META[r.examination.result] ?? {
+                              color: 'bg-muted text-muted-foreground',
+                            }).color
+                          }
+                        >
+                          {RESULT_META[r.examination.result]?.label ?? r.examination.result}
                         </Badge>
                       ) : (
                         <Badge className="bg-muted text-muted-foreground">

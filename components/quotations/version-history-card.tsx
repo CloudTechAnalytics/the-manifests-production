@@ -60,7 +60,10 @@ export function VersionHistoryCard({ quotation }: VersionHistoryCardProps) {
       </CardHeader>
       <CardContent className="space-y-2">
         {rows.map((row) => {
-          const statusMeta = QUOTATION_STATUS_META[row.status];
+          const statusMeta = QUOTATION_STATUS_META[row.status] ?? {
+            label: row.status ?? 'Unknown',
+            color: 'bg-muted text-muted-foreground',
+          };
           const isCurrent = row.id === quotation.id;
           return (
             <Link

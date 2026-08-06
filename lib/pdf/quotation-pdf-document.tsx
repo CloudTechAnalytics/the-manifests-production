@@ -92,7 +92,10 @@ const styles = StyleSheet.create({
  * uses its own primitives (View/Text) rather than DOM elements.
  */
 export function QuotationPdfDocument({ data }: { data: QuotationPdfData }) {
-  const statusMeta = QUOTATION_STATUS_META[data.status];
+  const statusMeta = QUOTATION_STATUS_META[data.status] ?? {
+    label: data.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
 
   return (
     <Document title={`Quotation ${data.quotationNumber}`}>

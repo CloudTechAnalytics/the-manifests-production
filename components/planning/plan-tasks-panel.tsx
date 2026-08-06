@@ -237,8 +237,14 @@ export function PlanTasksPanel({ planId, branchId, staff }: PlanTasksPanelProps)
             </TableHeader>
             <TableBody>
               {tasks.map((t) => {
-                const statusMeta = PLAN_TASK_STATUS_META[t.status];
-                const priorityMeta = PRIORITY_META[t.priority];
+                const statusMeta = PLAN_TASK_STATUS_META[t.status] ?? {
+                  label: t.status ?? 'Unknown',
+                  color: 'bg-muted text-muted-foreground',
+                };
+                const priorityMeta = PRIORITY_META[t.priority] ?? {
+                  label: t.priority ?? 'Unknown',
+                  color: 'bg-muted text-muted-foreground',
+                };
                 return (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.title}</TableCell>

@@ -196,7 +196,7 @@ export function WarehouseInventoryTabs({
         filteredMovements.map((m) => [
           m.movement_date,
           m.item?.name ?? '',
-          STOCK_MOVEMENT_TYPE_META[m.movement_type].label,
+          STOCK_MOVEMENT_TYPE_META[m.movement_type]?.label ?? m.movement_type,
           m.warehouse?.name ?? '',
           m.to_warehouse?.name ?? '',
           m.quantity,
@@ -404,7 +404,10 @@ export function WarehouseInventoryTabs({
               </TableHeader>
               <TableBody>
                 {pagedMovements.map((m) => {
-                  const typeMeta = STOCK_MOVEMENT_TYPE_META[m.movement_type];
+                  const typeMeta = STOCK_MOVEMENT_TYPE_META[m.movement_type] ?? {
+                    label: m.movement_type ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   return (
                     <TableRow key={m.id}>
                       <TableCell className="text-muted-foreground">{formatDateTime(m.created_at)}</TableCell>

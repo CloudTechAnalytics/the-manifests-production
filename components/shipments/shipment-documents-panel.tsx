@@ -135,8 +135,15 @@ export function ShipmentDocumentsPanel({ shipmentId, branchId, documents, onRelo
                       </TableCell>
                       <TableCell>
                         {effectiveStatus ? (
-                          <Badge variant="secondary" className={`text-[11px] ${DOCUMENT_STATUS_META[effectiveStatus].color}`}>
-                            {DOCUMENT_STATUS_META[effectiveStatus].label}
+                          <Badge
+                            variant="secondary"
+                            className={`text-[11px] ${
+                              (DOCUMENT_STATUS_META[effectiveStatus] ?? {
+                                color: 'bg-muted text-muted-foreground',
+                              }).color
+                            }`}
+                          >
+                            {DOCUMENT_STATUS_META[effectiveStatus]?.label ?? effectiveStatus}
                           </Badge>
                         ) : (
                           <Badge variant="secondary" className="bg-muted text-[11px] text-muted-foreground">
@@ -218,8 +225,15 @@ export function ShipmentDocumentsPanel({ shipmentId, branchId, documents, onRelo
                         {d.category.replace(/_/g, ' ')}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className={`text-[11px] ${DOCUMENT_STATUS_META[effectiveStatus].color}`}>
-                          {DOCUMENT_STATUS_META[effectiveStatus].label}
+                        <Badge
+                          variant="secondary"
+                          className={`text-[11px] ${
+                            (DOCUMENT_STATUS_META[effectiveStatus] ?? {
+                              color: 'bg-muted text-muted-foreground',
+                            }).color
+                          }`}
+                        >
+                          {DOCUMENT_STATUS_META[effectiveStatus]?.label ?? effectiveStatus}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{formatDate(d.created_at)}</TableCell>

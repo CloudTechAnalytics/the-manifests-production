@@ -58,7 +58,11 @@ export function RecentWarehouseActivities({
         ) : (
           <div className="space-y-1">
             {recent.map((m) => {
-              const meta = TYPE_META[m.movement_type];
+              const meta = TYPE_META[m.movement_type] ?? {
+                icon: History,
+                color: 'bg-muted text-muted-foreground',
+                verb: m.movement_type ?? 'Stock movement',
+              };
               const Icon = meta.icon;
               const sign = m.movement_type === 'adjustment_decrease' ? '-' : '+';
               const locationLabel =

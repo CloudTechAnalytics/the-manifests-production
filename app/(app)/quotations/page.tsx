@@ -361,7 +361,10 @@ export default function QuotationsPage() {
               </TableHeader>
               <TableBody>
                 {quotations.map((q) => {
-                  const meta = QUOTATION_STATUS_META[q.status];
+                  const meta = QUOTATION_STATUS_META[q.status] ?? {
+                    label: q.status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   const ShipmentIcon = q.shipment_type
                     ? SHIPMENT_TYPE_ICONS[q.shipment_type]
                     : null;

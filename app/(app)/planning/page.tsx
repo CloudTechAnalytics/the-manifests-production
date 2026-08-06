@@ -268,8 +268,15 @@ export default function PlanningPage() {
               </TableHeader>
               <TableBody>
                 {plans.map((p) => {
-                  const statusMeta = PLAN_STATUS_META[p.status];
-                  const priorityMeta = PRIORITY_META[p.priority];
+                  const statusMeta = PLAN_STATUS_META[p.status] ?? {
+                    label: p.status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                    step: -1,
+                  };
+                  const priorityMeta = PRIORITY_META[p.priority] ?? {
+                    label: p.priority ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   return (
                     <TableRow
                       key={p.id}

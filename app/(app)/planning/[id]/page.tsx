@@ -275,8 +275,15 @@ export default function PlanDetailPage() {
     );
   }
 
-  const statusMeta = PLAN_STATUS_META[plan.status];
-  const priorityMeta = PRIORITY_META[plan.priority];
+  const statusMeta = PLAN_STATUS_META[plan.status] ?? {
+    label: plan.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+    step: -1,
+  };
+  const priorityMeta = PRIORITY_META[plan.priority] ?? {
+    label: plan.priority ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const isConverted = !!plan.converted_shipment_id;
   const isCancelled = plan.status === 'cancelled';
 

@@ -192,6 +192,13 @@ export default function TrackingPage() {
   }, [visibleShipments, selectedId]);
 
   const selected = shipments.find((s) => s.id === selectedId) ?? null;
+  const selectedStatusMeta = selected
+    ? SHIPMENT_STATUS_META[selected.status] ?? {
+        label: selected.status ?? 'Unknown',
+        color: 'bg-muted text-muted-foreground',
+        step: -1,
+      }
+    : null;
 
   // Load timeline for the selected shipment
   useEffect(() => {
@@ -222,11 +229,7 @@ export default function TrackingPage() {
   }, [selectedId]);
 
   const isCancelled = selected?.status === 'cancelled';
-  const currentStep = selected
-    ? isCancelled
-      ? -1
-      : SHIPMENT_STATUS_META[selected.status].step
-    : -1;
+  const currentStep = selected ? (isCancelled ? -1 : selectedStatusMeta!.step) : -1;
   const progressPct =
     selected && !isCancelled
       ? (currentStep / (SHIPMENT_STATUS_FLOW.length - 1)) * 100
@@ -337,7 +340,11 @@ export default function TrackingPage() {
               ) : (
                 <div className="space-y-1 p-2">
                   {visibleShipments.map((s) => {
-                    const meta = SHIPMENT_STATUS_META[s.status];
+                    const meta = SHIPMENT_STATUS_META[s.status] ?? {
+                      label: s.status ?? 'Unknown',
+                      color: 'bg-muted text-muted-foreground',
+                      step: -1,
+                    };
                     const active = s.id === selectedId;
                     return (
                       <button
@@ -412,9 +419,9 @@ export default function TrackingPage() {
                         </h2>
                         <Badge
                           variant="secondary"
-                          className={SHIPMENT_STATUS_META[selected.status].color}
+                          className={selectedStatusMeta!.color}
                         >
-                          {SHIPMENT_STATUS_META[selected.status].label}
+                          {selectedStatusMeta!.label}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
@@ -449,7 +456,11 @@ export default function TrackingPage() {
                   ) : (
                     <div className="flex items-center overflow-x-auto pb-1">
                       {SHIPMENT_STATUS_FLOW.map((status, idx) => {
-                        const meta = SHIPMENT_STATUS_META[status];
+                        const meta = SHIPMENT_STATUS_META[status] ?? {
+                          label: status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                          step: -1,
+                        };
                         const isComplete = meta.step <= currentStep;
                         const isCurrent = meta.step === currentStep;
                         const isLast = idx === SHIPMENT_STATUS_FLOW.length - 1;
@@ -520,7 +531,7 @@ export default function TrackingPage() {
                     <p className="mt-2 text-center text-xs text-muted-foreground">
                       {isCancelled
                         ? 'Route progress unavailable'
-                        : `${SHIPMENT_STATUS_META[selected.status].label} · ETA ${formatDate(selected.estimated_arrival)}`}
+                        : `${selectedStatusMeta!.label} · ETA ${formatDate(selected.estimated_arrival)}`}
                     </p>
                   </div>
 
@@ -560,7 +571,11 @@ export default function TrackingPage() {
                   ) : (
                     <div className="relative space-y-4 before:absolute before:left-[3px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-border">
                       {timeline.map((entry) => {
-                        const meta = SHIPMENT_STATUS_META[entry.status];
+                        const meta = SHIPMENT_STATUS_META[entry.status] ?? {
+                          label: entry.status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                          step: -1,
+                        };
                         return (
                           <div key={entry.id} className="relative flex gap-3 pl-5">
                             <div className="absolute left-0 top-1.5 h-[7px] w-[7px] shrink-0 rounded-full bg-primary ring-4 ring-card" />

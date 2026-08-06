@@ -22,7 +22,7 @@ export function PlanStatusCard({ plan, onUpdated }: PlanStatusCardProps) {
 
   const isCancelled = plan.status === 'cancelled';
   const isConverted = !!plan.converted_shipment_id;
-  const currentStep = isCancelled ? -1 : PLAN_STATUS_META[plan.status].step;
+  const currentStep = isCancelled ? -1 : PLAN_STATUS_META[plan.status]?.step ?? -1;
 
   const nextStatus: PlanStatus | null = (() => {
     const idx = PLAN_STATUS_FLOW.indexOf(plan.status);

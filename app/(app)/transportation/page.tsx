@@ -165,8 +165,16 @@ export default function TransportationQueuePage() {
                       {r.transportation?.driver_name ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge className={STATUS_META[r.transportation?.status ?? 'assigned'].color}>
-                        {r.transportation ? STATUS_META[r.transportation.status].label : 'Not started'}
+                      <Badge
+                        className={
+                          (STATUS_META[r.transportation?.status ?? 'assigned'] ?? {
+                            color: 'bg-muted text-muted-foreground',
+                          }).color
+                        }
+                      >
+                        {r.transportation
+                          ? STATUS_META[r.transportation.status]?.label ?? r.transportation.status
+                          : 'Not started'}
                       </Badge>
                     </TableCell>
                     <TableCell>

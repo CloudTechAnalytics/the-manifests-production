@@ -255,7 +255,10 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const statusMeta = CUSTOMER_STATUS_META[customer.status];
+  const statusMeta = CUSTOMER_STATUS_META[customer.status] ?? {
+    label: customer.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const primaryContact = contacts.find((c) => c.is_primary);
 
   return (
@@ -532,7 +535,11 @@ export default function CustomerDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {shipments.map((s) => {
-                          const meta = SHIPMENT_STATUS_META[s.status];
+                          const meta = SHIPMENT_STATUS_META[s.status] ?? {
+                            label: s.status ?? 'Unknown',
+                            color: 'bg-muted text-muted-foreground',
+                            step: -1,
+                          };
                           return (
                             <TableRow
                               key={s.id}
@@ -584,7 +591,10 @@ export default function CustomerDetailPage() {
                       </TableHeader>
                       <TableBody>
                         {quotations.map((q) => {
-                          const meta = QUOTATION_STATUS_META[q.status];
+                          const meta = QUOTATION_STATUS_META[q.status] ?? {
+                            label: q.status ?? 'Unknown',
+                            color: 'bg-muted text-muted-foreground',
+                          };
                           return (
                             <TableRow
                               key={q.id}

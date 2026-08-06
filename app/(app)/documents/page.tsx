@@ -688,7 +688,10 @@ export default function DocumentsPage() {
               </TableHeader>
               <TableBody>
                 {documents.map((doc) => {
-                  const meta = CATEGORY_META[doc.category];
+                  const meta = CATEGORY_META[doc.category] ?? {
+                    label: doc.category ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   const linkedTo =
                     doc.shipment?.reference_number ??
                     doc.customer?.company_name ??

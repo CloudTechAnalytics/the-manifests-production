@@ -41,7 +41,13 @@ function TrackShipmentForm() {
     }
   };
 
-  const meta = result ? SHIPMENT_STATUS_META[result.status] : null;
+  const meta = result
+    ? SHIPMENT_STATUS_META[result.status] ?? {
+        label: result.status ?? 'Unknown',
+        color: 'bg-muted text-muted-foreground',
+        step: -1,
+      }
+    : null;
   const currentStep = meta?.step ?? -1;
 
   return (

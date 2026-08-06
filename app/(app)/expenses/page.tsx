@@ -302,7 +302,10 @@ export default function ExpensesPage() {
                 </TableHeader>
                 <TableBody>
                   {expenses.map((exp) => {
-                    const statusMeta = EXPENSE_STATUS_META[exp.status];
+                    const statusMeta = EXPENSE_STATUS_META[exp.status] ?? {
+                      label: exp.status ?? 'Unknown',
+                      color: 'bg-muted text-muted-foreground',
+                    };
                     return (
                       <TableRow
                         key={exp.id}
@@ -314,7 +317,7 @@ export default function ExpensesPage() {
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">{exp.description}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {EXPENSE_CATEGORY_META[exp.category].label}
+                          {EXPENSE_CATEGORY_META[exp.category]?.label ?? exp.category}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDate(exp.expense_date)}

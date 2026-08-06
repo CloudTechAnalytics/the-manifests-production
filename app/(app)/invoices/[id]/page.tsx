@@ -250,7 +250,10 @@ export default function InvoiceDetailPage() {
   }
 
   const overdue = isInvoiceOverdue(invoice);
-  const statusMeta = INVOICE_STATUS_META[invoice.status];
+  const statusMeta = INVOICE_STATUS_META[invoice.status] ?? {
+    label: invoice.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const outstanding = invoice.total - invoice.amount_paid;
   const canCancel = invoice.status !== 'paid' && invoice.status !== 'cancelled';
   // Matches payments/new's loadOutstandingInvoices filter (status in
@@ -570,7 +573,10 @@ function PrintInvoice({
   invoice: InvoiceDetail;
   allocations: AllocationRow[];
 }) {
-  const statusMeta = INVOICE_STATUS_META[invoice.status];
+  const statusMeta = INVOICE_STATUS_META[invoice.status] ?? {
+    label: invoice.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const outstanding = invoice.total - invoice.amount_paid;
 
   return (

@@ -427,7 +427,7 @@ export default function ShipmentDetailPage() {
           action: 'shipment.status_changed',
           entity_type: 'shipment',
           entity_id: shipmentId,
-          description: `Shipment ${shipment.reference_number ?? ''} status changed from "${SHIPMENT_STATUS_META[shipment.status].label}" to "${SHIPMENT_STATUS_META[target].label}"`,
+          description: `Shipment ${shipment.reference_number ?? ''} status changed from "${SHIPMENT_STATUS_META[shipment.status]?.label ?? shipment.status}" to "${SHIPMENT_STATUS_META[target].label}"`,
           metadata: {
             from: shipment.status,
             to: target,
@@ -620,9 +620,13 @@ export default function ShipmentDetailPage() {
 
   // --- Derived values -------------------------------------------------------
 
-  const statusMeta = SHIPMENT_STATUS_META[shipment.status];
+  const statusMeta = SHIPMENT_STATUS_META[shipment.status] ?? {
+    label: shipment.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+    step: -1,
+  };
   const isCancelled = shipment.status === 'cancelled';
-  const currentStep = isCancelled ? -1 : SHIPMENT_STATUS_META[shipment.status].step;
+  const currentStep = isCancelled ? -1 : statusMeta.step;
   const TypeIcon = shipment.shipment_type
     ? SHIPMENT_TYPE_ICONS[shipment.shipment_type]
     : null;
@@ -1171,7 +1175,11 @@ export default function ShipmentDetailPage() {
               ) : (
                 <div className="relative space-y-6 before:absolute before:left-[15px] before:top-2 before:h-[calc(100%-1rem)] before:w-0.5 before:bg-blue-100">
                   {timeline.map((entry) => {
-                    const meta = SHIPMENT_STATUS_META[entry.status];
+                    const meta = SHIPMENT_STATUS_META[entry.status] ?? {
+                      label: entry.status ?? 'Unknown',
+                      color: 'bg-muted text-muted-foreground',
+                      step: -1,
+                    };
                     return (
                       <div
                         key={entry.id}

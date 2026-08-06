@@ -509,7 +509,10 @@ export default function SalesPage() {
             ) : (
               <div className="space-y-3">
                 {FUNNEL_STEPS.map((status) => {
-                  const meta = QUOTATION_STATUS_META[status];
+                  const meta = QUOTATION_STATUS_META[status] ?? {
+                    label: status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                  };
                   const count = funnel[status];
                   const width = (count / maxFunnelCount) * 100;
                   return (

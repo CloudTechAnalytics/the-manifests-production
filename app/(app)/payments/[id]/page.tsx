@@ -530,7 +530,7 @@ export default function PaymentDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Method</span>
-                <span className="font-medium">{PAYMENT_METHOD_META[payment.payment_method].label}</span>
+                <span className="font-medium">{PAYMENT_METHOD_META[payment.payment_method]?.label ?? payment.payment_method}</span>
               </div>
               {payment.reference && (
                 <div className="flex justify-between">

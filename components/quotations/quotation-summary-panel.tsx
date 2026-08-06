@@ -34,7 +34,9 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
   const customer = customers.find((c) => c.id === values.customer_id);
   const totals = computeQuotationTotals(values.items ?? []);
   const ModeIcon = values.shipment_type ? MODE_ICON[values.shipment_type] : MapPin;
-  const statusMeta = status ? QUOTATION_STATUS_META[status] : null;
+  const statusMeta = status
+    ? QUOTATION_STATUS_META[status] ?? { label: status, color: 'bg-muted text-muted-foreground' }
+    : null;
   const showCompleteness = !status || status === 'draft' || status === 'pending_approval';
   const completeness = computeQuotationCompleteness(values);
   const suggestions = getSuggestions(values);

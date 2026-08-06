@@ -91,7 +91,10 @@ export function AwaitingOperationsCard() {
         ) : (
           <div className="divide-y divide-border">
             {quotations.map((q) => {
-              const priorityMeta = QUOTATION_PRIORITY_META[q.priority];
+              const priorityMeta = QUOTATION_PRIORITY_META[q.priority] ?? {
+                label: q.priority ?? 'Unknown',
+                color: 'bg-muted text-muted-foreground',
+              };
               return (
                 <div key={q.id} className="flex items-center justify-between gap-3 p-3">
                   <div className="min-w-0">

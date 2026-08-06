@@ -351,7 +351,10 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
   return (
     <Accordion type="single" collapsible className="w-full">
       {stages.map((stage) => {
-        const statusMeta = WORKFLOW_STAGE_STATUS_META[stage.status];
+        const statusMeta = WORKFLOW_STAGE_STATUS_META[stage.status] ?? {
+          label: stage.status ?? 'Unknown',
+          color: 'bg-muted text-muted-foreground',
+        };
         const tasks = tasksByStage[stage.id] ?? [];
         const comments = commentsByStage[stage.id] ?? [];
         const blockers = blockersByStage[stage.id] ?? [];
@@ -474,8 +477,14 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
                     </TableHeader>
                     <TableBody>
                       {tasks.map((t) => {
-                        const taskStatusMeta = PLAN_TASK_STATUS_META[t.status];
-                        const priorityMeta = PRIORITY_META[t.priority];
+                        const taskStatusMeta = PLAN_TASK_STATUS_META[t.status] ?? {
+                          label: t.status ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                        };
+                        const priorityMeta = PRIORITY_META[t.priority] ?? {
+                          label: t.priority ?? 'Unknown',
+                          color: 'bg-muted text-muted-foreground',
+                        };
                         return (
                           <TableRow key={t.id}>
                             <TableCell className="text-sm font-medium">{t.title}</TableCell>

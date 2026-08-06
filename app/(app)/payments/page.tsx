@@ -318,7 +318,7 @@ export default function PaymentsPage() {
                           {formatDate(p.payment_date)}
                         </TableCell>
                         <TableCell className="capitalize text-muted-foreground">
-                          {PAYMENT_METHOD_META[p.payment_method].label}
+                          {PAYMENT_METHOD_META[p.payment_method]?.label ?? p.payment_method}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(p.amount)}

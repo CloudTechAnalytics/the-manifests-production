@@ -168,8 +168,14 @@ export default function TerminalQueuePage() {
                       {r.terminal?.gate_pass_number ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge className={STATUS_META[r.terminal?.status ?? 'waiting'].color}>
-                        {r.terminal ? STATUS_META[r.terminal.status].label : 'Not started'}
+                      <Badge
+                        className={
+                          (STATUS_META[r.terminal?.status ?? 'waiting'] ?? {
+                            color: 'bg-muted text-muted-foreground',
+                          }).color
+                        }
+                      >
+                        {r.terminal ? STATUS_META[r.terminal.status]?.label ?? r.terminal.status : 'Not started'}
                       </Badge>
                     </TableCell>
                     <TableCell>

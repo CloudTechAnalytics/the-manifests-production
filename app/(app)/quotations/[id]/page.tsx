@@ -354,7 +354,7 @@ export default function QuotationDetailPage() {
         action: 'quotation.status_changed',
         entity_type: 'quotation',
         entity_id: quotationId,
-        description: `Quotation ${quotation.quotation_number ?? ''} status changed from "${QUOTATION_STATUS_META[quotation.status].label}" to "${QUOTATION_STATUS_META[target].label}"`,
+        description: `Quotation ${quotation.quotation_number ?? ''} status changed from "${QUOTATION_STATUS_META[quotation.status]?.label ?? quotation.status}" to "${QUOTATION_STATUS_META[target]?.label ?? target}"`,
         metadata: { from: quotation.status, to: target, quotation_number: quotation.quotation_number },
       });
 
@@ -403,7 +403,7 @@ export default function QuotationDetailPage() {
         console.warn('Quotation email request failed:', emailErr);
       }
 
-      toast.success(`Quotation marked as ${QUOTATION_STATUS_META[target].label}`);
+      toast.success(`Quotation marked as ${QUOTATION_STATUS_META[target]?.label ?? target}`);
       setTerminalActionTarget(null);
       setApprovalNotes('');
       loadData();
@@ -838,7 +838,10 @@ export default function QuotationDetailPage() {
     );
   }
 
-  const statusMeta = QUOTATION_STATUS_META[quotation.status];
+  const statusMeta = QUOTATION_STATUS_META[quotation.status] ?? {
+    label: quotation.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const ShipmentIcon = quotation.shipment_type ? SHIPMENT_TYPE_ICONS[quotation.shipment_type] : null;
   const availableActions = getStatusActions(quotation.status, approvalRequired, canApprove);
   // Converting to a real shipment is an operations action — mirrors
@@ -1528,7 +1531,10 @@ function InfoRow({
 // --- Print layout ----------------------------------------------------------
 
 function PrintQuotation({ quotation }: { quotation: QuotationDetail }) {
-  const statusMeta = QUOTATION_STATUS_META[quotation.status];
+  const statusMeta = QUOTATION_STATUS_META[quotation.status] ?? {
+    label: quotation.status ?? 'Unknown',
+    color: 'bg-muted text-muted-foreground',
+  };
   const ShipmentIcon = quotation.shipment_type ? SHIPMENT_TYPE_ICONS[quotation.shipment_type] : null;
 
   return (

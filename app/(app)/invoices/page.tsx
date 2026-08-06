@@ -328,7 +328,10 @@ export default function InvoicesPage() {
                 <TableBody>
                   {visibleInvoices.map((inv) => {
                     const overdue = isInvoiceOverdue(inv);
-                    const meta = INVOICE_STATUS_META[inv.status];
+                    const meta = INVOICE_STATUS_META[inv.status] ?? {
+                      label: inv.status ?? 'Unknown',
+                      color: 'bg-muted text-muted-foreground',
+                    };
                     return (
                       <TableRow
                         key={inv.id}

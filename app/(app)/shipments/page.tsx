@@ -396,7 +396,11 @@ export default function ShipmentsPage() {
               </TableHeader>
               <TableBody>
                 {shipments.map((s) => {
-                  const meta = SHIPMENT_STATUS_META[s.status];
+                  const meta = SHIPMENT_STATUS_META[s.status] ?? {
+                    label: s.status ?? 'Unknown',
+                    color: 'bg-muted text-muted-foreground',
+                    step: -1,
+                  };
                   const TypeIcon = s.shipment_type
                     ? SHIPMENT_TYPE_ICONS[s.shipment_type]
                     : null;
