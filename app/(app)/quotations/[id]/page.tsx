@@ -451,6 +451,10 @@ export default function QuotationDetailPage() {
       toast.success('Quotation deleted');
       router.push('/quotations');
     } catch (err) {
+      // Temporary — surfacing the full Postgres error (code/details/hint,
+      // not just message) to diagnose an RLS rejection that the message
+      // alone hasn't explained. Safe to remove once resolved.
+      console.error('Quotation delete failed — full error:', err);
       toast.error(getErrorMessage(err, 'Failed to delete quotation'));
     } finally {
       setDeleting(false);
