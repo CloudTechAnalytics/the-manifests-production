@@ -244,10 +244,13 @@ export function useDashboardData(): DashboardData {
 
         // Payments: Revenue Collected — actual cash received via the Finance
         // module, kept distinct from "Pipeline Value Won" (approved-quotation
-        // value, not money in hand).
+        // value, not money in hand). Payments don't carry a currency column
+        // in this schema (same reasoning as app/(app)/payments/page.tsx) —
+        // treated as NGN below, not selected here since the column doesn't
+        // exist (selecting it 400s the whole query).
         let paymentsQuery = supabase
           .from('payments')
-          .select('amount, currency, payment_date, branch_id')
+          .select('amount, payment_date, branch_id')
           .is('deleted_at', null);
         if (branchFilter) paymentsQuery = paymentsQuery.eq('branch_id', branchFilter);
 
@@ -424,13 +427,12 @@ export function useDashboardData(): DashboardData {
 
         const collected: Record<string, number> = {};
         (paymentRows ?? []).forEach((p) => {
-          collected[p.currency] = (collected[p.currency] ?? 0) + Number(p.amount);
+          collected.NGN = (collected.NGN ?? 0) + Number(p.amount);
         });
         const collectedPrimaryCurrency = pickPrimaryCurrency(collected);
 
         let collectedThisMonth = 0;
         (paymentRows ?? []).forEach((p) => {
-          if (p.currency !== collectedPrimaryCurrency) return;
           const d = new Date(p.payment_date);
           if (d.getFullYear() === trendYear && d.getMonth() === trendMonth) {
             collectedThisMonth += Number(p.amount);

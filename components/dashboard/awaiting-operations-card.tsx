@@ -99,7 +99,7 @@ export function AwaitingOperationsCard() {
                       <Link href={`/quotations/${q.id}`} className="truncate font-medium text-primary hover:underline">
                         {q.customer?.company_name ?? 'Unknown customer'}
                       </Link>
-                      {q.priority !== 'normal' && (
+                      {q.priority !== 'normal' && priorityMeta && (
                         <Badge variant="secondary" className={`text-[10px] ${priorityMeta.color}`}>
                           {priorityMeta.label}
                         </Badge>

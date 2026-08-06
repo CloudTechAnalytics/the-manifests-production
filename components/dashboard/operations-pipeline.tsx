@@ -4,7 +4,7 @@ import type { PipelineCounts } from '@/hooks/use-dashboard-data';
 
 const STAGE_COLORS: Record<string, string> = {
   quotation: 'bg-slate-100 text-slate-700 ring-slate-200',
-  booking: 'bg-blue-100 text-blue-700 ring-blue-200',
+  planning: 'bg-blue-100 text-blue-700 ring-blue-200',
   documentation: 'bg-amber-100 text-amber-700 ring-amber-200',
   customs: 'bg-purple-100 text-purple-700 ring-purple-200',
   in_transit: 'bg-cyan-100 text-cyan-700 ring-cyan-200',
