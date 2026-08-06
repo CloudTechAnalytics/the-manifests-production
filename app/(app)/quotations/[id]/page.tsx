@@ -840,7 +840,14 @@ export default function QuotationDetailPage() {
   const statusMeta = QUOTATION_STATUS_META[quotation.status];
   const ShipmentIcon = quotation.shipment_type ? SHIPMENT_TYPE_ICONS[quotation.shipment_type] : null;
   const availableActions = getStatusActions(quotation.status, approvalRequired, canApprove);
-  const canConvert = quotation.status === 'accepted' && !quotation.converted_shipment_id;
+  // Converting to a real shipment is an operations action — mirrors
+  // shipments' insert_shipments_branch RLS policy (can_manage_operations:
+  // admin/branch_manager/operations). Sales hands off an accepted
+  // quotation; operations executes it into a shipment.
+  const canConvert =
+    quotation.status === 'accepted' &&
+    !quotation.converted_shipment_id &&
+    (hasRole('admin') || hasRole('branch_manager') || hasRole('operations'));
   const canEditInPlace =
     quotation.is_latest_version && ['draft', 'pending_approval'].includes(quotation.status);
   const canCreateVersion =
@@ -890,6 +897,14 @@ export default function QuotationDetailPage() {
               {quotation.customer?.company_name ?? 'Unknown customer'}
               {quotation.branch && ` · ${quotation.branch.name} branch`}
             </p>
+            {quotation.status === 'accepted' &&
+              !quotation.converted_shipment_id &&
+              !canConvert && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Accepted and ready to become a shipment — an Operations team member needs to
+                  convert it.
+                </p>
+              )}
           </div>
         </div>
 
