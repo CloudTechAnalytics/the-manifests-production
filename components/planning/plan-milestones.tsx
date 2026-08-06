@@ -15,8 +15,8 @@ export function PlanMilestones({ plan, quotation, onEdit }: PlanMilestonesProps)
     { key: 'created', label: 'Plan Created', date: plan.created_at },
     {
       key: 'quotation',
-      label: 'Quotation Approved',
-      date: quotation?.status === 'approved' ? quotation.updated_at : null,
+      label: 'Quotation Accepted',
+      date: quotation?.status === 'accepted' ? quotation.updated_at : null,
     },
     { key: 'booking', label: 'Booking Confirmed', date: plan.booking_confirmed_date },
     { key: 'documentation', label: 'Documentation', date: plan.documentation_date },

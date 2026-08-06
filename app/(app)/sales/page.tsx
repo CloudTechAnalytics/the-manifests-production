@@ -63,8 +63,10 @@ interface AggRow {
 
 const FUNNEL_STEPS: QuotationStatus[] = [
   'draft',
-  'sent',
+  'pending_approval',
   'approved',
+  'sent',
+  'accepted',
   'rejected',
   'expired',
 ];
@@ -140,16 +142,21 @@ export default function SalesPage() {
 
   // --- Derived metrics -------------------------------------------------------
 
-  const approved = useMemo(
-    () => quotations.filter((q) => q.status === 'approved'),
+  // "Won" = customer accepted, not merely internally approved — approved
+  // is now a pre-send gate (see migration 044), accepted is the terminal
+  // won state.
+  const won = useMemo(
+    () => quotations.filter((q) => q.status === 'accepted'),
     [quotations]
   );
 
   const funnel = useMemo(() => {
     const counts: Record<QuotationStatus, number> = {
       draft: 0,
-      sent: 0,
+      pending_approval: 0,
       approved: 0,
+      sent: 0,
+      accepted: 0,
       rejected: 0,
       expired: 0,
     };
@@ -161,13 +168,13 @@ export default function SalesPage() {
 
   const revenueByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
-    approved.forEach((q) => {
+    won.forEach((q) => {
       totals[q.currency] = (totals[q.currency] ?? 0) + Number(q.total);
     });
     return totals;
-  }, [approved]);
+  }, [won]);
 
-  // The currency with the highest approved revenue — used as the "primary"
+  // The currency with the highest accepted revenue — used as the "primary"
   // currency for aggregates that need a single number (avg deal size,
   // monthly trend, top customers/branches). Avoids silently blending
   // incompatible currencies into one misleading total.
@@ -181,27 +188,27 @@ export default function SalesPage() {
 
   const hasMixedCurrencies = Object.keys(revenueByCurrency).length > 1;
 
-  const approvedPrimary = useMemo(
+  const wonPrimary = useMemo(
     () =>
       primaryCurrency
-        ? approved.filter((q) => q.currency === primaryCurrency)
+        ? won.filter((q) => q.currency === primaryCurrency)
         : [],
-    [approved, primaryCurrency]
+    [won, primaryCurrency]
   );
 
   const winRate = useMemo(() => {
-    const decided = funnel.approved + funnel.rejected + funnel.expired;
+    const decided = funnel.accepted + funnel.rejected + funnel.expired;
     if (decided === 0) return null;
-    return (funnel.approved / decided) * 100;
+    return (funnel.accepted / decided) * 100;
   }, [funnel]);
 
   const avgDealSize = useMemo(() => {
-    if (!primaryCurrency || approvedPrimary.length === 0) return null;
-    const total = approvedPrimary.reduce((sum, q) => sum + Number(q.total), 0);
-    return total / approvedPrimary.length;
-  }, [approvedPrimary, primaryCurrency]);
+    if (!primaryCurrency || wonPrimary.length === 0) return null;
+    const total = wonPrimary.reduce((sum, q) => sum + Number(q.total), 0);
+    return total / wonPrimary.length;
+  }, [wonPrimary, primaryCurrency]);
 
-  // Monthly trend: approved quotation value (primary currency) for the last 6 months
+  // Monthly trend: accepted quotation value (primary currency) for the last 6 months
   const monthlyTrend = useMemo(() => {
     const months: { key: string; label: string; total: number }[] = [];
     const now = new Date();
@@ -213,18 +220,18 @@ export default function SalesPage() {
         total: 0,
       });
     }
-    approvedPrimary.forEach((q) => {
+    wonPrimary.forEach((q) => {
       const d = new Date(q.updated_at);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const bucket = months.find((m) => m.key === key);
       if (bucket) bucket.total += Number(q.total);
     });
     return months;
-  }, [approvedPrimary]);
+  }, [wonPrimary]);
 
   const topCustomers = useMemo(() => {
     const map = new Map<string, AggRow>();
-    approvedPrimary.forEach((q) => {
+    wonPrimary.forEach((q) => {
       const id = q.customer_id;
       const existing = map.get(id);
       if (existing) {
@@ -242,12 +249,12 @@ export default function SalesPage() {
     return Array.from(map.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [approvedPrimary]);
+  }, [wonPrimary]);
 
   const branchAgg = useMemo(() => {
     if (!isAdmin) return [];
     const map = new Map<string, AggRow>();
-    approvedPrimary.forEach((q) => {
+    wonPrimary.forEach((q) => {
       const id = q.branch_id;
       const existing = map.get(id);
       if (existing) {
@@ -263,7 +270,7 @@ export default function SalesPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [approvedPrimary, isAdmin]);
+  }, [wonPrimary, isAdmin]);
 
   const maxFunnelCount = Math.max(
     ...FUNNEL_STEPS.map((s) => funnel[s]),
@@ -407,10 +414,10 @@ export default function SalesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    Approved Deals
+                    Accepted Deals
                   </p>
                   <p className="text-2xl font-bold tracking-tight">
-                    {approved.length}
+                    {won.length}
                   </p>
                 </div>
               </CardContent>
@@ -442,9 +449,9 @@ export default function SalesPage() {
           <CardContent>
             {loading ? (
               <Skeleton className="h-64 w-full" />
-            ) : approvedPrimary.length === 0 ? (
+            ) : wonPrimary.length === 0 ? (
               <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-                No approved quotations yet
+                No accepted quotations yet
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
@@ -534,7 +541,7 @@ export default function SalesPage() {
               Top Customers
             </CardTitle>
             <CardDescription>
-              Ranked by approved quotation value.
+              Ranked by accepted quotation value.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -546,7 +553,7 @@ export default function SalesPage() {
               </div>
             ) : topCustomers.length === 0 ? (
               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                No approved quotations yet
+                No accepted quotations yet
               </div>
             ) : (
               <Table>
@@ -597,7 +604,7 @@ export default function SalesPage() {
                 </div>
               ) : branchAgg.length === 0 ? (
                 <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                  No approved quotations yet
+                  No accepted quotations yet
                 </div>
               ) : (
                 <Table>

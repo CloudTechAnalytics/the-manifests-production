@@ -30,7 +30,7 @@ const ALERT_DEFS: AlertDef[] = [
     color: 'bg-amber-50 text-amber-600',
   },
   {
-    key: 'quotationsPendingApproval',
+    key: 'quotationsAwaitingResponse',
     label: 'Quotations Pending',
     description: 'Awaiting customer response',
     href: '/quotations?status=sent',

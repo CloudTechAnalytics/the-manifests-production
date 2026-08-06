@@ -124,7 +124,7 @@ export interface DashboardData {
   revenueTrend: RevenueTrendPoint[];
   alerts: {
     awaitingDocumentation: number;
-    quotationsPendingApproval: number;
+    quotationsAwaitingResponse: number;
     shipmentsDelayed: number;
     shipmentsMissingDocuments: number;
   };
@@ -194,7 +194,7 @@ export function useDashboardData(): DashboardData {
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrendPoint[]>([]);
   const [alerts, setAlerts] = useState({
     awaitingDocumentation: 0,
-    quotationsPendingApproval: 0,
+    quotationsAwaitingResponse: 0,
     shipmentsDelayed: 0,
     shipmentsMissingDocuments: 0,
   });
@@ -357,17 +357,27 @@ export function useDashboardData(): DashboardData {
 
         let pendingQuotations = 0;
         let sentCount = 0;
-        let approvedCount = 0;
+        // "Won" = customer accepted, not merely internally approved —
+        // approved is now a pre-send gate (see migration 044), accepted is
+        // the terminal won state.
+        let acceptedCount = 0;
         let rejectedCount = 0;
         let expiredCount = 0;
         const revenue: Record<string, number> = {};
         const quotationsByBranch = new Map<string, number>();
 
         (quotAgg ?? []).forEach((q) => {
-          if (q.status === 'draft' || q.status === 'sent') pendingQuotations++;
+          if (
+            q.status === 'draft' ||
+            q.status === 'pending_approval' ||
+            q.status === 'approved' ||
+            q.status === 'sent'
+          ) {
+            pendingQuotations++;
+          }
           if (q.status === 'sent') sentCount++;
-          if (q.status === 'approved') {
-            approvedCount++;
+          if (q.status === 'accepted') {
+            acceptedCount++;
             revenue[q.currency] = (revenue[q.currency] ?? 0) + Number(q.total);
           }
           if (q.status === 'rejected') rejectedCount++;
@@ -378,10 +388,10 @@ export function useDashboardData(): DashboardData {
           );
         });
 
-        const decided = approvedCount + rejectedCount + expiredCount;
-        const conversionRate = decided > 0 ? (approvedCount / decided) * 100 : null;
+        const decided = acceptedCount + rejectedCount + expiredCount;
+        const conversionRate = decided > 0 ? (acceptedCount / decided) * 100 : null;
 
-        // --- Revenue trend: cumulative approved-quotation revenue, day by
+        // --- Revenue trend: cumulative accepted-quotation revenue, day by
         // day, for the current month so far (primary currency only, same
         // reasoning as the Revenue KPI — avoids blending currencies). ---
         const trendCurrency = pickPrimaryCurrency(revenue);
@@ -392,7 +402,7 @@ export function useDashboardData(): DashboardData {
 
         const dailyTotals = new Map<number, number>();
         (quotAgg ?? []).forEach((q) => {
-          if (q.status !== 'approved') return;
+          if (q.status !== 'accepted') return;
           if (trendCurrency && q.currency !== trendCurrency) return;
           const d = new Date(q.updated_at);
           if (d.getFullYear() !== trendYear || d.getMonth() !== trendMonth) return;
@@ -484,7 +494,7 @@ export function useDashboardData(): DashboardData {
 
         const pipelineCounts: PipelineCounts[] = PIPELINE_STAGES.map((stage) => {
           if (stage.key === 'quotation') {
-            return { key: stage.key, label: stage.label, count: approvedCount };
+            return { key: stage.key, label: stage.label, count: acceptedCount };
           }
           const count = shipRows.filter((s) =>
             (stage.statuses as ShipmentStatus[]).includes(s.status)
@@ -683,7 +693,7 @@ export function useDashboardData(): DashboardData {
         setAlerts({
           awaitingDocumentation:
             pipelineCounts.find((p) => p.key === 'documentation')?.count ?? 0,
-          quotationsPendingApproval: sentCount,
+          quotationsAwaitingResponse: sentCount,
           shipmentsDelayed: delayedCount,
           shipmentsMissingDocuments: missingDocsCount,
         });

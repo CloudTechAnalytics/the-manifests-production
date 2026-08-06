@@ -21,12 +21,18 @@ export type CustomerStatus = 'active' | 'inactive' | 'blacklisted';
 
 export type QuotationStatus =
   | 'draft'
-  | 'sent'
+  | 'pending_approval'
   | 'approved'
+  | 'sent'
+  | 'accepted'
   | 'rejected'
   | 'expired';
 
 export type ShipmentType = 'air' | 'sea' | 'road' | 'rail' | 'multimodal';
+
+export type ShipmentDirection = 'import' | 'export';
+export type CargoType = 'fcl' | 'lcl' | 'roro' | 'break_bulk';
+export type QuotationPriority = 'normal' | 'urgent' | 'vip';
 
 export type ShipmentStatus =
   | 'booking_received'
@@ -111,6 +117,7 @@ export interface Organization {
   email: string | null;
   logo_url: string | null;
   is_active: boolean;
+  quotation_approval_required: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -226,9 +233,70 @@ export interface Quotation {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+
+  // Section 1: contact + rep
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  sales_rep_id: string | null;
+
+  // Section 2: shipment information
+  shipment_direction: ShipmentDirection | null;
+  cargo_type: CargoType | null;
+  incoterm: string | null;
+  origin_country: string | null;
+  origin_port: string | null;
+  destination_country: string | null;
+  destination_port: string | null;
+  expected_shipping_date: string | null;
+  expected_arrival_date: string | null;
+
+  // Section 3: cargo information
+  commodity_description: string | null;
+  hs_code: string | null;
+  container_count: number | null;
+  container_size: string | null;
+  weight: number | null;
+  weight_unit: string;
+  cbm: number | null;
+  packages_count: number | null;
+  package_type: string | null;
+  dangerous_cargo: boolean;
+  temperature_controlled: boolean;
+  insurance_required: boolean;
+  cargo_value: number | null;
+
+  // Section 4: selected services
+  services: string[];
+
+  // Section 6: payment terms
+  payment_terms: string | null;
+  payment_method: string | null;
+
+  // Section 7: required documents
+  required_documents: string[];
+
+  // Section 8: priority + customer-facing notes
+  priority: QuotationPriority;
+  customer_notes: string | null;
+
+  // Section 10: approval trail
+  requested_by: string | null;
+  approved_by: string | null;
+  approval_date: string | null;
+  approval_notes: string | null;
+
+  // Section 13: conversion tracking
+  converted_shipment_id: string | null;
+  converted_at: string | null;
+
   customer?: Customer | null;
   branch?: Branch | null;
   items?: QuotationItem[];
+  sales_rep?: Profile | null;
+  requested_by_user?: Profile | null;
+  approved_by_user?: Profile | null;
+  converted_shipment?: Shipment | null;
 }
 
 export interface QuotationItem {
@@ -238,6 +306,8 @@ export interface QuotationItem {
   quantity: number;
   unit_price: number;
   tax_rate: number;
+  discount_rate: number;
+  service_key: string | null;
   total: number;
   created_at: string;
   updated_at: string;

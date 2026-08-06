@@ -1192,8 +1192,8 @@ export default function ReportsPage() {
                   color="bg-blue-50 text-blue-600"
                 />
                 <SummaryCard
-                  label="Approved"
-                  value={quotationSummary.byStatus['approved'] ?? 0}
+                  label="Accepted"
+                  value={quotationSummary.byStatus['accepted'] ?? 0}
                   icon={CheckCircle2}
                   color="bg-green-50 text-green-600"
                 />
@@ -1201,6 +1201,8 @@ export default function ReportsPage() {
                   label="Pending"
                   value={
                     (quotationSummary.byStatus['draft'] ?? 0) +
+                    (quotationSummary.byStatus['pending_approval'] ?? 0) +
+                    (quotationSummary.byStatus['approved'] ?? 0) +
                     (quotationSummary.byStatus['sent'] ?? 0)
                   }
                   icon={TrendingUp}

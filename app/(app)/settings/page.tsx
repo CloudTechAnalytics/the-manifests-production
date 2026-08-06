@@ -25,6 +25,7 @@ import {
   Monitor,
   Trash2,
   Webhook,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -158,6 +159,61 @@ export default function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const isAdmin = profile?.role === 'admin';
+
+  // Section 9 (Quotations) — whether Draft quotations must pass through
+  // Pending Approval / Approved before they can be marked Sent.
+  const [approvalRequired, setApprovalRequired] = useState(false);
+  const [savingApproval, setSavingApproval] = useState(false);
+
+  useEffect(() => {
+    if (!profile?.organization_id) return;
+    supabase
+      .from('organizations')
+      .select('quotation_approval_required')
+      .eq('id', profile.organization_id)
+      .maybeSingle()
+      .then(({ data }) => setApprovalRequired(data?.quotation_approval_required ?? false));
+  }, [profile?.organization_id]);
+
+  const handleToggleApprovalRequired = async (checked: boolean) => {
+    if (!profile?.organization_id) return;
+    setSavingApproval(true);
+    const previous = approvalRequired;
+    setApprovalRequired(checked); // optimistic — reverted on failure below
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) throw new Error('Your session has expired. Please sign in again.');
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-org-quotation-settings`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ quotation_approval_required: checked }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error ?? `Request failed (${response.status})`);
+      }
+
+      toast.success(
+        checked
+          ? 'Quotations now require approval before they can be sent'
+          : 'Quotations can be sent without a separate approval step'
+      );
+    } catch (err) {
+      setApprovalRequired(previous);
+      toast.error(getErrorMessage(err, 'Failed to update this setting'));
+    } finally {
+      setSavingApproval(false);
+    }
+  };
 
   // Sync profile name when profile loads or changes
   useEffect(() => {
@@ -798,6 +854,40 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Quotation workflow (admin only) */}
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  Quotation Workflow
+                </CardTitle>
+                <CardDescription>
+                  Controls how a quotation moves from Draft to Sent, org-wide.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+                  <div>
+                    <p className="text-sm font-medium">Require approval before sending</p>
+                    <p className="text-sm text-muted-foreground">
+                      When on, a Draft quotation must be approved by an admin or branch
+                      manager (Pending Approval → Approved) before it can be marked Sent.
+                      When off, Draft can go straight to Sent.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={approvalRequired}
+                    onCheckedChange={handleToggleApprovalRequired}
+                    disabled={savingApproval}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ──────────────────────────────────────────────────────────── */}
