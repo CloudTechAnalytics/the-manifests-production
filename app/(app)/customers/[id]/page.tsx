@@ -101,7 +101,7 @@ export default function CustomerDetailPage() {
   const isAdmin = profile?.role === 'admin';
   const canDelete =
     !!customer &&
-    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [customer.created_by] });
+    canDeleteOwnRecord({ hasRole });
 
   const loadData = useCallback(async () => {
     if (!customerId) return;

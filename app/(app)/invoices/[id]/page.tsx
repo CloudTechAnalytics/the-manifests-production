@@ -99,7 +99,7 @@ export default function InvoiceDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete =
     !!invoice &&
-    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [invoice.created_by] });
+    canDeleteOwnRecord({ hasRole });
 
   const loadData = useCallback(async () => {
     if (!invoiceId) return;

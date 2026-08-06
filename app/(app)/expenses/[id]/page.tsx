@@ -74,7 +74,7 @@ export default function ExpenseDetailPage() {
   const [updating, setUpdating] = useState(false);
   const canDelete =
     !!expense &&
-    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [expense.created_by] });
+    canDeleteOwnRecord({ hasRole });
 
   const loadData = useCallback(async () => {
     if (!expenseId) return;

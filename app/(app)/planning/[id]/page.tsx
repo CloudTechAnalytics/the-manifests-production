@@ -132,13 +132,7 @@ export default function PlanDetailPage() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const canDelete =
-    !!plan &&
-    canDeleteOwnRecord({
-      hasRole,
-      userId: profile?.id,
-      ownerIds: [plan.created_by, plan.assigned_to, plan.planned_by],
-    });
+  const canDelete = !!plan && canDeleteOwnRecord({ hasRole });
 
   const [overviewEditOpen, setOverviewEditOpen] = useState(false);
   const [containerEditOpen, setContainerEditOpen] = useState(false);

@@ -83,7 +83,7 @@ export default function StockItemDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete =
-    !!item && canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [item.created_by] });
+    !!item && canDeleteOwnRecord({ hasRole });
 
   const [movementOpen, setMovementOpen] = useState(false);
   const [movementMode, setMovementMode] = useState<MovementMode>('inbound');

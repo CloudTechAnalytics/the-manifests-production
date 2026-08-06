@@ -1,23 +1,20 @@
 import type { UserRole } from '@/types';
 
-interface OwnershipCheckArgs {
+interface CanDeleteArgs {
   hasRole: (role: UserRole) => boolean;
-  userId: string | null | undefined;
-  /** created_by, assigned_to, sales_rep_id, planned_by — whichever this record has. */
-  ownerIds: Array<string | null | undefined>;
 }
 
 /**
- * Mirrors the ownership condition added to each table's soft-delete RLS
- * policy in migration 049 (ownership_scoped_delete): admin and
- * branch_manager remain the escalation path and can delete anything in
- * their branch; everyone else may only delete a record they created or
- * are assigned to. Used purely to decide what the UI shows/enables —
- * the database is the real enforcement point, this just avoids
- * presenting a Delete action that would only fail.
+ * Mirrors migration 051 (delete_restricted_to_manager_admin): only
+ * admin and branch_manager may delete any record. An earlier attempt
+ * (migrations 049/050) let a user delete records they personally
+ * created/were assigned to, but that ownership check could not be made
+ * to reliably pass RLS despite extensive verification, so it was
+ * dropped in favor of this simpler, easy-to-reason-about rule. Used
+ * purely to decide what the UI shows — the database is the real
+ * enforcement point, this just avoids presenting a Delete action that
+ * would only fail.
  */
-export function canDeleteOwnRecord({ hasRole, userId, ownerIds }: OwnershipCheckArgs): boolean {
-  if (hasRole('admin') || hasRole('branch_manager')) return true;
-  if (!userId) return false;
-  return ownerIds.some((id) => id === userId);
+export function canDeleteOwnRecord({ hasRole }: CanDeleteArgs): boolean {
+  return hasRole('admin') || hasRole('branch_manager');
 }

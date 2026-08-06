@@ -203,13 +203,7 @@ export default function ShipmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const canDelete =
-    !!shipment &&
-    canDeleteOwnRecord({
-      hasRole,
-      userId: profile?.id,
-      ownerIds: [shipment.created_by, shipment.assigned_to],
-    });
+  const canDelete = !!shipment && canDeleteOwnRecord({ hasRole });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [stagesVersion, setStagesVersion] = useState(0);
   const [statusBlockers, setStatusBlockers] = useState<string[]>([]);

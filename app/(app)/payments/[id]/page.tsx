@@ -70,7 +70,7 @@ export default function PaymentDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete =
     !!payment &&
-    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [payment.created_by] });
+    canDeleteOwnRecord({ hasRole });
 
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
