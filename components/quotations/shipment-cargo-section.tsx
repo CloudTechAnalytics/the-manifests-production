@@ -353,16 +353,10 @@ export function CargoInfoSection() {
               </label>
             )}
           />
-          <Controller
-            control={control}
-            name="insurance_required"
-            render={({ field }) => (
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={field.value} onCheckedChange={(c) => field.onChange(c === true)} />
-                Insurance Required?
-              </label>
-            )}
-          />
+          {/* Insurance is controlled solely by the "Cargo Insurance" checkbox
+              in Services Required (Section 4) — checking it is the only way
+              a priced insurance charge appears; there is deliberately no
+              second, disconnected insurance toggle here. */}
         </div>
       </CardContent>
     </Card>

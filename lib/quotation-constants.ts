@@ -48,13 +48,23 @@ export interface QuotationServiceDef {
  * resolveChargeTemplate() for what description/naming it gets (mode-
  * aware, e.g. "Ocean Freight" vs "Air Freight" for Freight Forwarding).
  */
+/**
+ * Deliberately excludes operational/exception charges that a real freight
+ * forwarder never sells as a planned service — Customs Duty (paid by the
+ * importer directly to Nigeria Customs, never our revenue; tracked instead
+ * on the shipment's Customs tab Duty Assessment) and Demurrage (an
+ * unplanned cost that can't be known at quotation time; tracked instead on
+ * the shipment's Financial Exposure tab). Detention, Port Storage,
+ * Shipping Line Storage, Terminal Penalty, Customs Penalty, and Late
+ * Delivery Charges were never in this catalog and must never be added
+ * here — see NOT_INCLUDED_SERVICE_OPTIONS below, where the customer-facing
+ * quotation PDF states plainly that none of these are included.
+ */
 export const QUOTATION_SERVICES: QuotationServiceDef[] = [
   { key: 'freight_forwarding', label: 'Freight Forwarding' },
   { key: 'customs_clearance', label: 'Customs Clearance' },
-  { key: 'customs_duty', label: 'Customs Duty' },
   { key: 'documentation', label: 'Documentation' },
   { key: 'terminal_handling', label: 'Terminal Handling' },
-  { key: 'demurrage', label: 'Demurrage' },
   { key: 'warehouse', label: 'Warehouse' },
   { key: 'haulage', label: 'Haulage' },
   { key: 'cargo_insurance', label: 'Cargo Insurance' },
@@ -183,6 +193,12 @@ export const BILLING_BASIS_OPTIONS = [
  * so lib/quotation-rules.ts's resolveExcludedServiceOptions() can drop
  * it the moment that service is selected — the list is never shown
  * contradicting what's actually included.
+ *
+ * Entries WITHOUT a relatedServiceKey are permanently excluded — they're
+ * operational/exception charges (Customs Duty, Demurrage, Detention,
+ * storage/penalty charges, late delivery) that are never a quotation
+ * service in the first place, so there's no selection that could ever
+ * make them "included." They always show on the customer-facing PDF.
  */
 export interface NotIncludedOption {
   label: string;
@@ -190,11 +206,18 @@ export interface NotIncludedOption {
 }
 
 export const NOT_INCLUDED_SERVICE_OPTIONS: NotIncludedOption[] = [
-  { label: 'Customs Duty', relatedServiceKey: 'customs_duty' },
+  { label: 'Customs Duty' },
   { label: 'SON Fees', relatedServiceKey: 'son' },
   { label: 'NAFDAC Fees', relatedServiceKey: 'nafdac' },
   { label: 'Storage Charges', relatedServiceKey: 'warehouse' },
-  { label: 'Demurrage', relatedServiceKey: 'demurrage' },
+  { label: 'Demurrage' },
+  { label: 'Detention' },
+  { label: 'Port Storage' },
+  { label: 'Shipping Line Storage' },
+  { label: 'Terminal Penalty' },
+  { label: 'Customs Penalty' },
+  { label: 'Re-examination / Additional Examination Penalty' },
+  { label: 'Late Delivery Charges' },
   { label: 'Examination Charges', relatedServiceKey: 'examination' },
   { label: 'Cargo Insurance', relatedServiceKey: 'cargo_insurance' },
 ];

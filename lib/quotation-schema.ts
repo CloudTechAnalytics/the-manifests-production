@@ -64,7 +64,11 @@ export const quotationSchema = z.object({
   package_type: z.string().optional().or(z.literal('')),
   dangerous_cargo: z.boolean(),
   temperature_controlled: z.boolean(),
-  insurance_required: z.boolean(),
+  // insurance_required is not a form field — it's derived from
+  // services.includes('cargo_insurance') at submit time (see
+  // app/(app)/quotations/new/page.tsx and [id]/edit/page.tsx), so
+  // there's exactly one control ("Cargo Insurance" in Services Required)
+  // instead of two disconnected ones.
   cargo_value: z.coerce.number().min(0).optional(),
 
   // Section 4: Services Required
@@ -129,7 +133,6 @@ export const QUOTATION_FORM_DEFAULTS: QuotationFormValues = {
   package_type: '',
   dangerous_cargo: false,
   temperature_controlled: false,
-  insurance_required: false,
   cargo_value: undefined,
   services: [],
   excluded_services: [],

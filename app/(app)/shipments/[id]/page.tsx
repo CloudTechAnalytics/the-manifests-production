@@ -34,6 +34,7 @@ import {
   AlertTriangle,
   Shield,
   Container as ContainerIcon,
+  Banknote,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -105,9 +106,12 @@ import { LifecycleTimeline } from '@/components/shipments/lifecycle-timeline';
 import { ShipmentWorkflowPanel } from '@/components/shipments/shipment-workflow-panel';
 import { ShipmentDocumentsPanel } from '@/components/shipments/shipment-documents-panel';
 import { CustomsFormDialog } from '@/components/customs/customs-form-dialog';
+import { DutyAssessmentCard } from '@/components/customs/duty-assessment-card';
+import { DutyAssessmentDialog } from '@/components/customs/duty-assessment-dialog';
 import { TerminalFormDialog } from '@/components/terminal/terminal-form-dialog';
 import { ExaminationFormDialog } from '@/components/examination/examination-form-dialog';
 import { TransportationFormDialog } from '@/components/transportation/transportation-form-dialog';
+import { FinancialExposurePanel } from '@/components/shipments/financial-exposure-panel';
 import { checkShipmentStatusReadiness } from '@/lib/utils/workflow-rules';
 import { ShipmentDocumentationDialog } from '@/components/shipments/shipment-documentation-dialog';
 import { ShipmentPartiesDialog } from '@/components/shipments/shipment-parties-dialog';
@@ -168,6 +172,7 @@ type TimelineEntry = ShipmentTimelineEntry & {
 
 const KNOWN_TABS = new Set([
   'overview', 'timeline', 'workflow', 'documents', 'cargo', 'customs', 'terminal', 'examination', 'transportation',
+  'financial_exposure',
 ]);
 
 export default function ShipmentDetailPage() {
@@ -191,6 +196,7 @@ export default function ShipmentDetailPage() {
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [insurancePolicies, setInsurancePolicies] = useState<CargoInsurancePolicy[]>([]);
   const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
+  const [dutyAssessmentDialogOpen, setDutyAssessmentDialogOpen] = useState(false);
   const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
   const [documentationDialogOpen, setDocumentationDialogOpen] = useState(false);
   const [partiesDialogOpen, setPartiesDialogOpen] = useState(false);
@@ -901,6 +907,10 @@ export default function ShipmentDetailPage() {
             <Truck className="h-4 w-4" />
             Transportation
           </TabsTrigger>
+          <TabsTrigger value="financial_exposure" className="gap-1.5">
+            <Banknote className="h-4 w-4" />
+            Financial Exposure
+          </TabsTrigger>
         </TabsList>
 
         {/* --- Overview Tab --- */}
@@ -1402,6 +1412,15 @@ export default function ShipmentDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {customsRecord && (
+            <div className="mt-4">
+              <DutyAssessmentCard
+                customsRecord={customsRecord}
+                onEdit={() => setDutyAssessmentDialogOpen(true)}
+              />
+            </div>
+          )}
         </TabsContent>
 
         {/* --- Terminal Tab --- */}
@@ -1561,6 +1580,17 @@ export default function ShipmentDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* --- Financial Exposure Tab --- */}
+        <TabsContent value="financial_exposure">
+          <FinancialExposurePanel
+            shipmentId={shipment.id}
+            branchId={shipment.branch_id}
+            shipmentStatus={shipment.status}
+            defaultCurrency={shipment.goods_value_currency || 'NGN'}
+            onChanged={loadData}
+          />
+        </TabsContent>
       </Tabs>
 
       {shipment && (
@@ -1585,6 +1615,16 @@ export default function ShipmentDetailPage() {
             existing={customsRecord}
             onSaved={loadData}
           />
+          {customsRecord && (
+            <DutyAssessmentDialog
+              open={dutyAssessmentDialogOpen}
+              onOpenChange={setDutyAssessmentDialogOpen}
+              shipmentId={shipment.id}
+              branchId={shipment.branch_id}
+              existing={customsRecord}
+              onSaved={loadData}
+            />
+          )}
           <TerminalFormDialog
             open={terminalDialogOpen}
             onOpenChange={setTerminalDialogOpen}

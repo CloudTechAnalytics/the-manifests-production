@@ -95,10 +95,8 @@ export function resolveDefaultServices(direction: ShipmentDirection | '' | null)
 const SCOPE_OF_SERVICE_LABELS: Record<string, string> = {
   freight_forwarding: 'Freight Forwarding',
   customs_clearance: 'Customs Clearance',
-  customs_duty: 'Customs Duty',
   documentation: 'Documentation',
   terminal_handling: 'Terminal Handling',
-  demurrage: 'Demurrage Handling',
   warehouse: 'Storage Services',
   haulage: 'Inland Haulage',
   delivery: 'Final Delivery',
@@ -145,10 +143,8 @@ const MODE_AWARE_DESCRIPTIONS: Partial<Record<string, Partial<Record<ShipmentTyp
 
 const STATIC_DESCRIPTIONS: Record<string, string> = {
   customs_clearance: 'Customs Clearance',
-  customs_duty: 'Customs Duty',
   documentation: 'Documentation Fee',
   terminal_handling: 'Terminal Handling Charge',
-  demurrage: 'Demurrage Charges',
   warehouse: 'Warehousing',
   haulage: 'Haulage Charge',
   cargo_insurance: 'Insurance Premium',
@@ -273,13 +269,6 @@ export function getSuggestions(values: SuggestionContext): Suggestion[] {
       id: 'import-documentation',
       level: 'warning',
       message: 'Import shipments normally require Documentation — this quotation doesn’t include it yet.',
-    });
-  }
-  if (values.shipment_direction === 'import' && !values.services.includes('customs_duty')) {
-    suggestions.push({
-      id: 'import-customs-duty',
-      level: 'info',
-      message: 'Import shipments often incur Customs Duty — consider adding it once the assessed duty is known.',
     });
   }
   if (values.shipment_direction === 'export' && !values.required_documents.includes('Shipping Instructions')) {

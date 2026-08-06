@@ -14,6 +14,10 @@ import type {
   WorkflowStageStatus,
   DocumentStatus,
   DocumentRecord,
+  DutyStatus,
+  ExposureType,
+  ResponsibleParty,
+  ExposureStatus,
 } from '@/types';
 
 /**
@@ -242,6 +246,46 @@ export function isDocumentExpired(doc: Pick<DocumentRecord, 'expiry_date'>): boo
   if (!doc.expiry_date) return false;
   return doc.expiry_date < new Date().toISOString().split('T')[0];
 }
+
+/**
+ * Duty assessment lifecycle (Customs tab), distinct from the broader
+ * customs-clearance `status` on the same shipment_customs record.
+ */
+export const DUTY_STATUS_META: Record<DutyStatus, { label: string; color: string }> = {
+  not_assessed: { label: 'Not Assessed', color: 'bg-gray-100 text-gray-700' },
+  awaiting_payment: { label: 'Awaiting Payment', color: 'bg-amber-100 text-amber-700' },
+  paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700' },
+  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
+};
+
+/**
+ * Financial Exposure — money being lost after a shipment is already
+ * underway (demurrage, detention, storage, penalties). Never a quotation
+ * charge. See lib/utils/financial-exposure.ts for the accrual calculator.
+ */
+export const EXPOSURE_TYPE_META: Record<ExposureType, { label: string; color: string }> = {
+  demurrage: { label: 'Demurrage', color: 'bg-red-100 text-red-700' },
+  detention: { label: 'Detention', color: 'bg-orange-100 text-orange-700' },
+  terminal_storage: { label: 'Terminal Storage', color: 'bg-amber-100 text-amber-700' },
+  warehouse_storage: { label: 'Warehouse Storage', color: 'bg-purple-100 text-purple-700' },
+  penalty: { label: 'Penalty', color: 'bg-pink-100 text-pink-700' },
+  emergency_charge: { label: 'Emergency Charge', color: 'bg-rose-100 text-rose-700' },
+};
+
+export const RESPONSIBLE_PARTY_META: Record<ResponsibleParty, { label: string }> = {
+  customer: { label: 'Customer' },
+  freight_forwarder: { label: 'Freight Forwarder' },
+  shipping_line: { label: 'Shipping Line' },
+  terminal: { label: 'Terminal' },
+  customs: { label: 'Customs' },
+};
+
+export const EXPOSURE_STATUS_META: Record<ExposureStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
+  disputed: { label: 'Disputed', color: 'bg-red-100 text-red-700' },
+  approved: { label: 'Approved', color: 'bg-blue-100 text-blue-700' },
+  paid: { label: 'Paid', color: 'bg-green-100 text-green-700' },
+};
 
 export function formatDate(date: string | null): string {
   if (!date) return '—';

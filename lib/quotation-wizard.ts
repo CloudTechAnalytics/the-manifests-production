@@ -63,7 +63,6 @@ export const WIZARD_STEP_FIELDS: Record<QuotationWizardStepId, (keyof QuotationF
     'package_type',
     'dangerous_cargo',
     'temperature_controlled',
-    'insurance_required',
     'cargo_value',
   ],
   services: ['services', 'excluded_services'],

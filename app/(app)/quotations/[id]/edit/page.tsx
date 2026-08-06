@@ -127,7 +127,6 @@ export default function EditQuotationPage() {
         package_type: q.package_type ?? '',
         dangerous_cargo: q.dangerous_cargo,
         temperature_controlled: q.temperature_controlled,
-        insurance_required: q.insurance_required,
         cargo_value: q.cargo_value ?? undefined,
         services: q.services ?? [],
         excluded_services: q.excluded_services ?? [],
@@ -218,7 +217,9 @@ export default function EditQuotationPage() {
           package_type: values.package_type || null,
           dangerous_cargo: values.dangerous_cargo,
           temperature_controlled: values.temperature_controlled,
-          insurance_required: values.insurance_required,
+          // Derived, not a form field — see lib/quotation-schema.ts's
+          // comment on why insurance has exactly one control.
+          insurance_required: values.services.includes('cargo_insurance'),
           cargo_value: values.cargo_value ?? null,
           services: values.services,
           excluded_services: values.excluded_services,

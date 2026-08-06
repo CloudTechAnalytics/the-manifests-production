@@ -90,6 +90,25 @@ export type TransportationStatus =
   | 'delivered'
   | 'failed_delivery';
 
+export type DutyStatus = 'not_assessed' | 'awaiting_payment' | 'paid' | 'verified';
+
+export type ExposureType =
+  | 'demurrage'
+  | 'detention'
+  | 'terminal_storage'
+  | 'warehouse_storage'
+  | 'penalty'
+  | 'emergency_charge';
+
+export type ResponsibleParty =
+  | 'customer'
+  | 'freight_forwarder'
+  | 'shipping_line'
+  | 'terminal'
+  | 'customs';
+
+export type ExposureStatus = 'pending' | 'disputed' | 'approved' | 'paid';
+
 export interface Branch {
   id: string;
   name: string;
@@ -594,6 +613,45 @@ export interface ShipmentCustoms {
   updated_at: string;
   deleted_at: string | null;
   shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+  // Duty Assessment — operational only, never quotation revenue. Customs
+  // Duty is paid by the importer directly to Nigeria Customs.
+  duty_vat: number;
+  duty_levy: number;
+  duty_ciss: number;
+  duty_etls: number;
+  duty_total: number; // generated column: duty_amount + vat + levy + ciss + etls
+  duty_paid_by: string | null;
+  duty_receipt_document_id: string | null;
+  duty_status: DutyStatus;
+}
+
+/**
+ * Financial Exposure — money being lost after a shipment is already
+ * underway (demurrage, detention, terminal/warehouse storage, penalties,
+ * emergency charges). Never a quotation charge; exists only on live
+ * shipments. current_days/accumulated_cost are deliberately not stored —
+ * see lib/utils/financial-exposure.ts::computeExposureAccrual().
+ */
+export interface FinancialExposure {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  exposure_type: ExposureType;
+  start_date: string;
+  free_days: number;
+  end_date: string | null;
+  charge_per_day: number;
+  currency: string;
+  responsible_party: ResponsibleParty;
+  reason: string | null;
+  status: ExposureStatus;
+  created_by: string | null;
+  updated_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  shipment?: { id: string; reference_number: string | null } | null;
 }
 
 export interface TerminalOperation {
