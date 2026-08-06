@@ -82,7 +82,7 @@ function WizardStepper({
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-8 gap-1.5">
         {QUOTATION_WIZARD_STEPS.map((step, index) => {
           const isActive = index === activeIndex;
           const isDone = index < activeIndex;
@@ -92,7 +92,7 @@ function WizardStepper({
               type="button"
               onClick={() => onJump(index)}
               className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 text-center text-[10px] font-medium leading-tight transition-colors sm:flex-row sm:gap-1.5 sm:rounded-full sm:px-2 sm:text-[11px]',
                 isActive
                   ? 'border-primary bg-primary text-primary-foreground'
                   : isDone
@@ -136,7 +136,7 @@ function WizardStepPanel({
     case 'services':
       return (
         <>
-          <ServicesSection />
+          <ServicesSection branchId={branchId} />
           <ScopeOfServiceSection />
         </>
       );

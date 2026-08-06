@@ -130,18 +130,18 @@ export function ChargeBreakdownSection() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
               {isDesktop ? (
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-8" />
-                      <TableHead>Description</TableHead>
-                      <TableHead className="w-16 text-right">Qty</TableHead>
-                      <TableHead className="w-24 text-right">Rate</TableHead>
-                      <TableHead className="w-16 text-right">VAT %</TableHead>
-                      <TableHead className="w-16 text-right">Disc %</TableHead>
-                      <TableHead className="w-28 text-right">Total</TableHead>
-                      <TableHead className="w-9" />
-                      <TableHead className="w-9" />
+                      <TableHead className="w-[4%] p-2" />
+                      <TableHead className="w-[30%] p-2">Description</TableHead>
+                      <TableHead className="w-[8%] p-2 text-right">Qty</TableHead>
+                      <TableHead className="w-[14%] p-2 text-right">Rate</TableHead>
+                      <TableHead className="w-[8%] p-2 text-right">VAT %</TableHead>
+                      <TableHead className="w-[8%] p-2 text-right">Disc %</TableHead>
+                      <TableHead className="w-[14%] p-2 text-right">Total</TableHead>
+                      <TableHead className="w-[7%] p-2" />
+                      <TableHead className="w-[7%] p-2" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -293,35 +293,38 @@ function ChargeTableRow({ id, index, row, currency, open, onToggleOpen, onRemove
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   const lineTotal = row ? computeLineTotal(row) : 0;
 
+  const rateNotConfigured = row && Number(row.unit_price) === 0;
+
   return (
     <>
-      <TableRow ref={setNodeRef} style={style}>
-        <TableCell className="cursor-grab align-middle text-muted-foreground" {...attributes} {...listeners}>
+      <TableRow ref={setNodeRef} style={style} className="animate-in fade-in slide-in-from-top-1 duration-200">
+        <TableCell className="cursor-grab p-2 align-middle text-muted-foreground" {...attributes} {...listeners}>
           <GripVertical className="h-4 w-4" />
         </TableCell>
-        <TableCell>
-          <Input {...register(`items.${index}.description`)} placeholder="Charge description" />
+        <TableCell className="p-2">
+          <Input className="h-8 text-sm" {...register(`items.${index}.description`)} placeholder="Charge description" />
           {errorMessage && <p className="mt-1 text-xs text-destructive">{errorMessage}</p>}
         </TableCell>
-        <TableCell>
-          <Input type="number" step="any" min="0" className="text-right" {...register(`items.${index}.quantity`)} />
+        <TableCell className="p-2">
+          <Input type="number" step="any" min="0" className="h-8 text-right text-sm" {...register(`items.${index}.quantity`)} />
         </TableCell>
-        <TableCell>
-          <Input type="number" step="any" min="0" className="text-right" {...register(`items.${index}.unit_price`)} />
+        <TableCell className="p-2">
+          <Input type="number" step="any" min="0" className="h-8 text-right text-sm" {...register(`items.${index}.unit_price`)} />
+          {rateNotConfigured && <p className="mt-0.5 truncate text-[10px] text-amber-600">Rate not configured</p>}
         </TableCell>
-        <TableCell>
-          <Input type="number" step="any" min="0" max="100" className="text-right" {...register(`items.${index}.tax_rate`)} />
+        <TableCell className="p-2">
+          <Input type="number" step="any" min="0" max="100" className="h-8 text-right text-sm" {...register(`items.${index}.tax_rate`)} />
         </TableCell>
-        <TableCell>
-          <Input type="number" step="any" min="0" max="100" className="text-right" {...register(`items.${index}.discount_rate`)} />
+        <TableCell className="p-2">
+          <Input type="number" step="any" min="0" max="100" className="h-8 text-right text-sm" {...register(`items.${index}.discount_rate`)} />
         </TableCell>
-        <TableCell className="text-right font-medium">{formatCurrency(lineTotal, currency)}</TableCell>
-        <TableCell>
+        <TableCell className="p-2 text-right text-sm font-medium">{formatCurrency(lineTotal, currency)}</TableCell>
+        <TableCell className="p-2">
           <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onToggleOpen}>
             <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
           </Button>
         </TableCell>
-        <TableCell>
+        <TableCell className="p-2">
           <Button
             type="button"
             variant="ghost"
@@ -335,7 +338,7 @@ function ChargeTableRow({ id, index, row, currency, open, onToggleOpen, onRemove
       </TableRow>
       {open && (
         <TableRow>
-          <TableCell colSpan={9} className="bg-muted/30 py-3">
+          <TableCell colSpan={9} className="animate-in bg-muted/30 py-3 fade-in slide-in-from-top-1 duration-150">
             <MoreDetailsFields index={index} register={register} control={control} />
           </TableCell>
         </TableRow>
@@ -351,8 +354,14 @@ function ChargeCard({ id, index, row, currency, open, onToggleOpen, onRemove, re
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   const lineTotal = row ? computeLineTotal(row) : 0;
 
+  const rateNotConfigured = row && Number(row.unit_price) === 0;
+
   return (
-    <div ref={setNodeRef} style={style} className="rounded-lg border border-border p-3">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="animate-in rounded-lg border border-border p-3 fade-in slide-in-from-top-1 duration-200"
+    >
       <div className="mb-2 flex items-center gap-2">
         <span className="cursor-grab text-muted-foreground" {...attributes} {...listeners}>
           <GripVertical className="h-4 w-4" />
@@ -371,6 +380,7 @@ function ChargeCard({ id, index, row, currency, open, onToggleOpen, onRemove, re
         <div className="space-y-1">
           <Label className="text-xs">Rate</Label>
           <Input type="number" step="any" min="0" className="h-8 text-sm" {...register(`items.${index}.unit_price`)} />
+          {rateNotConfigured && <p className="truncate text-[10px] text-amber-600">Rate not configured</p>}
         </div>
         <div className="space-y-1">
           <Label className="text-xs">VAT %</Label>

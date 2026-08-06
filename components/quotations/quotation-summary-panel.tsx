@@ -1,7 +1,7 @@
 'use client';
 
 import { useFormContext } from 'react-hook-form';
-import { Ship, Plane, Truck, Package2, MapPin, Lightbulb } from 'lucide-react';
+import { Ship, Plane, Truck, Package2, MapPin, Lightbulb, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +12,7 @@ import { computeQuotationTotals, computeQuotationCompleteness } from '@/lib/quot
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { Customer, QuotationStatus } from '@/types';
 import { QUOTATION_STATUS_META } from '@/lib/utils/status';
+import { cn } from '@/lib/utils';
 
 const MODE_ICON = { air: Plane, sea: Ship, road: Truck, rail: Truck, multimodal: Package2 };
 
@@ -70,9 +71,18 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
             {suggestions.map((s) => (
               <div
                 key={s.id}
-                className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800"
+                className={cn(
+                  'flex animate-in items-start gap-1.5 rounded-lg border p-2.5 text-xs fade-in slide-in-from-top-1 duration-200',
+                  s.level === 'warning'
+                    ? 'border-red-200 bg-red-50 text-red-800'
+                    : 'border-amber-200 bg-amber-50 text-amber-800'
+                )}
               >
-                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {s.level === 'warning' ? (
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                )}
                 <span>{s.message}</span>
               </div>
             ))}

@@ -98,7 +98,7 @@ export const REQUIRED_DOCUMENT_OPTIONS = [
   'NAFDAC',
   'Form M',
   'PAAR',
-  'Export Declaration',
+  'Export Declaration (NXP)',
   'Shipping Instructions',
   'Others',
 ];
@@ -107,13 +107,16 @@ export const REQUIRED_DOCUMENT_OPTIONS = [
  * Default required-document checklist by shipment direction (Section 7)
  * — pre-fills the checkbox grid above so staff don't have to hand-pick
  * every document on every quotation; still fully editable afterwards.
+ * Insurance Certificate/SONCAP/NAFDAC are deliberately NOT in either base
+ * list — they're conditional (CIF/CIP incoterm, SON/NAFDAC services) and
+ * added by lib/quotation-rules.ts's resolveRequiredDocuments(), not
+ * unconditionally on every import/export quotation.
  */
 export const IMPORT_REQUIRED_DOCUMENTS = [
   'Commercial Invoice',
   'Packing List',
   'Bill of Lading',
   'Certificate of Origin',
-  'Insurance Certificate',
   'Form M',
   'PAAR',
 ];
@@ -121,9 +124,10 @@ export const IMPORT_REQUIRED_DOCUMENTS = [
 export const EXPORT_REQUIRED_DOCUMENTS = [
   'Commercial Invoice',
   'Packing List',
-  'Export Declaration',
+  'Export Declaration (NXP)',
   'Certificate of Origin',
   'Shipping Instructions',
+  'Bill of Lading',
 ];
 
 export function getDefaultRequiredDocuments(direction: ShipmentDirection | null): string[] {
@@ -132,11 +136,6 @@ export function getDefaultRequiredDocuments(direction: ShipmentDirection | null)
   return [];
 }
 
-/**
- * "Not Included" checklist for the Scope of Service section — a
- * developer-defined catalog, same precedent as QUOTATION_SERVICES /
- * REQUIRED_DOCUMENT_OPTIONS (not admin-editable this pass).
- */
 /**
  * How a charge line is billed — internal GL metadata shown in the
  * charge table's "More Details" disclosure, not on the customer PDF.
@@ -150,13 +149,30 @@ export const BILLING_BASIS_OPTIONS = [
   { value: 'flat', label: 'Flat Fee' },
 ];
 
-export const NOT_INCLUDED_SERVICE_OPTIONS = [
-  'Customs Duty',
-  'SON Fees',
-  'NAFDAC Fees',
-  'Storage Charges',
-  'Demurrage',
-  'Examination Charges',
+/**
+ * "Not Included" catalog for the Scope of Service section — a
+ * developer-defined catalog, same precedent as QUOTATION_SERVICES /
+ * REQUIRED_DOCUMENT_OPTIONS (not admin-editable this pass). Each entry
+ * that corresponds to a selectable service carries that service's key
+ * so lib/quotation-rules.ts's resolveExcludedServiceOptions() can drop
+ * it the moment that service is selected — the list is never shown
+ * contradicting what's actually included. Entries with no
+ * relatedServiceKey (Customs Duty, Demurrage) aren't tied to any
+ * service and always show.
+ */
+export interface NotIncludedOption {
+  label: string;
+  relatedServiceKey?: string;
+}
+
+export const NOT_INCLUDED_SERVICE_OPTIONS: NotIncludedOption[] = [
+  { label: 'Customs Duty' },
+  { label: 'SON Fees', relatedServiceKey: 'son' },
+  { label: 'NAFDAC Fees', relatedServiceKey: 'nafdac' },
+  { label: 'Storage Charges', relatedServiceKey: 'warehouse' },
+  { label: 'Demurrage' },
+  { label: 'Examination Charges', relatedServiceKey: 'examination' },
+  { label: 'Cargo Insurance', relatedServiceKey: 'cargo_insurance' },
 ];
 
 export const QUOTATION_PRIORITY_META: Record<QuotationPriority, { label: string; color: string }> = {

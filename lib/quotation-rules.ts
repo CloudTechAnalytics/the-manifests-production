@@ -1,4 +1,10 @@
-import { IMPORT_REQUIRED_DOCUMENTS, EXPORT_REQUIRED_DOCUMENTS } from '@/lib/quotation-constants';
+import { supabase } from '@/lib/supabase/client';
+import {
+  IMPORT_REQUIRED_DOCUMENTS,
+  EXPORT_REQUIRED_DOCUMENTS,
+  NOT_INCLUDED_SERVICE_OPTIONS,
+  type NotIncludedOption,
+} from '@/lib/quotation-constants';
 import type { ShipmentDirection, ShipmentType, CargoType } from '@/types';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 
@@ -77,6 +83,47 @@ export function resolveDefaultServices(direction: ShipmentDirection | '' | null)
 }
 
 // ============================================================
+// SCOPE OF SERVICE (dynamic — no hardcoded lists in components)
+// ============================================================
+
+/**
+ * Customer-facing wording for the Scope of Service "Included" list —
+ * deliberately separate from QUOTATION_SERVICES[].label, which is the
+ * short name used in the Services Required checkbox grid. A scope-of-
+ * service line reads better as "Storage Services" than "Warehouse".
+ */
+const SCOPE_OF_SERVICE_LABELS: Record<string, string> = {
+  freight_forwarding: 'Freight Forwarding',
+  customs_clearance: 'Customs Clearance',
+  documentation: 'Documentation',
+  terminal_handling: 'Terminal Handling',
+  warehouse: 'Storage Services',
+  haulage: 'Inland Haulage',
+  delivery: 'Final Delivery',
+  cargo_insurance: 'Cargo Insurance',
+  son: 'SON Processing',
+  nafdac: 'NAFDAC Processing',
+  examination: 'Customs Examination Support',
+  inspection: 'Cargo Inspection',
+};
+
+export function resolveScopeOfServiceLabel(serviceKey: string): string {
+  return SCOPE_OF_SERVICE_LABELS[serviceKey] ?? serviceKey;
+}
+
+/**
+ * "Not Included" is never manually edited — it's the full catalog minus
+ * whatever's tied to an already-selected service, so it can never
+ * contradict what's shown as Included. See NotIncludedOption's doc
+ * comment in quotation-constants.ts for the correlation design.
+ */
+export function resolveExcludedServiceOptions(selectedServices: string[]): NotIncludedOption[] {
+  return NOT_INCLUDED_SERVICE_OPTIONS.filter(
+    (option) => !option.relatedServiceKey || !selectedServices.includes(option.relatedServiceKey)
+  );
+}
+
+// ============================================================
 // CHARGE TEMPLATES (mode-aware naming)
 // ============================================================
 
@@ -117,6 +164,53 @@ export function resolveChargeTemplate(
 }
 
 // ============================================================
+// DEFAULT RATE (from the existing freight_rate_cards table)
+// ============================================================
+
+export interface RateContext {
+  branchId: string | null;
+  originPort: string;
+  destinationPort: string;
+  shipmentType: ShipmentType | '' | null;
+}
+
+/**
+ * Only 'freight_forwarding' has a real backing rate source today — the
+ * trade-lane buy/sell tariffs already managed on the Rate Cards page
+ * (freight_rate_cards). Every other service has no rate table anywhere
+ * in this schema, so it correctly and honestly returns null ("Rate not
+ * configured") rather than inventing a number. Best-effort match on
+ * origin/destination text + mode, scoped to the quotation's branch,
+ * respecting the rate's validity window.
+ */
+export async function resolveDefaultRate(serviceKey: string, ctx: RateContext): Promise<number | null> {
+  if (serviceKey !== 'freight_forwarding') return null;
+  if (!ctx.branchId || !ctx.originPort.trim() || !ctx.destinationPort.trim()) return null;
+
+  let query = supabase
+    .from('freight_rate_cards')
+    .select('sell_rate, valid_from, valid_to')
+    .eq('branch_id', ctx.branchId)
+    .ilike('trade_lane_origin', ctx.originPort.trim())
+    .ilike('trade_lane_destination', ctx.destinationPort.trim())
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (ctx.shipmentType) {
+    query = query.eq('shipment_type', ctx.shipmentType);
+  }
+
+  const { data } = await query.maybeSingle();
+  if (!data) return null;
+
+  const today = new Date().toISOString().split('T')[0];
+  if (data.valid_from && data.valid_from > today) return null;
+  if (data.valid_to && data.valid_to < today) return null;
+
+  return Number(data.sell_rate);
+}
+
+// ============================================================
 // VALIDATION — hard (blocks submission) and soft (suggestion only)
 // ============================================================
 
@@ -142,16 +236,60 @@ export function getHardValidationIssues(values: Pick<QuotationFormValues, 'cargo
 export interface Suggestion {
   id: string;
   message: string;
+  /** 'warning' = something a real quotation for this shipment normally
+   *  needs and is currently missing; 'info' = a lighter recommendation. */
+  level: 'warning' | 'info';
 }
 
+type SuggestionContext = Pick<
+  QuotationFormValues,
+  'incoterm' | 'services' | 'shipment_direction' | 'cargo_type' | 'required_documents'
+>;
+
 /** Non-blocking hints shown in the summary panel — never prevents saving. */
-export function getSuggestions(values: Pick<QuotationFormValues, 'incoterm' | 'services'>): Suggestion[] {
+export function getSuggestions(values: SuggestionContext): Suggestion[] {
   const suggestions: Suggestion[] = [];
 
   if (values.incoterm && CIF_LIKE_INCOTERMS.has(values.incoterm) && !values.services.includes('cargo_insurance')) {
     suggestions.push({
       id: 'cif-insurance',
+      level: 'info',
       message: `${values.incoterm} shipments typically include cargo insurance — consider adding the Cargo Insurance service.`,
+    });
+  }
+  if (values.shipment_direction === 'import' && !values.services.includes('customs_clearance')) {
+    suggestions.push({
+      id: 'import-customs-clearance',
+      level: 'warning',
+      message: 'Import shipments normally require Customs Clearance — this quotation doesn’t include it yet.',
+    });
+  }
+  if (values.shipment_direction === 'import' && !values.services.includes('documentation')) {
+    suggestions.push({
+      id: 'import-documentation',
+      level: 'warning',
+      message: 'Import shipments normally require Documentation — this quotation doesn’t include it yet.',
+    });
+  }
+  if (values.shipment_direction === 'export' && !values.required_documents.includes('Shipping Instructions')) {
+    suggestions.push({
+      id: 'export-shipping-instructions',
+      level: 'warning',
+      message: 'Export shipments normally require Shipping Instructions — add it to Required Documents.',
+    });
+  }
+  if (values.cargo_type === 'fcl' && !values.services.includes('terminal_handling')) {
+    suggestions.push({
+      id: 'fcl-terminal-handling',
+      level: 'info',
+      message: 'FCL shipments typically include Terminal Handling — consider adding the service.',
+    });
+  }
+  if (values.cargo_type === 'lcl' && !values.services.includes('warehouse')) {
+    suggestions.push({
+      id: 'lcl-warehouse',
+      level: 'info',
+      message: 'LCL shipments often need consolidation/deconsolidation — consider adding the Warehouse service.',
     });
   }
 

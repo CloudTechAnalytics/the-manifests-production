@@ -341,7 +341,7 @@ export default function EditQuotationPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+      <div className="mx-auto max-w-[96rem] space-y-6 p-6 lg:p-8">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -420,7 +420,7 @@ export default function EditQuotationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-[96rem] space-y-6 p-6 lg:p-8">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>

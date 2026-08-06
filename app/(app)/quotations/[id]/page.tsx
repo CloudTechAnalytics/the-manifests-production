@@ -100,6 +100,7 @@ import {
   paymentMethodLabel,
 } from '@/lib/quotation-constants';
 import { computeApprovalReason, type QuotationTotals } from '@/lib/quotation-schema';
+import { resolveScopeOfServiceLabel } from '@/lib/quotation-rules';
 import { ConvertToShipmentDialog } from '@/components/quotations/convert-to-shipment-dialog';
 import { QuotationAttachmentsPanel } from '@/components/quotations/quotation-attachments-panel';
 import { VersionHistoryCard } from '@/components/quotations/version-history-card';
@@ -1268,15 +1269,12 @@ export default function QuotationDetailPage() {
                     <p className="text-sm text-muted-foreground">—</p>
                   ) : (
                     <ul className="space-y-1 text-sm">
-                      {quotation.services.map((key) => {
-                        const service = QUOTATION_SERVICES.find((s) => s.key === key);
-                        return (
-                          <li key={key} className="flex items-center gap-1.5">
-                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                            {service?.label ?? key}
-                          </li>
-                        );
-                      })}
+                      {quotation.services.map((key) => (
+                        <li key={key} className="flex items-center gap-1.5">
+                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          {resolveScopeOfServiceLabel(key)}
+                        </li>
+                      ))}
                     </ul>
                   )}
                 </div>

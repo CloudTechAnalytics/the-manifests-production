@@ -2,7 +2,8 @@ import { pdf } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { createElement } from 'react';
 import { QuotationPdfDocument, type QuotationPdfData } from '@/lib/pdf/quotation-pdf-document';
-import { paymentTermsLabel, paymentMethodLabel, QUOTATION_SERVICES, NOT_INCLUDED_SERVICE_OPTIONS } from '@/lib/quotation-constants';
+import { paymentTermsLabel, paymentMethodLabel } from '@/lib/quotation-constants';
+import { resolveScopeOfServiceLabel, resolveExcludedServiceOptions } from '@/lib/quotation-rules';
 import type { Quotation, QuotationItem, Customer, Branch, Profile, Organization } from '@/types';
 
 export type QuotationForPdf = Quotation & {
@@ -73,8 +74,11 @@ export async function buildQuotationPdfData(
     ),
     taxAmount: quotation.tax_amount,
     total: quotation.total,
-    includedServices: quotation.services.map((key) => QUOTATION_SERVICES.find((s) => s.key === key)?.label ?? key),
-    excludedServices: quotation.excluded_services.length > 0 ? quotation.excluded_services : NOT_INCLUDED_SERVICE_OPTIONS,
+    includedServices: quotation.services.map((key) => resolveScopeOfServiceLabel(key)),
+    excludedServices:
+      quotation.excluded_services.length > 0
+        ? quotation.excluded_services
+        : resolveExcludedServiceOptions(quotation.services).map((o) => o.label),
     paymentTerms: quotation.payment_terms ? paymentTermsLabel(quotation.payment_terms) : null,
     paymentMethod: quotation.payment_method ? paymentMethodLabel(quotation.payment_method) : null,
     requiredDocuments: quotation.required_documents,

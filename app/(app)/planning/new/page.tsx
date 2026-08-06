@@ -232,7 +232,7 @@ export default function NewPlanPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>

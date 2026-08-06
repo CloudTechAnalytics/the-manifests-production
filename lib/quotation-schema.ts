@@ -217,29 +217,27 @@ export function computeQuotationTotals(items: ChargeRowValues[]): QuotationTotal
 }
 
 /**
- * How "done" a draft quotation looks, for the Completion % bar — a
- * weighted checklist of fields that are optional to save but expected
- * on a real, customer-ready quote. Not validation (the zod schema
- * already covers what's actually required to save).
+ * How "done" a draft quotation is, for the Completion % bar —
+ * validation-based: only the fields that are actually mandatory to
+ * save (zod-required top-level fields, plus the FCL/LCL conditional
+ * hard-validation rules from the rules engine) count. A field that's
+ * merely nice-to-have doesn't move this number — it only increases as
+ * genuinely required, currently-invalid fields become valid.
  */
 export function computeQuotationCompleteness(values: QuotationFormValues): number {
+  const hardIssues = getHardValidationIssues(values);
+  const hasIssueAt = (field: string) => hardIssues.some((issue) => issue.path.includes(field));
+
   const checks: boolean[] = [
-    !!values.contact_person,
-    !!values.contact_email,
-    !!values.sales_rep_id,
-    !!values.incoterm,
-    !!values.expected_shipping_date,
-    !!values.expected_arrival_date,
-    !!values.commodity_description,
-    !!values.hs_code,
-    (values.weight ?? 0) > 0,
-    (values.cargo_value ?? 0) > 0,
-    values.services.length > 0,
-    !!values.payment_terms,
-    !!values.payment_method,
-    values.required_documents.length > 0,
-    !!values.notes,
-    !!values.terms,
+    !!values.customer_id,
+    !!values.shipment_type,
+    !!values.currency,
+    !!values.origin_port,
+    !!values.destination_port,
+    !hasIssueAt('container_size'),
+    !hasIssueAt('cbm'),
+    values.items.length > 0 && values.items.every((item) => !!item.description),
+    !!values.valid_until,
   ];
   const done = checks.filter(Boolean).length;
   return Math.round((done / checks.length) * 100);

@@ -278,7 +278,7 @@ export default function EditPlanPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 lg:p-8">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -308,7 +308,7 @@ export default function EditPlanPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-4xl space-y-6 p-6 lg:p-8">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
