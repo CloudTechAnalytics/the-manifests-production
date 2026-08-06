@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -119,7 +120,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const planId = params.id;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -131,6 +132,13 @@ export default function PlanDetailPage() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const canDelete =
+    !!plan &&
+    canDeleteOwnRecord({
+      hasRole,
+      userId: profile?.id,
+      ownerIds: [plan.created_by, plan.assigned_to, plan.planned_by],
+    });
 
   const [overviewEditOpen, setOverviewEditOpen] = useState(false);
   const [containerEditOpen, setContainerEditOpen] = useState(false);
@@ -341,36 +349,38 @@ export default function PlanDetailPage() {
               Edit All Details
             </Button>
           </Link>
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete plan?</DialogTitle>
-                <DialogDescription>
-                  This will soft-delete &quot;{plan.plan_number}&quot;. This does not affect any
-                  shipment it was already converted to.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete plan?</DialogTitle>
+                  <DialogDescription>
+                    This will soft-delete &quot;{plan.plan_number}&quot;. This does not affect any
+                    shipment it was already converted to.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

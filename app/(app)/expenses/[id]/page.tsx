@@ -17,6 +17,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { adminForceDelete } from '@/lib/utils/admin-delete';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,9 @@ export default function ExpenseDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const canDelete =
+    !!expense &&
+    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [expense.created_by] });
 
   const loadData = useCallback(async () => {
     if (!expenseId) return;
@@ -266,45 +270,47 @@ export default function ExpenseDetailPage() {
               Edit
             </Button>
           </Link>
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete expense?</DialogTitle>
-                <DialogDescription>
-                  {hasRole('admin') ? (
-                    <>
-                      This permanently deletes expense &quot;{expense.expense_number}&quot;.
-                      This cannot be undone.
-                    </>
-                  ) : (
-                    <>
-                      This will soft-delete expense &quot;{expense.expense_number}&quot;. The
-                      record is retained but hidden from lists.
-                    </>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete expense?</DialogTitle>
+                  <DialogDescription>
+                    {hasRole('admin') ? (
+                      <>
+                        This permanently deletes expense &quot;{expense.expense_number}&quot;.
+                        This cannot be undone.
+                      </>
+                    ) : (
+                      <>
+                        This will soft-delete expense &quot;{expense.expense_number}&quot;. The
+                        record is retained but hidden from lists.
+                      </>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

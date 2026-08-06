@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
+import { Plus, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
@@ -19,10 +22,20 @@ import {
   PAYMENT_TERMS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   REQUIRED_DOCUMENT_OPTIONS,
+  REQUIRED_DOCUMENT_CATEGORY,
+  type RequiredDocumentCategory,
 } from '@/lib/quotation-constants';
 import { resolveRequiredDocuments } from '@/lib/quotation-rules';
+import { cn } from '@/lib/utils';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { QuotationPriority } from '@/types';
+
+const CATEGORY_BADGE: Record<RequiredDocumentCategory, { label: string; className: string }> = {
+  import: { label: 'Import', className: 'bg-blue-100 text-blue-700' },
+  export: { label: 'Export', className: 'bg-purple-100 text-purple-700' },
+  both: { label: 'Both', className: 'bg-gray-100 text-gray-700' },
+  conditional: { label: 'Conditional', className: 'bg-amber-100 text-amber-700' },
+};
 
 const PRIORITY_OPTIONS: { value: QuotationPriority; label: string }[] = [
   { value: 'normal', label: 'Normal' },
@@ -107,6 +120,7 @@ export function RequiredDocumentsSection() {
   const shipmentType = watch('shipment_type');
   const incoterm = watch('incoterm');
   const services = watch('services') ?? [];
+  const [customDocInput, setCustomDocInput] = useState('');
 
   const lastAutoApplied = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -143,29 +157,94 @@ export function RequiredDocumentsSection() {
     );
   };
 
+  // Anything already selected that isn't one of the catalog options —
+  // either typed in here, or carried over from an older quotation.
+  const customDocs = selected.filter((d) => !REQUIRED_DOCUMENT_OPTIONS.includes(d));
+
+  const addCustomDoc = () => {
+    const value = customDocInput.trim();
+    if (!value || selected.includes(value)) {
+      setCustomDocInput('');
+      return;
+    }
+    setValue('required_documents', [...selected, value], { shouldDirty: true });
+    setCustomDocInput('');
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Required Documents</CardTitle>
         <CardDescription>
           What the customer should expect to provide — Operations sees this at a glance once the
-          shipment is live.
+          shipment is live. Documents are auto-checked from the shipment&apos;s direction, mode,
+          incoterm, and services; the badge on each shows why it&apos;s here.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {REQUIRED_DOCUMENT_OPTIONS.map((doc) => (
-            <label
-              key={doc}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-sm hover:bg-accent/50"
-            >
-              <Checkbox
-                checked={selected.includes(doc)}
-                onCheckedChange={(c) => toggle(doc, c === true)}
-              />
-              {doc}
-            </label>
-          ))}
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {REQUIRED_DOCUMENT_OPTIONS.map((doc) => {
+            const category = REQUIRED_DOCUMENT_CATEGORY[doc];
+            const badge = category ? CATEGORY_BADGE[category] : null;
+            return (
+              <label
+                key={doc}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-sm hover:bg-accent/50"
+              >
+                <span className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selected.includes(doc)}
+                    onCheckedChange={(c) => toggle(doc, c === true)}
+                  />
+                  {doc}
+                </span>
+                {badge && (
+                  <Badge variant="secondary" className={cn('shrink-0 text-[10px]', badge.className)}>
+                    {badge.label}
+                  </Badge>
+                )}
+              </label>
+            );
+          })}
+        </div>
+
+        <div className="space-y-2 border-t border-border pt-4">
+          <Label htmlFor="custom-document">Add a custom document</Label>
+          <div className="flex gap-2">
+            <Input
+              id="custom-document"
+              placeholder="e.g. Fumigation Certificate"
+              value={customDocInput}
+              onChange={(e) => setCustomDocInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addCustomDoc();
+                }
+              }}
+            />
+            <Button type="button" variant="outline" onClick={addCustomDoc}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add
+            </Button>
+          </div>
+          {customDocs.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {customDocs.map((doc) => (
+                <Badge key={doc} variant="outline" className="gap-1.5 py-1 pl-2.5 pr-1.5 text-xs">
+                  {doc}
+                  <button
+                    type="button"
+                    onClick={() => toggle(doc, false)}
+                    className="rounded-full p-0.5 hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${doc}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -51,8 +51,10 @@ export interface QuotationServiceDef {
 export const QUOTATION_SERVICES: QuotationServiceDef[] = [
   { key: 'freight_forwarding', label: 'Freight Forwarding' },
   { key: 'customs_clearance', label: 'Customs Clearance' },
+  { key: 'customs_duty', label: 'Customs Duty' },
   { key: 'documentation', label: 'Documentation' },
   { key: 'terminal_handling', label: 'Terminal Handling' },
+  { key: 'demurrage', label: 'Demurrage' },
   { key: 'warehouse', label: 'Warehouse' },
   { key: 'haulage', label: 'Haulage' },
   { key: 'cargo_insurance', label: 'Cargo Insurance' },
@@ -100,7 +102,6 @@ export const REQUIRED_DOCUMENT_OPTIONS = [
   'PAAR',
   'Export Declaration (NXP)',
   'Shipping Instructions',
-  'Others',
 ];
 
 /**
@@ -137,6 +138,31 @@ export function getDefaultRequiredDocuments(direction: ShipmentDirection | null)
 }
 
 /**
+ * Which direction(s) each catalog document belongs to, purely so the
+ * Required Documents checklist can show a badge ("Import"/"Export"/
+ * "Both"/"Conditional") next to every option — otherwise there's no way
+ * to tell at a glance why a document is or isn't auto-checked for the
+ * quotation's current direction. "Conditional" covers documents that
+ * are neither base-list (Air Waybill, Insurance Certificate, SONCAP,
+ * NAFDAC) — lib/quotation-rules.ts's resolveRequiredDocuments() adds
+ * those based on mode/incoterm/services, not direction alone.
+ */
+export type RequiredDocumentCategory = 'import' | 'export' | 'both' | 'conditional';
+
+export const REQUIRED_DOCUMENT_CATEGORY: Record<string, RequiredDocumentCategory> = (() => {
+  const importSet = new Set(IMPORT_REQUIRED_DOCUMENTS);
+  const exportSet = new Set(EXPORT_REQUIRED_DOCUMENTS);
+  const map: Record<string, RequiredDocumentCategory> = {};
+  for (const doc of REQUIRED_DOCUMENT_OPTIONS) {
+    if (importSet.has(doc) && exportSet.has(doc)) map[doc] = 'both';
+    else if (importSet.has(doc)) map[doc] = 'import';
+    else if (exportSet.has(doc)) map[doc] = 'export';
+    else map[doc] = 'conditional';
+  }
+  return map;
+})();
+
+/**
  * How a charge line is billed — internal GL metadata shown in the
  * charge table's "More Details" disclosure, not on the customer PDF.
  */
@@ -156,9 +182,7 @@ export const BILLING_BASIS_OPTIONS = [
  * that corresponds to a selectable service carries that service's key
  * so lib/quotation-rules.ts's resolveExcludedServiceOptions() can drop
  * it the moment that service is selected — the list is never shown
- * contradicting what's actually included. Entries with no
- * relatedServiceKey (Customs Duty, Demurrage) aren't tied to any
- * service and always show.
+ * contradicting what's actually included.
  */
 export interface NotIncludedOption {
   label: string;
@@ -166,11 +190,11 @@ export interface NotIncludedOption {
 }
 
 export const NOT_INCLUDED_SERVICE_OPTIONS: NotIncludedOption[] = [
-  { label: 'Customs Duty' },
+  { label: 'Customs Duty', relatedServiceKey: 'customs_duty' },
   { label: 'SON Fees', relatedServiceKey: 'son' },
   { label: 'NAFDAC Fees', relatedServiceKey: 'nafdac' },
   { label: 'Storage Charges', relatedServiceKey: 'warehouse' },
-  { label: 'Demurrage' },
+  { label: 'Demurrage', relatedServiceKey: 'demurrage' },
   { label: 'Examination Charges', relatedServiceKey: 'examination' },
   { label: 'Cargo Insurance', relatedServiceKey: 'cargo_insurance' },
 ];

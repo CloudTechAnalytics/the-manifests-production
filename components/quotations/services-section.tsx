@@ -1,10 +1,11 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { QUOTATION_SERVICES } from '@/lib/quotation-constants';
-import { resolveChargeTemplate, resolveDefaultRate } from '@/lib/quotation-rules';
+import { resolveChargeTemplate, resolveDefaultRate, resolveDefaultServices } from '@/lib/quotation-rules';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 
 interface ServicesSectionProps {
@@ -20,6 +21,12 @@ interface ServicesSectionProps {
  * at a zero rate — resolveDefaultRate() then fills it in from the
  * existing Rate Cards table (freight_rate_cards) a moment later if a
  * matching trade lane is configured, without blocking the checkbox.
+ *
+ * Shipment Direction also drives a default checklist (resolveDefaultServices)
+ * — reactive the same way Required Documents is: a ref tracks exactly
+ * which services THIS effect last auto-checked, so switching Import to
+ * Export swaps the defaults without ever un-checking something the user
+ * picked by hand.
  */
 export function ServicesSection({ branchId }: ServicesSectionProps) {
   const { control, watch, setValue, getValues } = useFormContext<QuotationFormValues>();
@@ -27,14 +34,23 @@ export function ServicesSection({ branchId }: ServicesSectionProps) {
   const services = watch('services') ?? [];
   const items = watch('items') ?? [];
   const shipmentType = watch('shipment_type');
+  const shipmentDirection = watch('shipment_direction');
   const originPort = watch('origin_port');
   const destinationPort = watch('destination_port');
 
   const toggleService = (key: string, checked: boolean) => {
+    // Read fresh from the form rather than the closed-over `services`/
+    // `items` — this function can be called more than once in the same
+    // tick (the direction-default effect below does exactly that), and
+    // a stale closure would make every call but the last a no-op.
+    const currentServices = getValues('services') ?? [];
+    const currentItems = getValues('items') ?? [];
+
     if (checked) {
-      setValue('services', [...services, key]);
+      if (currentServices.includes(key)) return;
+      setValue('services', [...currentServices, key]);
       const template = resolveChargeTemplate(key, { shipment_type: shipmentType });
-      const newIndex = fields.length;
+      const newIndex = currentItems.length;
       append({
         service_key: key,
         description: template.description,
@@ -68,23 +84,54 @@ export function ServicesSection({ branchId }: ServicesSectionProps) {
         }
       });
     } else {
+      if (!currentServices.includes(key)) return;
       setValue(
         'services',
-        services.filter((s) => s !== key)
+        currentServices.filter((s) => s !== key)
       );
       // Remove charge rows this service generated — walk backwards since
       // remove() shifts indices.
-      for (let i = fields.length - 1; i >= 0; i--) {
-        if (items[i]?.service_key === key) remove(i);
+      for (let i = currentItems.length - 1; i >= 0; i--) {
+        if (currentItems[i]?.service_key === key) remove(i);
       }
     }
   };
+
+  const lastAutoAppliedServices = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const computed = new Set(resolveDefaultServices(shipmentDirection));
+    const current = new Set(getValues('services') ?? []);
+    const prevAuto = lastAutoAppliedServices.current;
+
+    // Drop services this effect previously auto-checked but that are no
+    // longer part of the computed default — never touches a service the
+    // user checked by hand (it was never added to prevAuto).
+    for (const key of prevAuto) {
+      if (!computed.has(key) && current.has(key)) {
+        toggleService(key, false);
+      }
+    }
+    // Check anything newly defaulted that isn't already selected.
+    for (const key of computed) {
+      if (!current.has(key)) {
+        toggleService(key, true);
+      }
+    }
+    lastAutoAppliedServices.current = computed;
+    // toggleService is intentionally excluded — it's recreated every
+    // render and reads fresh state internally, so it doesn't need to be
+    // a dependency for this effect to stay correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipmentDirection]);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Services Required</CardTitle>
-        <CardDescription>Selecting a service adds a matching row to the charge breakdown.</CardDescription>
+        <CardDescription>
+          Selecting a service adds a matching row to the charge breakdown. Import/Export defaults
+          are pre-checked automatically — add or remove any service as needed.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

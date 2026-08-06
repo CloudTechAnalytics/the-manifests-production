@@ -38,6 +38,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { adminForceDelete } from '@/lib/utils/admin-delete';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -202,6 +203,13 @@ export default function ShipmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canDelete =
+    !!shipment &&
+    canDeleteOwnRecord({
+      hasRole,
+      userId: profile?.id,
+      ownerIds: [shipment.created_by, shipment.assigned_to],
+    });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [stagesVersion, setStagesVersion] = useState(0);
   const [statusBlockers, setStatusBlockers] = useState<string[]>([]);
@@ -737,55 +745,57 @@ export default function ShipmentDetailPage() {
               Edit
             </Button>
           </Link>
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete shipment?</DialogTitle>
-                <DialogDescription>
-                  {hasRole('admin') ? (
-                    <>
-                      This permanently deletes shipment{' '}
-                      &quot;{shipment.reference_number}&quot; and everything under
-                      it — timeline, documents, customs, terminal, examination, and
-                      transportation records. This cannot be undone.
-                    </>
-                  ) : (
-                    <>
-                      This will soft-delete shipment{' '}
-                      &quot;{shipment.reference_number}&quot;. The record is
-                      retained but hidden from lists. This action can be undone by
-                      an admin.
-                    </>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
                 <Button
-                  variant="destructive"
-                  onClick={handleDelete}
-                  disabled={deleting}
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
-                  {deleting && (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  )}
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete shipment?</DialogTitle>
+                  <DialogDescription>
+                    {hasRole('admin') ? (
+                      <>
+                        This permanently deletes shipment{' '}
+                        &quot;{shipment.reference_number}&quot; and everything under
+                        it — timeline, documents, customs, terminal, examination, and
+                        transportation records. This cannot be undone.
+                      </>
+                    ) : (
+                      <>
+                        This will soft-delete shipment{' '}
+                        &quot;{shipment.reference_number}&quot;. The record is
+                        retained but hidden from lists. This action can be undone by
+                        an admin.
+                      </>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    {deleting && (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    )}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

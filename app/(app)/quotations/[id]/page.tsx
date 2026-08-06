@@ -40,6 +40,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { adminForceDelete } from '@/lib/utils/admin-delete';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -234,6 +235,13 @@ export default function QuotationDetailPage() {
 
   const quotationId = params.id;
   const isAdmin = profile?.role === 'admin';
+  const canDelete =
+    !!quotation &&
+    canDeleteOwnRecord({
+      hasRole,
+      userId: profile?.id,
+      ownerIds: [quotation.created_by, quotation.sales_rep_id],
+    });
   const approvalRequired = organization?.quotation_approval_required ?? false;
   const totals: QuotationTotals = quotation
     ? {
@@ -1001,49 +1009,51 @@ export default function QuotationDetailPage() {
             </Button>
           )}
 
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Trash2 className="h-5 w-5 text-red-600" />
-                  Delete quotation?
-                </DialogTitle>
-                <DialogDescription>
-                  {hasRole('admin') ? (
-                    <>
-                      This permanently deletes quotation &quot;{quotation.quotation_number ?? 'Draft'}
-                      &quot; and its charges. This cannot be undone.
-                    </>
-                  ) : (
-                    <>
-                      This will soft-delete quotation &quot;{quotation.quotation_number ?? 'Draft'}
-                      &quot;. The record is retained but hidden from lists. This action can be undone
-                      by an admin.
-                    </>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Trash2 className="h-5 w-5 text-red-600" />
+                    Delete quotation?
+                  </DialogTitle>
+                  <DialogDescription>
+                    {hasRole('admin') ? (
+                      <>
+                        This permanently deletes quotation &quot;{quotation.quotation_number ?? 'Draft'}
+                        &quot; and its charges. This cannot be undone.
+                      </>
+                    ) : (
+                      <>
+                        This will soft-delete quotation &quot;{quotation.quotation_number ?? 'Draft'}
+                        &quot;. The record is retained but hidden from lists. This action can be undone
+                        by an admin.
+                      </>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

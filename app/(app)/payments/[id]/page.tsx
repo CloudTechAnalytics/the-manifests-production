@@ -8,6 +8,7 @@ import { ArrowLeft, Trash2, Wallet, User, Loader2, PlusCircle } from 'lucide-rea
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { adminForceDelete } from '@/lib/utils/admin-delete';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -67,6 +68,9 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canDelete =
+    !!payment &&
+    canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [payment.created_by] });
 
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -454,47 +458,49 @@ export default function PaymentDetailPage() {
               </DialogContent>
             </Dialog>
           )}
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete payment?</DialogTitle>
-                <DialogDescription>
-                  {hasRole('admin') ? (
-                    <>
-                      This permanently deletes payment &quot;{payment.payment_number}&quot;
-                      and its allocations, updating any linked invoices&apos; outstanding
-                      balances back up. This cannot be undone.
-                    </>
-                  ) : (
-                    <>
-                      This will soft-delete payment &quot;{payment.payment_number}&quot; and remove
-                      its allocations, updating any linked invoices&apos; outstanding balances back
-                      up. This action can be undone by an admin.
-                    </>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete payment?</DialogTitle>
+                  <DialogDescription>
+                    {hasRole('admin') ? (
+                      <>
+                        This permanently deletes payment &quot;{payment.payment_number}&quot;
+                        and its allocations, updating any linked invoices&apos; outstanding
+                        balances back up. This cannot be undone.
+                      </>
+                    ) : (
+                      <>
+                        This will soft-delete payment &quot;{payment.payment_number}&quot; and remove
+                        its allocations, updating any linked invoices&apos; outstanding balances back
+                        up. This action can be undone by an admin.
+                      </>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 

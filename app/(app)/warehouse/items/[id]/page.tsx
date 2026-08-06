@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -69,7 +70,7 @@ import type { StockItem, StockMovement, Warehouse, WarehouseStock } from '@/type
 export default function StockItemDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const itemId = params.id;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -81,6 +82,8 @@ export default function StockItemDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canDelete =
+    !!item && canDeleteOwnRecord({ hasRole, userId: profile?.id, ownerIds: [item.created_by] });
 
   const [movementOpen, setMovementOpen] = useState(false);
   const [movementMode, setMovementMode] = useState<MovementMode>('inbound');
@@ -257,36 +260,38 @@ export default function StockItemDetailPage() {
               Edit
             </Button>
           </Link>
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete item?</DialogTitle>
-                <DialogDescription>
-                  This will soft-delete &quot;{item.name}&quot; from the catalog. Its stock and
-                  movement history are preserved.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {canDelete && (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
                   Delete
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete item?</DialogTitle>
+                  <DialogDescription>
+                    This will soft-delete &quot;{item.name}&quot; from the catalog. Its stock and
+                    movement history are preserved.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
