@@ -193,8 +193,20 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!emailRes.ok) {
-      console.error("Resend error:", await emailRes.text());
-      return json(502, { error: "Failed to send email" });
+      const resendBody = await emailRes.text();
+      console.error("Resend error:", resendBody);
+      // Surface Resend's actual reason (e.g. "domain not verified", "you can
+      // only send testing emails to your own address") instead of a generic
+      // message — this was previously logged server-side only, forcing a
+      // dashboard trip to diagnose every send failure.
+      let detail = resendBody;
+      try {
+        const parsed = JSON.parse(resendBody);
+        detail = parsed.message ?? parsed.error ?? resendBody;
+      } catch {
+        // resendBody wasn't JSON — use it as-is.
+      }
+      return json(502, { error: `Failed to send email: ${detail}` });
     }
 
     return json(200, { success: true });
