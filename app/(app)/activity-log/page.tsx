@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { History, Loader2 } from 'lucide-react';
+import { History, ShieldAlert, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -10,6 +10,7 @@ import { formatDateTime } from '@/lib/utils/status';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -31,6 +32,23 @@ interface ActivityRow {
 
 const PAGE_SIZE = 25;
 
+/*
+ * Same activities table, same query engine, two views instead of two
+ * pages: Operations Log is the day-to-day feed (shipments, quotations,
+ * invoices, documents...), Audit Trail narrows to account/security/
+ * destructive actions (user management, permanent deletes, password
+ * resets, org settings). Filtered server-side via `action`'s own
+ * `entity.verb` naming convention already used everywhere this table is
+ * written to — no new column, no second table, "Load more" stays correct
+ * per tab because the filter is in the query, not applied after the fact.
+ */
+type LogView = 'operations' | 'audit';
+
+// action follows an `entity.verb` convention everywhere it's written —
+// these patterns classify it as Audit Trail; everything else is
+// Operations Log. PostgREST like uses SQL wildcards (% not *).
+const AUDIT_LIKE_PATTERNS = ['user.%', 'organization.%', 'branch.%', '%permanently_deleted%', '%password_reset%'];
+
 export default function ActivityLogPage() {
   const { hasRole } = useAuth();
   // Mirrors select_activities_branch (migration 028): only admin and
@@ -38,23 +56,37 @@ export default function ActivityLogPage() {
   // their own, enforced at the database level, not just here.
   const seesEveryonesActivity = hasRole('admin') || hasRole('branch_manager');
 
+  const [view, setView] = useState<LogView>('operations');
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  const loadPage = useCallback(async (offset: number) => {
+  const loadPage = useCallback(async (offset: number, currentView: LogView) => {
     // No client-side org/branch filter needed — select_activities_branch
     // scopes branch-scoped rows to the caller's own organization (every
     // branch, for an admin) or just their own branch (for everyone else),
     // and select_activities_org_admin separately lets an org admin see
     // their own organization's branch-less rows (e.g. inviting a user
     // with no branch yet).
-    const { data, error } = await supabase
+    let query = supabase
       .from('activities')
       .select('id, user_id, action, description, created_at, branch:branches(name)')
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
+
+    if (currentView === 'audit') {
+      query = query.or(AUDIT_LIKE_PATTERNS.map((p) => `action.like.${p}`).join(','));
+    } else {
+      // Operations Log = the inverse: none of the audit patterns match.
+      // Chained .not() calls AND together (no .and() exists on this
+      // builder) — "not like A" and "not like B" and ...
+      for (const pattern of AUDIT_LIKE_PATTERNS) {
+        query = query.not('action', 'like', pattern);
+      }
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -97,7 +129,7 @@ export default function ActivityLogPage() {
     (async () => {
       setLoading(true);
       try {
-        const first = await loadPage(0);
+        const first = await loadPage(0, view);
         setRows(first);
         setHasMore(first.length === PAGE_SIZE);
       } catch (err) {
@@ -106,12 +138,12 @@ export default function ActivityLogPage() {
         setLoading(false);
       }
     })();
-  }, [loadPage]);
+  }, [loadPage, view]);
 
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const next = await loadPage(rows.length);
+      const next = await loadPage(rows.length, view);
       setRows((prev) => [...prev, ...next]);
       setHasMore(next.length === PAGE_SIZE);
     } catch (err) {
@@ -124,13 +156,28 @@ export default function ActivityLogPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       <div>
-        <h1 className="page-title">Activity Log</h1>
+        <h1 className="page-title">{view === 'audit' ? 'Audit Trail' : 'Operations Log'}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {seesEveryonesActivity
-            ? 'Every logged action across your organization.'
-            : 'Your logged actions.'}
+          {view === 'audit'
+            ? 'Account, security, and destructive actions.'
+            : seesEveryonesActivity
+              ? 'Every logged operational action across your organization.'
+              : 'Your logged operational actions.'}
         </p>
       </div>
+
+      <Tabs value={view} onValueChange={(v) => setView(v as LogView)}>
+        <TabsList>
+          <TabsTrigger value="operations" className="gap-1.5">
+            <History className="h-4 w-4" />
+            Operations Log
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-1.5">
+            <ShieldAlert className="h-4 w-4" />
+            Audit Trail
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <Card>
         <CardContent className="p-0">

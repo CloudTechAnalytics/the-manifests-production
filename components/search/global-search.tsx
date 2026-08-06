@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Package, Users, FolderOpen } from 'lucide-react';
+import { FileText, Package, Users, FolderOpen, Boxes, Truck, Receipt, Wallet, UserCog } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/auth-context';
 import {
   CommandDialog,
   CommandEmpty,
@@ -18,6 +19,11 @@ interface SearchResults {
   customers: { id: string; company_name: string }[];
   quotations: { id: string; quotation_number: string | null; customerName: string | null }[];
   documents: { id: string; name: string }[];
+  containers: { id: string; container_number: string; shipmentId: string; shipmentRef: string | null }[];
+  truckNumbers: { id: string; truck_number: string; shipmentId: string; shipmentRef: string | null }[];
+  invoices: { id: string; invoice_number: string | null; customerName: string | null }[];
+  payments: { id: string; payment_number: string | null; customerName: string | null }[];
+  users: { id: string; full_name: string; email: string }[];
 }
 
 const EMPTY_RESULTS: SearchResults = {
@@ -25,6 +31,11 @@ const EMPTY_RESULTS: SearchResults = {
   customers: [],
   quotations: [],
   documents: [],
+  containers: [],
+  truckNumbers: [],
+  invoices: [],
+  payments: [],
+  users: [],
 };
 
 interface GlobalSearchProps {
@@ -35,13 +46,16 @@ interface GlobalSearchProps {
 /**
  * Global search command palette (Cmd+K). Reuses the exact same
  * table/column search patterns already used by each list page's local
- * search (shipments.reference_number, customers.company_name,
- * quotations.quotation_number, documents.name) — no new backend
- * endpoints, just the existing Supabase client querying the existing
- * tables. RLS already scopes results to what the current user can see.
+ * search — no new backend endpoints, just the existing Supabase client
+ * querying the existing tables. RLS already scopes results to what the
+ * current user can see. Users search is additionally gated to
+ * admin/branch_manager here, on top of RLS, matching the same roles that
+ * can reach the Users page itself.
  */
 export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
   const router = useRouter();
+  const { hasRole } = useAuth();
+  const canSearchUsers = hasRole('admin') || hasRole('branch_manager');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
   const [loading, setLoading] = useState(false);
@@ -64,32 +78,64 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     let cancelled = false;
     setLoading(true);
     const t = setTimeout(async () => {
-      const [shipRes, custRes, quotRes, docRes] = await Promise.all([
-        supabase
-          .from('shipments')
-          .select('id, reference_number, customer:customers(company_name)')
-          .is('deleted_at', null)
-          .ilike('reference_number', `%${term}%`)
-          .limit(5),
-        supabase
-          .from('customers')
-          .select('id, company_name')
-          .is('deleted_at', null)
-          .ilike('company_name', `%${term}%`)
-          .limit(5),
-        supabase
-          .from('quotations')
-          .select('id, quotation_number, customer:customers(company_name)')
-          .is('deleted_at', null)
-          .ilike('quotation_number', `%${term}%`)
-          .limit(5),
-        supabase
-          .from('documents')
-          .select('id, name')
-          .is('deleted_at', null)
-          .ilike('name', `%${term}%`)
-          .limit(5),
-      ]);
+      const [shipRes, custRes, quotRes, docRes, containerRes, truckRes, invRes, payRes, userRes] =
+        await Promise.all([
+          supabase
+            .from('shipments')
+            .select('id, reference_number, customer:customers(company_name)')
+            .is('deleted_at', null)
+            .ilike('reference_number', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('customers')
+            .select('id, company_name')
+            .is('deleted_at', null)
+            .ilike('company_name', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('quotations')
+            .select('id, quotation_number, customer:customers(company_name)')
+            .is('deleted_at', null)
+            .ilike('quotation_number', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('documents')
+            .select('id, name')
+            .is('deleted_at', null)
+            .ilike('name', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('shipment_containers')
+            .select('id, container_number, shipment_id, shipment:shipments(reference_number)')
+            .ilike('container_number', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('shipment_transportation')
+            .select('id, truck_number, shipment_id, shipment:shipments(reference_number)')
+            .is('deleted_at', null)
+            .ilike('truck_number', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('invoices')
+            .select('id, invoice_number, customer:customers(company_name)')
+            .is('deleted_at', null)
+            .ilike('invoice_number', `%${term}%`)
+            .limit(5),
+          supabase
+            .from('payments')
+            .select('id, payment_number, customer:customers(company_name)')
+            .is('deleted_at', null)
+            .ilike('payment_number', `%${term}%`)
+            .limit(5),
+          canSearchUsers
+            ? supabase
+                .from('profiles')
+                .select('id, full_name, email')
+                .is('deleted_at', null)
+                .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
+                .limit(5)
+            : Promise.resolve({ data: [] }),
+        ]);
 
       if (cancelled) return;
 
@@ -110,6 +156,29 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
               ?.company_name ?? null,
         })),
         documents: (docRes.data ?? []) as SearchResults['documents'],
+        containers: (containerRes.data ?? []).map((c) => ({
+          id: c.id as string,
+          container_number: c.container_number as string,
+          shipmentId: c.shipment_id as string,
+          shipmentRef: (c.shipment as unknown as { reference_number: string | null } | null)?.reference_number ?? null,
+        })),
+        truckNumbers: (truckRes.data ?? []).map((t) => ({
+          id: t.id as string,
+          truck_number: t.truck_number as string,
+          shipmentId: t.shipment_id as string,
+          shipmentRef: (t.shipment as unknown as { reference_number: string | null } | null)?.reference_number ?? null,
+        })),
+        invoices: (invRes.data ?? []).map((i) => ({
+          id: i.id as string,
+          invoice_number: i.invoice_number as string | null,
+          customerName: (i.customer as unknown as { company_name: string } | null)?.company_name ?? null,
+        })),
+        payments: (payRes.data ?? []).map((p) => ({
+          id: p.id as string,
+          payment_number: p.payment_number as string | null,
+          customerName: (p.customer as unknown as { company_name: string } | null)?.company_name ?? null,
+        })),
+        users: (userRes.data ?? []) as SearchResults['users'],
       });
       setLoading(false);
     }, 250);
@@ -118,7 +187,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, canSearchUsers]);
 
   const go = useCallback(
     (href: string) => {
@@ -132,12 +201,17 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     results.shipments.length > 0 ||
     results.customers.length > 0 ||
     results.quotations.length > 0 ||
-    results.documents.length > 0;
+    results.documents.length > 0 ||
+    results.containers.length > 0 ||
+    results.truckNumbers.length > 0 ||
+    results.invoices.length > 0 ||
+    results.payments.length > 0 ||
+    results.users.length > 0;
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
-        placeholder="Search shipments, customers, quotations, documents…"
+        placeholder="Search shipments, containers, invoices, customers…"
         value={query}
         onValueChange={setQuery}
       />
@@ -163,6 +237,44 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                     {s.customerName && (
                       <span className="ml-2 truncate text-xs text-muted-foreground">
                         {s.customerName}
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {results.containers.length > 0 && (
+              <CommandGroup heading="Containers">
+                {results.containers.map((c) => (
+                  <CommandItem
+                    key={c.id}
+                    value={`container-${c.id}-${c.container_number}`}
+                    onSelect={() => go(`/shipments/${c.shipmentId}`)}
+                  >
+                    <Boxes className="mr-2 h-4 w-4 text-teal-600" />
+                    <span>{c.container_number}</span>
+                    {c.shipmentRef && (
+                      <span className="ml-2 truncate text-xs text-muted-foreground">
+                        {c.shipmentRef}
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {results.truckNumbers.length > 0 && (
+              <CommandGroup heading="Truck Numbers">
+                {results.truckNumbers.map((t) => (
+                  <CommandItem
+                    key={t.id}
+                    value={`truck-${t.id}-${t.truck_number}`}
+                    onSelect={() => go(`/shipments/${t.shipmentId}`)}
+                  >
+                    <Truck className="mr-2 h-4 w-4 text-orange-600" />
+                    <span>{t.truck_number}</span>
+                    {t.shipmentRef && (
+                      <span className="ml-2 truncate text-xs text-muted-foreground">
+                        {t.shipmentRef}
                       </span>
                     )}
                   </CommandItem>
@@ -202,6 +314,44 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                 ))}
               </CommandGroup>
             )}
+            {results.invoices.length > 0 && (
+              <CommandGroup heading="Invoices">
+                {results.invoices.map((i) => (
+                  <CommandItem
+                    key={i.id}
+                    value={`invoice-${i.id}-${i.invoice_number}`}
+                    onSelect={() => go(`/invoices/${i.id}`)}
+                  >
+                    <Receipt className="mr-2 h-4 w-4 text-emerald-600" />
+                    <span>{i.invoice_number ?? 'Invoice'}</span>
+                    {i.customerName && (
+                      <span className="ml-2 truncate text-xs text-muted-foreground">
+                        {i.customerName}
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {results.payments.length > 0 && (
+              <CommandGroup heading="Payments">
+                {results.payments.map((p) => (
+                  <CommandItem
+                    key={p.id}
+                    value={`payment-${p.id}-${p.payment_number}`}
+                    onSelect={() => go(`/payments/${p.id}`)}
+                  >
+                    <Wallet className="mr-2 h-4 w-4 text-green-600" />
+                    <span>{p.payment_number ?? 'Payment'}</span>
+                    {p.customerName && (
+                      <span className="ml-2 truncate text-xs text-muted-foreground">
+                        {p.customerName}
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
             {results.documents.length > 0 && (
               <CommandGroup heading="Documents">
                 {results.documents.map((d) => (
@@ -212,6 +362,21 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                   >
                     <FolderOpen className="mr-2 h-4 w-4 text-purple-600" />
                     <span>{d.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {results.users.length > 0 && (
+              <CommandGroup heading="Users">
+                {results.users.map((u) => (
+                  <CommandItem
+                    key={u.id}
+                    value={`user-${u.id}-${u.full_name}`}
+                    onSelect={() => go('/users')}
+                  >
+                    <UserCog className="mr-2 h-4 w-4 text-slate-600" />
+                    <span>{u.full_name}</span>
+                    <span className="ml-2 truncate text-xs text-muted-foreground">{u.email}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

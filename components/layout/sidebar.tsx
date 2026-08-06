@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -16,6 +16,7 @@ import {
   Ship,
   LogOut,
   ChevronDown,
+  ChevronRight,
   Menu,
   Search,
   Radar,
@@ -25,18 +26,25 @@ import {
   CreditCard,
   Warehouse,
   ClipboardList,
+  ListChecks,
   Building2,
+  Network,
   Bell,
   CheckCircle2,
   History,
+  ShieldAlert,
+  ShieldCheck,
   Landmark,
   FileSearch,
   Truck,
+  PackageCheck,
+  Send,
   BadgeDollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
 import { useNotifications } from '@/hooks/use-notifications';
+import { useNavBadges, type NavBadgeCounts } from '@/hooks/use-nav-badges';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -63,67 +71,100 @@ type NavItem = {
   adminOnly?: boolean;
   platformAdminOnly?: boolean;
   roles?: UserRole[];
+  /** Key into useNavBadges' counts — shown as a number beside the label,
+   *  hidden entirely at 0. Omitted for items with no outstanding-work
+   *  concept (Shipments, Customers, Settings, ...). */
+  badgeKey?: keyof NavBadgeCounts;
 };
 
+// Every group below mirrors a stage of the freight-forwarding lifecycle
+// (Customer -> Quotation -> Shipment -> Planning -> Documentation ->
+// Customs -> Terminal -> Warehouse -> Transport -> Delivery -> Invoice ->
+// Payment -> Reports), not a technical grouping of tables. `roles`
+// restricts an item to the specialist roles that actually own it — a
+// department role (documentation/customs/terminal/warehouse/transport)
+// sees only its own lane plus Dashboard and Work Queue; admin and
+// branch_manager see everything (branch_manager loses only Organization).
 const OPERATIONS_ROLES: UserRole[] = ['admin', 'branch_manager', 'operations'];
 const SALES_ROLES: UserRole[] = ['admin', 'branch_manager', 'sales'];
 const FINANCE_ROLES: UserRole[] = ['admin', 'branch_manager', 'finance'];
-const CUSTOMS_ROLES: UserRole[] = ['admin', 'branch_manager', 'customs'];
+const APPROVAL_ROLES: UserRole[] = ['admin', 'branch_manager'];
+const WORK_QUEUE_ROLES: UserRole[] = [
+  'admin',
+  'branch_manager',
+  'operations',
+  'documentation',
+  'customs',
+  'terminal',
+  'warehouse',
+  'transport',
+  'finance',
+  'examination',
+  'planning',
+];
 
-// Professionally grouped navigation. Only real, existing routes are
-// included — dead-end links are never added. `roles` restricts a track
-// to the specialist roles that actually manage it (see the RBAC
-// migrations) — omitted entirely means visible to every role, used for
-// cross-cutting items like Dashboard/Documents/Reports/Activity Log.
 const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Operations',
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/planning', label: 'Planning Centre', icon: ClipboardList, roles: [...OPERATIONS_ROLES, 'planning'] },
       { href: '/shipments', label: 'Shipments', icon: Package, roles: OPERATIONS_ROLES },
-      { href: '/planning', label: 'Planning', icon: ClipboardList, roles: OPERATIONS_ROLES },
       { href: '/tracking', label: 'Tracking', icon: Radar, roles: OPERATIONS_ROLES },
       { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: OPERATIONS_ROLES },
-      { href: '/customs', label: 'Customs', icon: Landmark, roles: CUSTOMS_ROLES },
-      { href: '/terminal', label: 'Terminal', icon: Building2, roles: CUSTOMS_ROLES },
-      { href: '/examination', label: 'Examination', icon: FileSearch, roles: CUSTOMS_ROLES },
-      { href: '/transportation', label: 'Transportation', icon: Truck, roles: OPERATIONS_ROLES },
+      { href: '/work-queue', label: 'Work Queue', icon: ListChecks, roles: WORK_QUEUE_ROLES },
     ],
   },
   {
-    label: 'Sales',
+    label: 'Clearance',
     items: [
-      { href: '/quotations', label: 'Quotations', icon: FileText, roles: SALES_ROLES },
-      { href: '/sales', label: 'Sales', icon: TrendingUp, roles: SALES_ROLES },
-      { href: '/rates', label: 'Rate Cards', icon: BadgeDollarSign, roles: SALES_ROLES },
+      { href: '/documents', label: 'Documentation', icon: FolderOpen, roles: ['admin', 'branch_manager', 'documentation'], badgeKey: 'documentation' },
+      { href: '/customs', label: 'Customs', icon: Landmark, roles: ['admin', 'branch_manager', 'customs'], badgeKey: 'customs' },
+      { href: '/terminal', label: 'Terminal', icon: Building2, roles: ['admin', 'branch_manager', 'terminal'], badgeKey: 'terminal' },
+      { href: '/examination', label: 'Examination', icon: FileSearch, roles: ['admin', 'branch_manager', 'examination'] },
+      { href: '/terminal', label: 'Release', icon: PackageCheck, roles: ['admin', 'branch_manager', 'terminal'] },
     ],
   },
   {
-    label: 'Customers',
-    items: [{ href: '/customers', label: 'Customers', icon: Users, roles: SALES_ROLES }],
+    label: 'Logistics',
+    items: [
+      { href: '/warehouse', label: 'Warehouse', icon: Warehouse, roles: ['admin', 'branch_manager', 'warehouse'], badgeKey: 'warehouse' },
+      { href: '/transportation', label: 'Transport', icon: Truck, roles: ['admin', 'branch_manager', 'transport'] },
+      { href: '/transportation', label: 'Delivery', icon: Send, roles: ['admin', 'branch_manager', 'transport'] },
+    ],
+  },
+  {
+    label: 'Commercial',
+    items: [
+      { href: '/customers', label: 'Customers', icon: Users, roles: SALES_ROLES },
+      { href: '/quotations', label: 'Quotations', icon: FileText, roles: SALES_ROLES },
+      { href: '/rates', label: 'Rate Cards', icon: BadgeDollarSign, roles: SALES_ROLES },
+      { href: '/sales', label: 'Sales', icon: TrendingUp, roles: SALES_ROLES },
+    ],
   },
   {
     label: 'Finance',
     items: [
-      { href: '/invoices', label: 'Invoices', icon: Receipt, roles: FINANCE_ROLES },
+      { href: '/invoices', label: 'Invoices', icon: Receipt, roles: FINANCE_ROLES, badgeKey: 'invoices' },
       { href: '/payments', label: 'Payments', icon: Wallet, roles: FINANCE_ROLES },
       { href: '/expenses', label: 'Expenses', icon: CreditCard, roles: FINANCE_ROLES },
+      { href: '/approvals', label: 'Approvals', icon: ShieldCheck, roles: APPROVAL_ROLES, badgeKey: 'approvals' },
     ],
   },
   {
-    label: 'Operations Support',
+    label: 'Reports',
     items: [
-      { href: '/documents', label: 'Documents', icon: FolderOpen },
-      { href: '/warehouse', label: 'Warehouse', icon: Warehouse, roles: OPERATIONS_ROLES },
-      { href: '/reports', label: 'Reports', icon: BarChart3 },
-      { href: '/activity-log', label: 'Activity Log', icon: History },
+      { href: '/reports', label: 'Reports', icon: BarChart3, roles: [...FINANCE_ROLES] },
+      { href: '/activity-log', label: 'Operations Log', icon: History, roles: APPROVAL_ROLES },
+      { href: '/activity-log?view=audit', label: 'Audit Trail', icon: ShieldAlert, roles: APPROVAL_ROLES },
     ],
   },
 ];
 
 const administrationItems: NavItem[] = [
-  { href: '/users', label: 'Users', icon: UserCog, adminOnly: true },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/users', label: 'Users', icon: UserCog, roles: APPROVAL_ROLES },
+  { href: '/settings?tab=branches', label: 'Branches', icon: Network, roles: APPROVAL_ROLES },
+  { href: '/settings?tab=company', label: 'Organization', icon: Building2, adminOnly: true },
+  { href: '/settings?tab=profile', label: 'Settings', icon: Settings },
   {
     href: '/platform',
     label: 'Platform Console',
@@ -221,14 +262,24 @@ function NavGroup({
   label,
   items,
   pathname,
+  currentHref,
   roles,
+  badges,
   onNavigate,
+  collapsible = false,
+  collapsed = false,
+  onToggleCollapse,
 }: {
   label: string;
   items: NavItem[];
   pathname: string;
+  currentHref: string;
   roles: UserRole[];
+  badges: NavBadgeCounts;
   onNavigate?: () => void;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const visibleItems = items.filter((item) => {
     if (item.adminOnly && !roles.includes('admin')) return false;
@@ -246,16 +297,41 @@ function NavGroup({
 
   return (
     <div>
-      <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
+      <button
+        type="button"
+        onClick={collapsible ? onToggleCollapse : undefined}
+        className={cn(
+          'flex w-full items-center justify-between px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80',
+          collapsible && 'cursor-pointer hover:text-brand-dark-muted'
+        )}
+      >
         {label}
-      </p>
-      <div className="space-y-0.5">
+        {collapsible && (
+          <ChevronRight
+            className={cn('h-3.5 w-3.5 transition-transform duration-200', !collapsed && 'rotate-90')}
+          />
+        )}
+      </button>
+      <div
+        className={cn(
+          'space-y-0.5 overflow-hidden transition-all duration-200',
+          collapsed ? 'max-h-0 opacity-0' : 'max-h-[600px] opacity-100'
+        )}
+      >
         {visibleItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname.startsWith(item.href);
+          // Dual-purpose hrefs (Release/Delivery aliasing Terminal/
+          // Transport; Operations Log/Audit Trail aliasing Activity Log
+          // via ?view=) carry a query string, so an exact current-URL
+          // match is used instead of startsWith — otherwise every alias
+          // sharing a base path would light up together.
+          const active = item.href.includes('?')
+            ? currentHref === item.href
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const count = item.badgeKey ? badges[item.badgeKey] : 0;
           return (
             <Link
-              key={item.href}
+              key={`${item.href}-${item.label}`}
               href={item.href}
               onClick={onNavigate}
               className={cn(
@@ -269,7 +345,17 @@ function NavGroup({
                 <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
               )}
               <Icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {!!count && (
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                    active ? 'bg-brand-gold/20 text-brand-gold-soft' : 'bg-brand-dark-elevated text-brand-dark-muted'
+                  )}
+                >
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -278,12 +364,67 @@ function NavGroup({
   );
 }
 
+const COLLAPSE_STORAGE_KEY = 'sidebar-collapsed-groups';
+
+function useCollapsedGroups() {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+      if (stored) setCollapsed(JSON.parse(stored));
+    } catch {
+      // Corrupt or inaccessible storage just means every group starts
+      // expanded — not worth surfacing an error for.
+    }
+  }, []);
+
+  const toggle = (label: string) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Best-effort persistence — a failed write just means the
+        // preference won't survive a reload this time.
+      }
+      return next;
+    });
+  };
+
+  return { collapsed, toggle };
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { roles } = useAuth();
+  const badges = useNavBadges();
+  const { collapsed, toggle } = useCollapsedGroups();
+
+  const search = searchParams.toString();
+  const currentHref = search ? `${pathname}?${search}` : pathname;
 
   return (
     <nav className="flex flex-1 flex-col overflow-y-auto scrollbar-thin px-3 py-4">
+      <div className="space-y-1">
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className={cn(
+            'relative mb-4 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            pathname === '/dashboard'
+              ? 'bg-brand-dark-elevated text-brand-gold-soft'
+              : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
+          )}
+        >
+          {pathname === '/dashboard' && (
+            <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
+          )}
+          <LayoutDashboard className="h-4 w-4 shrink-0" />
+          Dashboard
+        </Link>
+      </div>
       <div className="space-y-5">
         {navGroups.map((group) => (
           <NavGroup
@@ -291,8 +432,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             label={group.label}
             items={group.items}
             pathname={pathname}
+            currentHref={currentHref}
             roles={roles}
+            badges={badges}
             onNavigate={onNavigate}
+            collapsible
+            collapsed={!!collapsed[group.label]}
+            onToggleCollapse={() => toggle(group.label)}
           />
         ))}
       </div>
@@ -302,7 +448,9 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         label="Administration"
         items={administrationItems}
         pathname={pathname}
+        currentHref={currentHref}
         roles={roles}
+        badges={badges}
         onNavigate={onNavigate}
       />
     </nav>

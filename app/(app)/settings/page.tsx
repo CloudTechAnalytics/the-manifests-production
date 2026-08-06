@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Building2,
   Plus,
@@ -114,10 +115,15 @@ type BranchFormErrors = Partial<Record<keyof BranchForm, string>>;
 
 // --- Component -------------------------------------------------------------
 
-export default function SettingsPage() {
+function SettingsPageInner() {
+  const searchParams = useSearchParams();
   const { profile, refreshProfile } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('company');
+  const validTabs = ['company', 'branches', 'profile', 'preferences', 'webhooks'];
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'profile'
+  );
 
   // Branches state
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -1852,5 +1858,13 @@ function PreferencesTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageInner />
+    </Suspense>
   );
 }
