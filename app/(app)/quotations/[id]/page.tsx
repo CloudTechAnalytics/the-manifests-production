@@ -235,7 +235,8 @@ export default function QuotationDetailPage() {
 
   const quotationId = params.id;
   const isAdmin = profile?.role === 'admin';
-  const canDelete = !!quotation && canDeleteOwnRecord({ hasRole });
+  const canDelete =
+    !!quotation && !quotation.converted_shipment_id && canDeleteOwnRecord({ hasRole });
   const approvalRequired = organization?.quotation_approval_required ?? false;
   const totals: QuotationTotals = quotation
     ? {
@@ -982,14 +983,16 @@ export default function QuotationDetailPage() {
             Print
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
-            {duplicating ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <Copy className="mr-1.5 h-4 w-4" />
-            )}
-            Duplicate
-          </Button>
+          {!quotation.converted_shipment_id && (
+            <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
+              {duplicating ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="mr-1.5 h-4 w-4" />
+              )}
+              Duplicate
+            </Button>
+          )}
 
           {canEditInPlace && (
             <Link href={`/quotations/${quotationId}/edit`}>

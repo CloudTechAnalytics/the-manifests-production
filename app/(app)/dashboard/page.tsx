@@ -24,7 +24,8 @@ import { OperationsPipeline } from '@/components/dashboard/operations-pipeline';
 import { OperationalAlerts } from '@/components/dashboard/operational-alerts';
 import { TodaySchedule } from '@/components/dashboard/today-schedule';
 import { RecentShipmentsTable } from '@/components/dashboard/recent-shipments-table';
-import { RecentQuotationsTable } from '@/components/dashboard/recent-quotations-table';
+import { AwaitingOperationsCard } from '@/components/dashboard/awaiting-operations-card';
+import { ShipmentStageBreakdown } from '@/components/dashboard/shipment-stage-breakdown';
 import { FinanceSummary } from '@/components/dashboard/finance-summary';
 import { PlanningOverview } from '@/components/dashboard/planning-overview';
 import { WarehouseSummary } from '@/components/warehouse/warehouse-summary';
@@ -227,6 +228,7 @@ export default function DashboardPage() {
 
       {/* 4. Operations pipeline — full width */}
       <OperationsPipeline pipeline={data.pipeline} loading={data.loading} />
+      <ShipmentStageBreakdown />
 
       {/* 5. Operational alerts + today's schedule */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -234,16 +236,13 @@ export default function DashboardPage() {
         <TodaySchedule events={data.todaySchedule} loading={data.loading} />
       </div>
 
-      {/* 6. Recent shipments + recent quotations */}
+      {/* 6. Recent shipments + awaiting operations */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <RecentShipmentsTable
           shipments={data.recentShipments}
           loading={data.loading}
         />
-        <RecentQuotationsTable
-          quotations={data.recentQuotations}
-          loading={data.loading}
-        />
+        <AwaitingOperationsCard />
       </div>
 
       {/* 7. Finance summary + planning overview */}

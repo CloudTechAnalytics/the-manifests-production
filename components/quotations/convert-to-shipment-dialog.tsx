@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowRightLeft, Loader2 } from 'lucide-react';
+import { ArrowRightLeft, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
-import { seedShipmentStages } from '@/lib/utils/seed-shipment-stages';
-import { useAuth } from '@/contexts/auth-context';
+import { getConversionBlockers } from '@/lib/utils/shipment-conversion';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,13 +27,14 @@ interface ConvertToShipmentDialogProps {
 }
 
 /**
- * Section 13 — direct Quotation -> Shipment conversion. Deliberately
- * bypasses Shipment Planning: everything Operations needs (route,
- * incoterm, cargo, containers, weight, services, required documents) was
- * already captured at quote time, so there's nothing left to plan before
- * booking. Planning stays available separately for shipments that do
- * need that intermediate step — this doesn't replace it, just adds a
- * shorter path for the common case.
+ * Section 13 — direct Quotation -> Shipment conversion. A thin wrapper
+ * around the convert_quotation_to_shipment() RPC (migration 053) — that
+ * function is what actually creates the shipment, seeds Planning/
+ * Documentation/Customs/Terminal/Examination/Warehouse/Delivery records
+ * per the quotation's selected services, and locks the quotation, all in
+ * one atomic transaction. This component's only jobs are: show blockers
+ * before the call, make the call, and translate its outcome (already
+ * converted / validation failed / permission denied / success) into UI.
  */
 export function ConvertToShipmentDialog({
   quotation,
@@ -43,101 +43,45 @@ export function ConvertToShipmentDialog({
   onConverted,
 }: ConvertToShipmentDialogProps) {
   const router = useRouter();
-  const { profile } = useAuth();
   const [converting, setConverting] = useState(false);
 
+  const blockers = getConversionBlockers(quotation);
+
   const handleConvert = async () => {
-    if (!profile?.id) return;
     setConverting(true);
     try {
-      const { data: shipment, error: shipmentError } = await supabase
-        .from('shipments')
-        .insert({
-          customer_id: quotation.customer_id,
-          quotation_id: quotation.id,
-          branch_id: quotation.branch_id,
-          shipment_type: quotation.shipment_type,
-          origin: quotation.origin_port ?? quotation.origin,
-          destination: quotation.destination_port ?? quotation.destination,
-          status: 'booking_received',
-          booking_date: new Date().toISOString().split('T')[0],
-          estimated_departure: quotation.expected_shipping_date,
-          estimated_arrival: quotation.expected_arrival_date,
-          weight: quotation.weight,
-          volume: quotation.cbm,
-          notes: quotation.notes,
-          incoterm: quotation.incoterm,
-          hs_code: quotation.hs_code,
-          commodity: quotation.commodity_description,
-          port_of_loading: quotation.origin_port,
-          port_of_discharge: quotation.destination_port,
-          goods_value: quotation.cargo_value,
-          goods_value_currency: quotation.currency,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id, reference_number')
-        .single();
+      const { data, error } = await supabase.rpc('convert_quotation_to_shipment', {
+        p_quotation_id: quotation.id,
+      });
 
-      if (shipmentError || !shipment) {
-        throw new Error(shipmentError?.message ?? 'Failed to create shipment');
-      }
+      if (error) {
+        const message = error.message ?? '';
 
-      if (quotation.container_count && quotation.container_count > 0) {
-        const containerRows = Array.from({ length: quotation.container_count }, () => ({
-          shipment_id: shipment.id,
-          branch_id: quotation.branch_id,
-          container_type: quotation.container_size,
-          created_by: profile.id,
-        }));
-        const { error: containerError } = await supabase
-          .from('shipment_containers')
-          .insert(containerRows);
-        if (containerError) {
-          console.error('Container row seed error:', containerError);
+        if (message.startsWith('ALREADY_CONVERTED:')) {
+          const shipmentId = message.slice('ALREADY_CONVERTED:'.length).trim();
+          toast.info('This quotation has already been converted to a shipment.');
+          onOpenChange(false);
+          router.push(`/shipments/${shipmentId}`);
+          return;
         }
+        if (message.startsWith('VALIDATION_FAILED:')) {
+          toast.error(message.slice('VALIDATION_FAILED:'.length).trim());
+          return;
+        }
+        if (message.startsWith('PERMISSION_DENIED')) {
+          toast.error("You don't have permission to start a shipment — this is an Operations action.");
+          return;
+        }
+        throw error;
       }
 
-      await supabase.from('shipment_timeline').insert({
-        shipment_id: shipment.id,
-        status: 'booking_received',
-        notes: `Created from quotation ${quotation.quotation_number ?? ''}`,
-        created_by: profile.id,
-      });
-
-      const { error: quotationError } = await supabase
-        .from('quotations')
-        .update({
-          converted_shipment_id: shipment.id,
-          converted_at: new Date().toISOString(),
-          updated_by: profile.id,
-        })
-        .eq('id', quotation.id);
-
-      if (quotationError) {
-        toast.warning('Shipment created, but the quotation record failed to update.');
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.converted',
-        entity_type: 'quotation',
-        entity_id: quotation.id,
-        description: `Converted quotation ${quotation.quotation_number ?? ''} to shipment ${shipment.reference_number ?? ''}`,
-        metadata: { shipment_id: shipment.id },
-      });
-
-      try {
-        await seedShipmentStages(shipment.id, quotation.branch_id, profile.id);
-      } catch (stageError) {
-        console.error('Workflow stage seed error:', stageError);
-      }
-
-      toast.success(`Converted to shipment ${shipment.reference_number}`);
+      const result = data as { shipment_id: string; reference_number: string };
+      toast.success(
+        `Shipment ${result.reference_number} created successfully and handed over to Operations.`
+      );
       onConverted();
       onOpenChange(false);
-      router.push(`/shipments/${shipment.id}`);
+      router.push(`/shipments/${result.shipment_id}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to convert quotation'));
     } finally {
@@ -155,16 +99,32 @@ export function ConvertToShipmentDialog({
           </DialogTitle>
           <DialogDescription>
             This creates a real shipment from &quot;{quotation.quotation_number}&quot; — route,
-            incoterm, cargo, containers, and required documents all carry over, so Operations
-            won&apos;t need to ask the customer for anything already captured here. This can&apos;t
+            incoterm, cargo, containers, services, and required documents all carry over, and
+            Planning/Documentation/Customs/Terminal/Examination/Warehouse/Delivery records are
+            created automatically for whichever services this quotation includes. This can&apos;t
             be undone.
           </DialogDescription>
         </DialogHeader>
+
+        {blockers.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Fix these before converting:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {blockers.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button onClick={handleConvert} disabled={converting}>
+          <Button onClick={handleConvert} disabled={converting || blockers.length > 0}>
             {converting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Convert to Shipment
           </Button>

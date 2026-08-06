@@ -16,34 +16,58 @@ import type {
   DocumentRecord,
 } from '@/types';
 
+/**
+ * The strict, non-skippable 12-stage lifecycle (migrations 052/053).
+ * The 4 legacy entries at the bottom are never produced by application
+ * code anymore (see SHIPMENT_STATUS_FLOW) — they're kept only so a
+ * pre-migration shipment_timeline row still renders a label instead of
+ * crashing on an unrecognized status.
+ */
 export const SHIPMENT_STATUS_META: Record<
   ShipmentStatus,
   { label: string; color: string; step: number }
 > = {
-  booking_received: { label: 'Booking Received', color: 'bg-blue-100 text-blue-700', step: 0 },
-  documentation: { label: 'Documentation', color: 'bg-amber-100 text-amber-700', step: 1 },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', step: 2 },
-  in_transit: { label: 'In Transit', color: 'bg-cyan-100 text-cyan-700', step: 3 },
-  arrived: { label: 'Arrived', color: 'bg-indigo-100 text-indigo-700', step: 4 },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', step: 5 },
+  awaiting_operations: { label: 'Awaiting Operations', color: 'bg-blue-100 text-blue-700', step: 0 },
+  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700', step: 1 },
+  documentation: { label: 'Documentation', color: 'bg-amber-100 text-amber-700', step: 2 },
+  awaiting_customs: { label: 'Awaiting Customs', color: 'bg-orange-100 text-orange-700', step: 3 },
+  customs_clearance: { label: 'Customs Clearance', color: 'bg-purple-100 text-purple-700', step: 4 },
+  terminal_processing: { label: 'Terminal Processing', color: 'bg-fuchsia-100 text-fuchsia-700', step: 5 },
+  cargo_examination: { label: 'Cargo Examination', color: 'bg-pink-100 text-pink-700', step: 6 },
+  released: { label: 'Released', color: 'bg-teal-100 text-teal-700', step: 7 },
+  transport: { label: 'Transport', color: 'bg-cyan-100 text-cyan-700', step: 8 },
+  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', step: 9 },
+  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700', step: 10 },
+  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600', step: 11 },
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', step: -1 },
+  // Legacy — retired, never produced going forward.
+  booking_received: { label: 'Booking Received', color: 'bg-blue-100 text-blue-700', step: 0 },
+  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', step: 4 },
+  in_transit: { label: 'In Transit', color: 'bg-cyan-100 text-cyan-700', step: 8 },
+  arrived: { label: 'Arrived', color: 'bg-teal-100 text-teal-700', step: 7 },
 };
 
 export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
-  'booking_received',
+  'awaiting_operations',
+  'planning',
   'documentation',
-  'processing',
-  'in_transit',
-  'arrived',
+  'awaiting_customs',
+  'customs_clearance',
+  'terminal_processing',
+  'cargo_examination',
+  'released',
+  'transport',
   'delivered',
+  'completed',
+  'archived',
 ];
 
 /**
- * Visual pipeline stages for the Operations Center. Maps the existing
- * shipment_status enum onto customer-facing freight-forwarding language
- * (e.g. "processing" reads as "Customs" in a freight context) without
- * touching the underlying enum. "Quotation" is not a shipment status —
- * it represents approved quotations that haven't become a shipment yet.
+ * Visual pipeline stages for the Operations Center. Maps the strict
+ * shipment_status flow onto customer-facing freight-forwarding language
+ * without touching the underlying enum. "Quotation" is not a shipment
+ * status — it represents accepted quotations that haven't become a
+ * shipment yet.
  */
 export const PIPELINE_STAGES: {
   key: string;
@@ -51,11 +75,15 @@ export const PIPELINE_STAGES: {
   statuses: ShipmentStatus[];
 }[] = [
   { key: 'quotation', label: 'Quotation', statuses: [] },
-  { key: 'booking', label: 'Booking', statuses: ['booking_received'] },
+  { key: 'operations', label: 'Awaiting Operations', statuses: ['awaiting_operations', 'planning'] },
   { key: 'documentation', label: 'Documentation', statuses: ['documentation'] },
-  { key: 'customs', label: 'Customs', statuses: ['processing'] },
-  { key: 'in_transit', label: 'In Transit', statuses: ['in_transit', 'arrived'] },
-  { key: 'delivered', label: 'Delivered', statuses: ['delivered'] },
+  {
+    key: 'customs',
+    label: 'Customs',
+    statuses: ['awaiting_customs', 'customs_clearance', 'terminal_processing', 'cargo_examination', 'released'],
+  },
+  { key: 'in_transit', label: 'In Transit', statuses: ['transport'] },
+  { key: 'delivered', label: 'Delivered', statuses: ['delivered', 'completed'] },
 ];
 
 export const QUOTATION_STATUS_META: Record<

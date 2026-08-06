@@ -204,6 +204,11 @@ export default function ShipmentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete = !!shipment && canDeleteOwnRecord({ hasRole });
+  // Shipment ownership: Operations owns the shipment (mirrors
+  // insert/update_shipments_branch RLS's can_manage_operations()).
+  // Sales and every other non-operations track can View/Track but not
+  // Edit/Assign/Update Status.
+  const canManageShipment = hasRole('admin') || hasRole('branch_manager') || hasRole('operations');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [stagesVersion, setStagesVersion] = useState(0);
   const [statusBlockers, setStatusBlockers] = useState<string[]>([]);
@@ -681,8 +686,10 @@ export default function ShipmentDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Status update dropdown — one step at a time only; advancing
-              is gated by checkShipmentStatusReadiness (see handleStatusChange) */}
-          {!isCancelled && shipment.status !== 'delivered' && (
+              is gated by checkShipmentStatusReadiness (see handleStatusChange).
+              Operations-owned: Sales/other tracks can View/Track but not
+              change status (mirrors update_shipments_branch RLS). */}
+          {canManageShipment && !isCancelled && shipment.status !== 'delivered' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
               <Button variant="default" size="sm" disabled={updatingStatus}>
@@ -733,12 +740,14 @@ export default function ShipmentDetailPage() {
             </DropdownMenu>
           )}
 
-          <Link href={`/shipments/${shipmentId}/edit`}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit
-            </Button>
-          </Link>
+          {canManageShipment && (
+            <Link href={`/shipments/${shipmentId}/edit`}>
+              <Button variant="outline" size="sm">
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          )}
           {canDelete && (
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
               <DialogTrigger asChild>
@@ -1076,7 +1085,10 @@ export default function ShipmentDetailPage() {
 
         {/* --- Timeline Tab --- */}
         <TabsContent value="timeline" className="space-y-6">
-          {/* Add Timeline Entry Form */}
+          {/* Add Timeline Entry Form — Operations-owned, same rule as
+              Update Status above; Sales/other tracks can view history
+              below but not add to it. */}
+          {canManageShipment && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -1141,6 +1153,7 @@ export default function ShipmentDetailPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Timeline List */}
           <Card>

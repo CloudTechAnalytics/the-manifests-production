@@ -37,13 +37,27 @@ export type CargoType = 'fcl' | 'lcl' | 'roro' | 'break_bulk';
 export type QuotationPriority = 'normal' | 'urgent' | 'vip';
 
 export type ShipmentStatus =
-  | 'booking_received'
+  | 'awaiting_operations'
+  | 'planning'
   | 'documentation'
+  | 'awaiting_customs'
+  | 'customs_clearance'
+  | 'terminal_processing'
+  | 'cargo_examination'
+  | 'released'
+  | 'transport'
+  | 'delivered'
+  | 'completed'
+  | 'archived'
+  | 'cancelled'
+  // Legacy values — retired from the active flow (see SHIPMENT_STATUS_FLOW
+  // in lib/utils/status.ts) but Postgres enums can't drop values, and old
+  // shipment_timeline rows permanently store them, so they must stay valid
+  // here purely so those historical rows still render a label.
+  | 'booking_received'
   | 'processing'
   | 'in_transit'
-  | 'arrived'
-  | 'delivered'
-  | 'cancelled';
+  | 'arrived';
 
 export type DocumentCategory =
   | 'invoice'
@@ -391,6 +405,26 @@ export interface Shipment {
   actual_weight: number | null;
   volumetric_weight: number | null;
   chargeable_weight: number | null;
+  // Retained copy of the fields the quotation already captured — see
+  // migration 053's comment for why this is a real copy, not a join.
+  services: string[];
+  required_documents: string[];
+  priority: QuotationPriority;
+  cargo_type: CargoType | null;
+  shipment_direction: ShipmentDirection | null;
+  container_count: number | null;
+  packages_count: number | null;
+  package_type: string | null;
+  dangerous_cargo: boolean;
+  temperature_controlled: boolean;
+  insurance_required: boolean;
+  payment_terms: string | null;
+  payment_method: string | null;
+  customer_notes: string | null;
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  sales_rep_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -399,6 +433,7 @@ export interface Shipment {
   customer?: Customer | null;
   branch?: Branch | null;
   assigned_user?: Profile | null;
+  sales_rep?: Profile | null;
   timeline?: ShipmentTimelineEntry[];
 }
 
@@ -629,6 +664,60 @@ export interface ShipmentTransportation {
   shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
 }
 
+export type ShipmentWarehouseRecordStatus = 'awaiting_arrival' | 'received' | 'released';
+
+export interface ShipmentWarehouseRecord {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  warehouse_id: string | null;
+  status: ShipmentWarehouseRecordStatus;
+  expected_arrival_date: string | null;
+  received_date: string | null;
+  released_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+}
+
+export type DeliveryOrderStatus = 'waiting_for_release' | 'released' | 'delivered';
+
+export interface DeliveryOrder {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  order_number: string | null;
+  status: DeliveryOrderStatus;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  released_date: string | null;
+  delivered_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+}
+
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  branch_id: string;
+  type: string;
+  entity_type: 'quotation' | 'shipment';
+  entity_id: string;
+  title: string;
+  body: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 export interface UserPreferences {
@@ -844,6 +933,7 @@ export interface ShipmentPlan {
   plan_number: string | null;
   customer_id: string;
   quotation_id: string | null;
+  shipment_id: string | null;
   branch_id: string;
   status: PlanStatus;
   priority: PriorityLevel;

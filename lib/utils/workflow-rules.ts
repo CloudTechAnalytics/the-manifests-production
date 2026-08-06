@@ -1,5 +1,6 @@
 import { checkCustomsReleased, checkReleaseReadiness, type ReleaseReadiness } from '@/lib/utils/release-readiness';
 import { getDocumentChecklist } from '@/lib/utils/document-templates';
+import { supabase } from '@/lib/supabase/client';
 import type { ShipmentStatus } from '@/types';
 
 export type StageReadiness = ReleaseReadiness;
@@ -33,26 +34,52 @@ export async function checkStageReadiness(shipmentId: string, stageKey: string):
 }
 
 /**
- * Gates the simple shipment.status flow (booking_received -> documentation
- * -> processing -> in_transit -> arrived -> delivered) — the status shown
- * everywhere in the app (dashboard, lists, badges) — separately from the
- * granular shipment_stages workflow tab, which already gates itself via
- * checkStageReadiness. Keyed by the status being ENTERED: what must be
- * true before the shipment can be marked as that status.
+ * Which shipment_stages row must be completed (or skipped) before the
+ * shipment's main status can advance to a given target — the "cannot
+ * skip stages" rule. Keyed by the status being ENTERED, valued by the
+ * stage_key that must be done first (the stage matching the status
+ * immediately before it in SHIPMENT_STATUS_FLOW). No entry (e.g.
+ * awaiting_operations, the first status — nothing to complete first —
+ * or archived, which has no matching stage) means no stage precondition.
  *
- * booking_received and arrived have no precondition (arrival is a physical
- * event nothing here can verify); cancelled is never blocked.
+ * This deliberately does NOT duplicate the document/release-readiness
+ * checks that already gate checkStageReadiness above — a stage can only
+ * be marked completed once those pass, so requiring the stage to be
+ * completed here transitively enforces the same preconditions without
+ * checking them twice.
  */
-const STATUS_VALIDATORS: Partial<Record<ShipmentStatus, (shipmentId: string) => Promise<StageReadiness>>> = {
-  processing: (id) => checkDocumentsForStage(id, 'documentation'),
-  in_transit: (id) => checkReleaseReadiness(id),
-  delivered: (id) => checkDocumentsForStage(id, 'transportation'),
+const STATUS_PRECEDING_STAGE_KEY: Partial<Record<ShipmentStatus, string>> = {
+  planning: 'shipment_created',
+  documentation: 'planning',
+  awaiting_customs: 'documentation',
+  customs_clearance: 'regulatory_compliance',
+  terminal_processing: 'customs_clearance',
+  cargo_examination: 'terminal_operations',
+  released: 'cargo_examination',
+  transport: 'released',
+  delivered: 'transportation',
+  completed: 'delivered',
+  archived: 'completed',
 };
+
+async function checkStageComplete(shipmentId: string, stageKey: string): Promise<StageReadiness> {
+  const { data } = await supabase
+    .from('shipment_stages')
+    .select('label, status')
+    .eq('shipment_id', shipmentId)
+    .eq('stage_key', stageKey)
+    .maybeSingle();
+
+  if (!data || data.status === 'completed' || data.status === 'skipped') {
+    return { ready: true, blockers: [] };
+  }
+  return { ready: false, blockers: [`"${data.label}" must be completed or skipped before advancing.`] };
+}
 
 export async function checkShipmentStatusReadiness(
   shipmentId: string,
   targetStatus: ShipmentStatus
 ): Promise<StageReadiness> {
-  const validator = STATUS_VALIDATORS[targetStatus];
-  return validator ? validator(shipmentId) : { ready: true, blockers: [] };
+  const precedingStageKey = STATUS_PRECEDING_STAGE_KEY[targetStatus];
+  return precedingStageKey ? checkStageComplete(shipmentId, precedingStageKey) : { ready: true, blockers: [] };
 }

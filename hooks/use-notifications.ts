@@ -3,123 +3,87 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import type { AppNotification } from '@/types';
 
 /*
- * Notifications for the tenant top-bar bell.
+ * Notifications for the tenant top-bar bell — a real per-user inbox
+ * (migration 053's `notifications` table), not a derived live count.
+ * Rows are written only by trusted server-side paths (currently the
+ * convert_quotation_to_shipment RPC, notifying Operations on shipment
+ * creation; more event triggers land there over time) — there's no
+ * client INSERT policy, so this hook only ever reads and marks read.
  *
- * These are live operational signals, not an inbox: each item is a count
- * of outstanding work derived from the same rules the dashboard's
- * Operational Alerts card uses, so the bell and the dashboard never
- * disagree. Because they are live, the badge clears when the underlying
- * work is done rather than when the dropdown is opened — there is no
- * fake "mark as read".
- *
- * Every query is a HEAD count (no rows fetched) and branch-scoped exactly
- * like the dashboard: an admin sees the whole organization, everyone else
- * only their own branch. RLS is the real boundary; the branch filter just
- * matches what each role already sees elsewhere.
+ * The previous "live operational signals" version of this hook (delayed
+ * shipments, docs due, quotations pending) still exists as
+ * components/dashboard/operational-alerts.tsx — a distinct, always-live
+ * metrics concept that isn't lost, just no longer conflated with the
+ * bell.
  */
 
-export interface NotificationItem {
-  key: string;
-  label: string;
-  description: string;
-  href: string;
-  count: number;
-}
-
 export interface NotificationsState {
-  items: NotificationItem[];
-  total: number;
+  items: AppNotification[];
+  unreadCount: number;
   loading: boolean;
   refresh: () => void;
+  markRead: (id: string) => Promise<void>;
+  markAllRead: () => Promise<void>;
 }
+
+const RECENT_LIMIT = 20;
 
 export function useNotifications(): NotificationsState {
   const { profile } = useAuth();
-  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const isAdmin = profile?.role === 'admin';
-  const branchFilter = isAdmin ? null : profile?.branch_id ?? null;
 
   const load = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('recipient_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(RECENT_LIMIT);
 
-      // Built then conditionally narrowed by branch, mirroring the dashboard
-      // hook. Reassigning the builder (rather than a generic wrapper) keeps
-      // TypeScript from recursing into Supabase's query-builder types.
-      let docsQuery = supabase
-        .from('shipments')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('status', 'documentation');
-      if (branchFilter) docsQuery = docsQuery.eq('branch_id', branchFilter);
-
-      let quotesQuery = supabase
-        .from('quotations')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('status', 'sent');
-      if (branchFilter) quotesQuery = quotesQuery.eq('branch_id', branchFilter);
-
-      let delayedQuery = supabase
-        .from('shipments')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .not('status', 'in', '(delivered,cancelled)')
-        .not('estimated_arrival', 'is', null)
-        .lt('estimated_arrival', today);
-      if (branchFilter) delayedQuery = delayedQuery.eq('branch_id', branchFilter);
-
-      const [docs, quotes, delayed] = await Promise.all([
-        docsQuery,
-        quotesQuery,
-        delayedQuery,
-      ]);
-
-      const defs: NotificationItem[] = [
-        {
-          key: 'delayed',
-          label: 'Shipments delayed',
-          description: 'Past estimated arrival',
-          href: '/shipments',
-          count: delayed.count ?? 0,
-        },
-        {
-          key: 'documentation',
-          label: 'Awaiting documentation',
-          description: 'Need paperwork to proceed',
-          href: '/shipments?status=documentation',
-          count: docs.count ?? 0,
-        },
-        {
-          key: 'quotations',
-          label: 'Quotations pending',
-          description: 'Awaiting customer response',
-          href: '/quotations?status=sent',
-          count: quotes.count ?? 0,
-        },
-      ];
-
-      // Only surface signals that actually have outstanding items.
-      setItems(defs.filter((d) => d.count > 0));
-    } catch {
-      // A failed count shouldn't break the shell — show nothing rather
-      // than a broken bell.
-      setItems([]);
+      if (error) {
+        console.error('Error loading notifications:', error);
+        setItems([]);
+        return;
+      }
+      setItems((data as AppNotification[]) ?? []);
     } finally {
       setLoading(false);
     }
-  }, [profile, branchFilter]);
+  }, [profile]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const total = items.reduce((sum, i) => sum + i.count, 0);
-  return { items, total, loading, refresh: load };
+  const markRead = useCallback(
+    async (id: string) => {
+      const now = new Date().toISOString();
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: now } : n)));
+      const { error } = await supabase.from('notifications').update({ read_at: now }).eq('id', id);
+      if (error) console.error('Error marking notification read:', error);
+    },
+    []
+  );
+
+  const markAllRead = useCallback(async () => {
+    if (!profile) return;
+    const now = new Date().toISOString();
+    setItems((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })));
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read_at: now })
+      .eq('recipient_id', profile.id)
+      .is('read_at', null);
+    if (error) console.error('Error marking all notifications read:', error);
+  }, [profile]);
+
+  const unreadCount = items.filter((n) => !n.read_at).length;
+  return { items, unreadCount, loading, refresh: load, markRead, markAllRead };
 }

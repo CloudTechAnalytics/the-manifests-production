@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -62,7 +62,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import type { UserRole } from '@/types';
+import type { UserRole, AppNotification } from '@/types';
 
 type NavItem = {
   href: string;
@@ -599,11 +599,19 @@ function HeaderUserMenu() {
   );
 }
 
-/** Notifications bell: live operational signals (delayed shipments,
- *  paperwork due, quotations awaiting response) from useNotifications.
- *  The badge reflects outstanding work and clears when the work is done. */
+/** Notifications bell: a real per-user inbox (migration 053's
+ *  `notifications` table) — shipment created, docs needed, customs
+ *  released, etc. Unread count badges the bell; opening an item marks
+ *  it read and navigates to the record it's about. */
 function NotificationsBell() {
-  const { items, total, loading } = useNotifications();
+  const router = useRouter();
+  const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
+
+  const handleOpen = (item: AppNotification) => {
+    if (!item.read_at) markRead(item.id);
+    const href = item.entity_type === 'shipment' ? `/shipments/${item.entity_id}` : `/quotations/${item.entity_id}`;
+    router.push(href);
+  };
 
   return (
     <DropdownMenu>
@@ -612,24 +620,33 @@ function NotificationsBell() {
           variant="ghost"
           size="icon"
           className="relative text-muted-foreground"
-          aria-label={total > 0 ? `Notifications (${total})` : 'Notifications'}
+          aria-label={unreadCount > 0 ? `Notifications (${unreadCount})` : 'Notifications'}
         >
           <Bell className="h-5 w-5" />
-          {total > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
-              {total > 9 ? '9+' : total}
+              {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <div className="px-2 py-1.5">
-          <p className="text-sm font-medium">Notifications</p>
-          <p className="text-xs text-muted-foreground">
-            {total > 0
-              ? `${total} item${total === 1 ? '' : 's'} need attention`
-              : 'Outstanding operational items'}
-          </p>
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <div>
+            <p className="text-sm font-medium">Notifications</p>
+            <p className="text-xs text-muted-foreground">
+              {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up"}
+            </p>
+          </div>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Mark all read
+            </button>
+          )}
         </div>
         <DropdownMenuSeparator />
         {loading ? (
@@ -639,25 +656,31 @@ function NotificationsBell() {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
             <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-            <p className="text-sm font-medium">You&apos;re all caught up</p>
+            <p className="text-sm font-medium">Nothing yet</p>
             <p className="text-xs text-muted-foreground">
-              No outstanding items right now.
+              You&apos;ll see updates here as things happen.
             </p>
           </div>
         ) : (
-          items.map((item) => (
-            <DropdownMenuItem key={item.key} asChild className="cursor-pointer">
-              <Link href={item.href} className="flex items-start gap-3 py-2">
-                <span className="mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive/10 px-1.5 text-xs font-semibold text-destructive">
-                  {item.count}
-                </span>
+          <div className="max-h-96 overflow-y-auto">
+            {items.map((item) => (
+              <DropdownMenuItem
+                key={item.id}
+                onClick={() => handleOpen(item)}
+                className="flex cursor-pointer items-start gap-2.5 py-2"
+              >
+                <span
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.read_at ? 'bg-transparent' : 'bg-primary'}`}
+                />
                 <span className="flex flex-col">
-                  <span className="text-sm font-medium leading-tight">{item.label}</span>
-                  <span className="text-xs text-muted-foreground">{item.description}</span>
+                  <span className={`text-sm leading-tight ${item.read_at ? 'font-normal' : 'font-medium'}`}>
+                    {item.title}
+                  </span>
+                  {item.body && <span className="text-xs text-muted-foreground">{item.body}</span>}
                 </span>
-              </Link>
-            </DropdownMenuItem>
-          ))
+              </DropdownMenuItem>
+            ))}
+          </div>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -56,6 +56,20 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
     [hasRole]
   );
 
+  /**
+   * "Cannot skip stages": the earliest not-yet-done, non-optional stage
+   * with a lower sequence than the one being started, if any. Optional
+   * stages (cargo_examination, warehouse) never block — they're either
+   * done or explicitly skipped, never a mandatory gate for what follows.
+   */
+  const getBlockingPriorStage = useCallback(
+    (stage: ShipmentStage): ShipmentStage | null =>
+      stages.find(
+        (s) => s.sequence < stage.sequence && !s.is_optional && s.status !== 'completed' && s.status !== 'skipped'
+      ) ?? null,
+    [stages]
+  );
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -133,6 +147,11 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
 
   const handleStart = async (stage: ShipmentStage) => {
     if (!profile) return;
+    const blocker = getBlockingPriorStage(stage);
+    if (blocker) {
+      toast.error(`Complete or skip "${blocker.label}" first — stages can't be started out of order.`);
+      return;
+    }
     setBusyStageId(stage.id);
     try {
       const { error } = await supabase
@@ -339,6 +358,7 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
         const blockers = blockersByStage[stage.id] ?? [];
         const canAct = canActOnStage(stage);
         const busy = busyStageId === stage.id;
+        const blockingStage = stage.status === 'pending' ? getBlockingPriorStage(stage) : null;
 
         return (
           <AccordionItem key={stage.id} value={stage.id}>
@@ -368,6 +388,13 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
             </AccordionTrigger>
             <AccordionContent className="px-1">
               <div className="space-y-4">
+                {blockingStage && (
+                  <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-700">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    &quot;{blockingStage.label}&quot; must be completed or skipped before this stage can start.
+                  </div>
+                )}
+
                 {blockers.length > 0 && (
                   <div className="space-y-1.5 rounded-lg border border-red-200 bg-red-50 p-3">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-red-700">
@@ -421,7 +448,7 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
                             Skip
                           </Button>
                         )}
-                        <Button size="sm" disabled={!canAct || busy} onClick={() => handleStart(stage)}>
+                        <Button size="sm" disabled={!canAct || busy || !!blockingStage} onClick={() => handleStart(stage)}>
                           {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                           Start
                         </Button>

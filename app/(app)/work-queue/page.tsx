@@ -13,15 +13,19 @@ import {
   PackageCheck,
   AlertTriangle,
   Clock,
+  ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ConvertToShipmentDialog } from '@/components/quotations/convert-to-shipment-dialog';
 import { formatDate, formatCurrency } from '@/lib/utils/status';
+import type { Quotation } from '@/types';
 
 /*
  * Work Queue — the operational homepage. Where the dashboard shows how
@@ -42,6 +46,9 @@ interface QueueRow {
   secondary: string;
   meta: string;
   href: string;
+  /** Only the Awaiting Operations row uses this — a "Start Shipment"
+   *  action instead of relying on the reader to click through first. */
+  startShipmentQuotation?: Quotation;
 }
 
 interface QueueSection {
@@ -59,6 +66,8 @@ export default function WorkQueuePage() {
   const { profile, hasRole } = useAuth();
   const [sections, setSections] = useState<QueueSection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [convertTarget, setConvertTarget] = useState<Quotation | null>(null);
+  const canConvert = hasRole('admin') || hasRole('branch_manager') || hasRole('operations');
 
   const isAdmin = profile?.role === 'admin';
   const seesWholeOrg = isAdmin || hasRole('branch_manager');
@@ -124,6 +133,17 @@ export default function WorkQueuePage() {
         .limit(8);
       if (branchFilter) quotationsQuery = quotationsQuery.eq('branch_id', branchFilter);
 
+      // Awaiting Operations — accepted, not yet converted to a shipment.
+      let awaitingOpsQuery = supabase
+        .from('quotations')
+        .select('*, customer:customers(*)', { count: 'exact' })
+        .is('deleted_at', null)
+        .eq('status', 'accepted')
+        .is('converted_shipment_id', null)
+        .order('approval_date', { ascending: false, nullsFirst: false })
+        .limit(8);
+      if (branchFilter) awaitingOpsQuery = awaitingOpsQuery.eq('branch_id', branchFilter);
+
       let invoicesQuery = supabase
         .from('invoices')
         .select('id, invoice_number, customer:customers(company_name), total, currency, due_date', { count: 'exact' })
@@ -176,13 +196,14 @@ export default function WorkQueuePage() {
         .limit(8);
       if (branchFilter) overdueTasksQuery = overdueTasksQuery.eq('branch_id', branchFilter);
 
-      const [docs, customs, paar, terminal, quotations, invoices, truck, ready, urgent, overdue] =
+      const [docs, customs, paar, terminal, quotations, awaitingOps, invoices, truck, ready, urgent, overdue] =
         await Promise.all([
           docsQuery,
           customsQuery,
           paarQuery,
           terminalQuery,
           quotationsQuery,
+          awaitingOpsQuery,
           invoicesQuery,
           truckQuery,
           readyQuery,
@@ -203,6 +224,23 @@ export default function WorkQueuePage() {
         .slice(0, 8);
 
       const built: QueueSection[] = [
+        {
+          key: 'awaiting_operations',
+          label: 'Awaiting Operations',
+          description: 'Accepted quotations ready to become a shipment',
+          icon: ArrowRightLeft,
+          color: 'bg-primary/10 text-primary',
+          count: awaitingOps.count ?? 0,
+          viewAllHref: '/quotations?status=accepted',
+          rows: ((awaitingOps.data ?? []) as unknown as Quotation[]).map((q) => ({
+            id: q.id,
+            primary: q.customer?.company_name ?? 'Unknown customer',
+            secondary: q.quotation_number ?? 'Quotation',
+            meta: '',
+            href: `/quotations/${q.id}`,
+            startShipmentQuotation: canConvert ? q : undefined,
+          })),
+        },
         {
           key: 'documentation',
           label: 'Awaiting Documentation',
@@ -410,7 +448,7 @@ export default function WorkQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [profile, branchFilter]);
+  }, [profile, branchFilter, canConvert]);
 
   useEffect(() => {
     load();
@@ -463,21 +501,41 @@ export default function WorkQueuePage() {
                   <CardDescription>{section.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-1">
-                  {section.rows.slice(0, 5).map((row) => (
-                    <Link
-                      key={row.id}
-                      href={row.href}
-                      className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent"
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="font-medium">{row.primary}</span>
-                        <span className="text-muted-foreground"> · {row.secondary}</span>
-                      </span>
-                      {row.meta && (
-                        <span className="shrink-0 text-xs text-muted-foreground">{row.meta}</span>
-                      )}
-                    </Link>
-                  ))}
+                  {section.rows.slice(0, 5).map((row) =>
+                    row.startShipmentQuotation ? (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                      >
+                        <Link href={row.href} className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{row.primary}</span>
+                          <span className="text-muted-foreground"> · {row.secondary}</span>
+                        </Link>
+                        <Button
+                          size="sm"
+                          className="h-7 shrink-0 text-xs"
+                          onClick={() => setConvertTarget(row.startShipmentQuotation!)}
+                        >
+                          <ArrowRightLeft className="mr-1 h-3 w-3" />
+                          Start Shipment
+                        </Button>
+                      </div>
+                    ) : (
+                      <Link
+                        key={row.id}
+                        href={row.href}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{row.primary}</span>
+                          <span className="text-muted-foreground"> · {row.secondary}</span>
+                        </span>
+                        {row.meta && (
+                          <span className="shrink-0 text-xs text-muted-foreground">{row.meta}</span>
+                        )}
+                      </Link>
+                    )
+                  )}
                   {section.count > 5 && (
                     <Link
                       href={section.viewAllHref}
@@ -490,6 +548,15 @@ export default function WorkQueuePage() {
               </Card>
             ))}
         </div>
+      )}
+
+      {convertTarget && (
+        <ConvertToShipmentDialog
+          quotation={convertTarget}
+          open={!!convertTarget}
+          onOpenChange={(open) => !open && setConvertTarget(null)}
+          onConverted={load}
+        />
       )}
     </div>
   );
