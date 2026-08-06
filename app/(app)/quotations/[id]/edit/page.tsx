@@ -26,15 +26,7 @@ import {
   computeLineTotal,
   type QuotationFormValues,
 } from '@/lib/quotation-schema';
-import { CustomerSection } from '@/components/quotations/customer-section';
-import { ShipmentInfoSection, CargoInfoSection } from '@/components/quotations/shipment-cargo-section';
-import { ServicesChargeSection } from '@/components/quotations/services-charge-section';
-import {
-  PaymentTermsSection,
-  RequiredDocumentsSection,
-  ValiditySection,
-} from '@/components/quotations/payment-docs-validity-section';
-import { ScopeOfServiceSection } from '@/components/quotations/scope-of-service-section';
+import { QuotationWizardShell } from '@/components/quotations/quotation-wizard-shell';
 import { QuotationAttachmentsPanel } from '@/components/quotations/quotation-attachments-panel';
 import { QuotationSummaryPanel } from '@/components/quotations/quotation-summary-panel';
 import type { Customer, Profile, Quotation, QuotationItem, QuotationStatus } from '@/types';
@@ -152,6 +144,11 @@ export default function EditQuotationPage() {
             tax_rate: i.tax_rate,
             unit: i.unit ?? '',
             notes: i.notes ?? '',
+            billing_basis: i.billing_basis ?? '',
+            cost_centre: i.cost_centre ?? '',
+            gl_account: i.gl_account ?? '',
+            internal_reference: i.internal_reference ?? '',
+            tax_code: i.tax_code ?? '',
           })),
         payment_terms: q.payment_terms ?? '',
         payment_method: q.payment_method ?? '',
@@ -268,6 +265,11 @@ export default function EditQuotationPage() {
           tax_rate: Number(item.tax_rate),
           unit: item.unit || null,
           notes: item.notes || null,
+          billing_basis: item.billing_basis || null,
+          cost_centre: item.cost_centre || null,
+          gl_account: item.gl_account || null,
+          internal_reference: item.internal_reference || null,
+          tax_code: item.tax_code || null,
           sort_order: index,
           total: Math.round(computeLineTotal(item) * 100) / 100,
         };
@@ -459,7 +461,7 @@ export default function EditQuotationPage() {
       <FormProvider {...methods}>
         <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <CustomerSection
+            <QuotationWizardShell
               customers={customers}
               loadingCustomers={loadingCustomers}
               salesReps={salesReps}
@@ -469,13 +471,6 @@ export default function EditQuotationPage() {
                 methods.setValue('customer_id', c.id);
               }}
             />
-            <ShipmentInfoSection />
-            <CargoInfoSection />
-            <ServicesChargeSection />
-            <ScopeOfServiceSection />
-            <PaymentTermsSection />
-            <RequiredDocumentsSection />
-            <ValiditySection />
             <QuotationAttachmentsPanel quotationId={quotationId} branchId={quotation.branch_id} />
 
             <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">

@@ -28,15 +28,7 @@ import {
   computeLineTotal,
   type QuotationFormValues,
 } from '@/lib/quotation-schema';
-import { CustomerSection } from '@/components/quotations/customer-section';
-import { ShipmentInfoSection, CargoInfoSection } from '@/components/quotations/shipment-cargo-section';
-import { ServicesChargeSection } from '@/components/quotations/services-charge-section';
-import {
-  PaymentTermsSection,
-  RequiredDocumentsSection,
-  ValiditySection,
-} from '@/components/quotations/payment-docs-validity-section';
-import { ScopeOfServiceSection } from '@/components/quotations/scope-of-service-section';
+import { QuotationWizardShell } from '@/components/quotations/quotation-wizard-shell';
 import { QuotationSummaryPanel } from '@/components/quotations/quotation-summary-panel';
 import type { Customer, Profile } from '@/types';
 
@@ -199,6 +191,11 @@ export default function NewQuotationPage() {
         tax_rate: Number(item.tax_rate),
         unit: item.unit || null,
         notes: item.notes || null,
+        billing_basis: item.billing_basis || null,
+        cost_centre: item.cost_centre || null,
+        gl_account: item.gl_account || null,
+        internal_reference: item.internal_reference || null,
+        tax_code: item.tax_code || null,
         sort_order: index,
         total: Math.round(computeLineTotal(item) * 100) / 100,
       }));
@@ -281,7 +278,7 @@ export default function NewQuotationPage() {
               />
             )}
 
-            <CustomerSection
+            <QuotationWizardShell
               customers={customers}
               loadingCustomers={loadingCustomers}
               salesReps={salesReps}
@@ -291,13 +288,6 @@ export default function NewQuotationPage() {
                 methods.setValue('customer_id', c.id);
               }}
             />
-            <ShipmentInfoSection />
-            <CargoInfoSection />
-            <ServicesChargeSection />
-            <ScopeOfServiceSection />
-            <PaymentTermsSection />
-            <RequiredDocumentsSection />
-            <ValiditySection />
 
             <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">
               <Link href="/quotations" className="sm:shrink-0">

@@ -294,6 +294,10 @@ export interface Quotation {
   approval_date: string | null;
   approval_notes: string | null;
 
+  // Sent By / Sent Date — set when status moves to 'sent'
+  sent_by: string | null;
+  sent_at: string | null;
+
   // Section 13: conversion tracking
   converted_shipment_id: string | null;
   converted_at: string | null;
@@ -313,6 +317,7 @@ export interface Quotation {
   sales_rep?: Profile | null;
   requested_by_user?: Profile | null;
   approved_by_user?: Profile | null;
+  sent_by_user?: Profile | null;
   converted_shipment?: Shipment | null;
 }
 
@@ -327,6 +332,11 @@ export interface QuotationItem {
   service_key: string | null;
   unit: string | null;
   notes: string | null;
+  billing_basis: string | null;
+  cost_centre: string | null;
+  gl_account: string | null;
+  internal_reference: string | null;
+  tax_code: string | null;
   sort_order: number;
   total: number;
   created_at: string;

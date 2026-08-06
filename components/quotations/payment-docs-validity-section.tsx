@@ -19,8 +19,8 @@ import {
   PAYMENT_TERMS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   REQUIRED_DOCUMENT_OPTIONS,
-  getDefaultRequiredDocuments,
 } from '@/lib/quotation-constants';
+import { resolveRequiredDocuments } from '@/lib/quotation-rules';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { QuotationPriority } from '@/types';
 
@@ -87,23 +87,54 @@ export function PaymentTermsSection() {
   );
 }
 
-/** Section 7 — Required Documents checklist. */
+/**
+ * Section 7 — Required Documents checklist. Fully reactive: recomputes
+ * on every change of direction/mode/incoterm/services, not just a
+ * one-time prefill — e.g. switching to Export immediately drops PAAR,
+ * switching to Air immediately adds Air Waybill.
+ *
+ * Distinguishes "the engine put this here" from "the user checked this
+ * by hand": a ref tracks exactly which documents were last
+ * auto-applied. A document only gets pruned when it's both (a) no
+ * longer in the freshly computed set AND (b) was part of the previous
+ * auto-applied set — so a manual addition unrelated to the changed
+ * context is never touched.
+ */
 export function RequiredDocumentsSection() {
   const { watch, getValues, setValue } = useFormContext<QuotationFormValues>();
   const selected = watch('required_documents') ?? [];
   const direction = watch('shipment_direction');
+  const shipmentType = watch('shipment_type');
+  const incoterm = watch('incoterm');
+  const services = watch('services') ?? [];
 
-  // Pre-fill the standard checklist for the chosen direction the first
-  // time it's picked — guarded on "still empty" so it never clobbers a
-  // manual edit made afterwards.
-  const lastAppliedDirection = useRef<string | null>(null);
+  const lastAutoApplied = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!direction || direction === lastAppliedDirection.current) return;
-    if ((getValues('required_documents') ?? []).length === 0) {
-      setValue('required_documents', getDefaultRequiredDocuments(direction));
+    const computed = new Set(
+      resolveRequiredDocuments({
+        shipment_direction: direction,
+        shipment_type: shipmentType,
+        incoterm,
+        services,
+      })
+    );
+    const current = getValues('required_documents') ?? [];
+    const prevAuto = lastAutoApplied.current;
+
+    const next = current.filter((d) => !prevAuto.has(d) || computed.has(d));
+    for (const d of computed) {
+      if (!next.includes(d)) next.push(d);
     }
-    lastAppliedDirection.current = direction;
-  }, [direction, getValues, setValue]);
+
+    const changed = next.length !== current.length || next.some((d, i) => d !== current[i]);
+    if (changed) {
+      setValue('required_documents', next, { shouldDirty: true });
+    }
+    lastAutoApplied.current = computed;
+    // services is an array — join it so the effect only re-fires when its
+    // actual membership changes, not on every unrelated re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [direction, shipmentType, incoterm, services.join('|'), getValues, setValue]);
 
   const toggle = (doc: string, checked: boolean) => {
     setValue(

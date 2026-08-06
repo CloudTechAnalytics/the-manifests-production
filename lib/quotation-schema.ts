@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getHardValidationIssues } from '@/lib/quotation-rules';
 import type { Organization } from '@/types';
 
 /**
@@ -21,6 +22,13 @@ export const chargeRowSchema = z.object({
   tax_rate: z.coerce.number().min(0, 'Tax rate must be ≥ 0').max(100, 'Tax rate must be ≤ 100'),
   unit: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  // "More Details" disclosure — internal GL/billing metadata, never
+  // shown on the customer-facing PDF.
+  billing_basis: z.string().optional().or(z.literal('')),
+  cost_centre: z.string().optional().or(z.literal('')),
+  gl_account: z.string().optional().or(z.literal('')),
+  internal_reference: z.string().optional().or(z.literal('')),
+  tax_code: z.string().optional().or(z.literal('')),
 });
 
 export const quotationSchema = z.object({
@@ -81,6 +89,13 @@ export const quotationSchema = z.object({
   notes: z.string().optional().or(z.literal('')),
   customer_notes: z.string().optional().or(z.literal('')),
   terms: z.string().optional().or(z.literal('')),
+}).superRefine((values, ctx) => {
+  // Intelligent validation (Section 12) — FCL requires a container type,
+  // LCL requires CBM. Sourced from the centralized rules engine so this
+  // is the one place these rules are encoded, not duplicated here.
+  for (const issue of getHardValidationIssues(values)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+  }
 });
 
 export type QuotationFormValues = z.infer<typeof quotationSchema>;
@@ -128,6 +143,11 @@ export const QUOTATION_FORM_DEFAULTS: QuotationFormValues = {
       tax_rate: 0,
       unit: '',
       notes: '',
+      billing_basis: '',
+      cost_centre: '',
+      gl_account: '',
+      internal_reference: '',
+      tax_code: '',
     },
   ],
   payment_terms: '',

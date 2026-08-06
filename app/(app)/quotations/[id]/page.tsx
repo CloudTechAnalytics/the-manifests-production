@@ -258,7 +258,8 @@ export default function QuotationDetailPage() {
           `*, customer:customers(*), branch:branches(*), items:quotation_items(*),
            sales_rep:profiles!quotations_sales_rep_id_fkey(id, full_name),
            requested_by_user:profiles!quotations_requested_by_fkey(id, full_name),
-           approved_by_user:profiles!quotations_approved_by_fkey(id, full_name)`
+           approved_by_user:profiles!quotations_approved_by_fkey(id, full_name),
+           sent_by_user:profiles!quotations_sent_by_fkey(id, full_name)`
         )
         .eq('id', quotationId)
         .is('deleted_at', null)
@@ -331,6 +332,10 @@ export default function QuotationDetailPage() {
         updatePayload.approved_by = profile.id;
         updatePayload.approval_date = new Date().toISOString();
         if (notes) updatePayload.approval_notes = notes;
+      }
+      if (target === 'sent') {
+        updatePayload.sent_by = profile.id;
+        updatePayload.sent_at = new Date().toISOString();
       }
       if ((target === 'rejected' || target === 'cancelled') && notes) {
         updatePayload.approval_notes = notes;
@@ -521,6 +526,11 @@ export default function QuotationDetailPage() {
           tax_rate: item.tax_rate,
           unit: item.unit,
           notes: item.notes,
+          billing_basis: item.billing_basis,
+          cost_centre: item.cost_centre,
+          gl_account: item.gl_account,
+          internal_reference: item.internal_reference,
+          tax_code: item.tax_code,
           sort_order: index,
           total: item.total,
         }));
@@ -645,6 +655,11 @@ export default function QuotationDetailPage() {
           tax_rate: item.tax_rate,
           unit: item.unit,
           notes: item.notes,
+          billing_basis: item.billing_basis,
+          cost_centre: item.cost_centre,
+          gl_account: item.gl_account,
+          internal_reference: item.internal_reference,
+          tax_code: item.tax_code,
           sort_order: index,
           total: item.total,
         }));
@@ -1150,7 +1165,7 @@ export default function QuotationDetailPage() {
           </Card>
 
           {/* Section 10: Approval */}
-          {(quotation.requested_by_user || quotation.approved_by_user || quotation.status === 'pending_approval') && (
+          {(quotation.requested_by_user || quotation.approved_by_user || quotation.sent_by_user || quotation.status === 'pending_approval') && (
             <Card className="no-print">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -1171,6 +1186,12 @@ export default function QuotationDetailPage() {
                   icon={Calendar}
                   label="Approval Date"
                   value={quotation.approval_date ? formatDateTime(quotation.approval_date) : null}
+                />
+                <InfoRow icon={User} label="Sent By" value={quotation.sent_by_user?.full_name ?? null} />
+                <InfoRow
+                  icon={Calendar}
+                  label="Sent Date"
+                  value={quotation.sent_at ? formatDateTime(quotation.sent_at) : null}
                 />
                 {quotation.approval_notes && (
                   <div>

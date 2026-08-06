@@ -40,27 +40,27 @@ export const PACKAGE_TYPES = [
 export interface QuotationServiceDef {
   key: string;
   label: string;
-  defaultDescription: string;
 }
 
 /**
  * The fixed service checklist (Section 4). Checking one seeds a charge
- * row in the pricing table with this description and a zero rate the
- * user fills in — not a rate card, just a starting point.
+ * row in the pricing table — see lib/quotation-rules.ts's
+ * resolveChargeTemplate() for what description/naming it gets (mode-
+ * aware, e.g. "Ocean Freight" vs "Air Freight" for Freight Forwarding).
  */
 export const QUOTATION_SERVICES: QuotationServiceDef[] = [
-  { key: 'freight_forwarding', label: 'Freight Forwarding', defaultDescription: 'Freight Forwarding Service' },
-  { key: 'customs_clearance', label: 'Customs Clearance', defaultDescription: 'Customs Clearance' },
-  { key: 'documentation', label: 'Documentation', defaultDescription: 'Documentation Fee' },
-  { key: 'terminal_handling', label: 'Terminal Handling', defaultDescription: 'Terminal Handling Charge' },
-  { key: 'warehouse', label: 'Warehouse', defaultDescription: 'Warehousing' },
-  { key: 'haulage', label: 'Haulage', defaultDescription: 'Haulage / Inland Transport' },
-  { key: 'cargo_insurance', label: 'Cargo Insurance', defaultDescription: 'Cargo Insurance Premium' },
-  { key: 'delivery', label: 'Delivery', defaultDescription: 'Final-Mile Delivery' },
-  { key: 'examination', label: 'Examination', defaultDescription: 'Cargo Examination Fee' },
-  { key: 'son', label: 'SON', defaultDescription: 'SON Inspection' },
-  { key: 'nafdac', label: 'NAFDAC', defaultDescription: 'NAFDAC Clearance' },
-  { key: 'inspection', label: 'Inspection', defaultDescription: 'Pre-Shipment Inspection' },
+  { key: 'freight_forwarding', label: 'Freight Forwarding' },
+  { key: 'customs_clearance', label: 'Customs Clearance' },
+  { key: 'documentation', label: 'Documentation' },
+  { key: 'terminal_handling', label: 'Terminal Handling' },
+  { key: 'warehouse', label: 'Warehouse' },
+  { key: 'haulage', label: 'Haulage' },
+  { key: 'cargo_insurance', label: 'Cargo Insurance' },
+  { key: 'delivery', label: 'Delivery' },
+  { key: 'examination', label: 'Examination' },
+  { key: 'son', label: 'SON' },
+  { key: 'nafdac', label: 'NAFDAC' },
+  { key: 'inspection', label: 'Inspection' },
 ];
 
 export const PAYMENT_TERMS_OPTIONS = [
@@ -91,6 +91,7 @@ export const REQUIRED_DOCUMENT_OPTIONS = [
   'Commercial Invoice',
   'Packing List',
   'Bill of Lading',
+  'Air Waybill',
   'Certificate of Origin',
   'Insurance Certificate',
   'SONCAP',
@@ -136,6 +137,19 @@ export function getDefaultRequiredDocuments(direction: ShipmentDirection | null)
  * developer-defined catalog, same precedent as QUOTATION_SERVICES /
  * REQUIRED_DOCUMENT_OPTIONS (not admin-editable this pass).
  */
+/**
+ * How a charge line is billed — internal GL metadata shown in the
+ * charge table's "More Details" disclosure, not on the customer PDF.
+ */
+export const BILLING_BASIS_OPTIONS = [
+  { value: 'per_shipment', label: 'Per Shipment' },
+  { value: 'per_container', label: 'Per Container' },
+  { value: 'per_cbm', label: 'Per CBM' },
+  { value: 'per_kg', label: 'Per KG' },
+  { value: 'per_document', label: 'Per Document' },
+  { value: 'flat', label: 'Flat Fee' },
+];
+
 export const NOT_INCLUDED_SERVICE_OPTIONS = [
   'Customs Duty',
   'SON Fees',

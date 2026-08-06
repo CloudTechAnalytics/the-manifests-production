@@ -1,12 +1,13 @@
 'use client';
 
 import { useFormContext } from 'react-hook-form';
-import { Ship, Plane, Truck, Package2, MapPin } from 'lucide-react';
+import { Ship, Plane, Truck, Package2, MapPin, Lightbulb } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency, formatDate } from '@/lib/utils/status';
 import { QUOTATION_SERVICES, paymentTermsLabel } from '@/lib/quotation-constants';
+import { getSuggestions } from '@/lib/quotation-rules';
 import { computeQuotationTotals, computeQuotationCompleteness } from '@/lib/quotation-schema';
 import type { QuotationFormValues } from '@/lib/quotation-schema';
 import type { Customer, QuotationStatus } from '@/types';
@@ -35,6 +36,7 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
   const statusMeta = status ? QUOTATION_STATUS_META[status] : null;
   const showCompleteness = !status || status === 'draft' || status === 'pending_approval';
   const completeness = computeQuotationCompleteness(values);
+  const suggestions = getSuggestions(values);
 
   return (
     <Card className="sticky top-6 border-primary/20 bg-primary/[0.03]">
@@ -60,6 +62,20 @@ export function QuotationSummaryPanel({ customers, status }: QuotationSummaryPan
                 style={{ width: `${completeness}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {suggestions.length > 0 && (
+          <div className="space-y-1.5">
+            {suggestions.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800"
+              >
+                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{s.message}</span>
+              </div>
+            ))}
           </div>
         )}
 
