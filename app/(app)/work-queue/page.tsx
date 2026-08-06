@@ -153,18 +153,18 @@ export default function WorkQueuePage() {
         .limit(8);
       if (branchFilter) invoicesQuery = invoicesQuery.eq('branch_id', branchFilter);
 
-      // "Truck Assignment Required" — a shipment that has arrived at
-      // destination but has no transportation leg recorded yet.
+      // "Truck Assignment Required" — a shipment customs/terminal have
+      // released, ready for pickup.
       let truckQuery = supabase
         .from('shipments')
         .select('id, reference_number, customer:customers(company_name), estimated_arrival', { count: 'exact' })
         .is('deleted_at', null)
-        .eq('status', 'arrived')
+        .eq('status', 'released')
         .limit(8);
       if (branchFilter) truckQuery = truckQuery.eq('branch_id', branchFilter);
 
       // "Containers Ready for Delivery" — terminal has released it, but
-      // the shipment hasn't moved to in_transit/delivered yet.
+      // the shipment hasn't moved to transport/delivered yet.
       let readyQuery = supabase
         .from('terminal_operations')
         .select(
@@ -220,7 +220,7 @@ export default function WorkQueuePage() {
         .slice(0, 8);
 
       const readyRows = ((ready.data ?? []) as unknown as { id: string; shipment: ShipmentLite & { status: string } }[])
-        .filter((r) => r.shipment && !['in_transit', 'delivered', 'cancelled'].includes(r.shipment.status))
+        .filter((r) => r.shipment && !['transport', 'delivered', 'cancelled'].includes(r.shipment.status))
         .slice(0, 8);
 
       const built: QueueSection[] = [

@@ -81,14 +81,14 @@ export default function DashboardPage() {
       label: 'Awaiting Customs',
       value: stageCount('customs'),
       icon: Landmark,
-      href: '/shipments?status=processing',
+      href: '/shipments?status=awaiting_customs',
       color: 'bg-primary/10 text-primary',
     },
     {
       label: 'In Transit',
       value: stageCount('in_transit'),
       icon: Truck,
-      href: '/shipments?status=in_transit',
+      href: '/shipments?status=transport',
       color: 'bg-primary/10 text-primary',
     },
     {

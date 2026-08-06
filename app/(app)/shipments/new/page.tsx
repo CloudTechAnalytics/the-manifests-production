@@ -233,7 +233,7 @@ export default function NewShipmentPage() {
           shipment_type: values.shipment_type,
           origin: values.origin,
           destination: values.destination,
-          status: 'booking_received',
+          status: 'planning',
           assigned_to: values.assigned_to || null,
           booking_date: values.booking_date || null,
           estimated_departure: values.estimated_departure || null,
@@ -270,8 +270,8 @@ export default function NewShipmentPage() {
         .from('shipment_timeline')
         .insert({
           shipment_id: shipmentId,
-          status: 'booking_received',
-          notes: 'Shipment booking received and recorded.',
+          status: 'planning',
+          notes: 'Shipment created and recorded.',
           created_by: profile.id,
         });
 

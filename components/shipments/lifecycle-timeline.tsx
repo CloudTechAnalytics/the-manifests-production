@@ -20,14 +20,31 @@ interface StageDef {
   state: StageState;
 }
 
-const STAGE_META: Record<StageState, { icon: typeof CheckCircle2; className: string }> = {
-  completed: { icon: CheckCircle2, className: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-  in_progress: { icon: Clock, className: 'text-primary bg-primary/10 border-primary/30' },
-  pending: { icon: Circle, className: 'text-muted-foreground bg-muted border-border' },
-  delayed: { icon: AlertTriangle, className: 'text-red-600 bg-red-50 border-red-200' },
-  not_required: { icon: MinusCircle, className: 'text-muted-foreground/50 bg-muted/40 border-border/50' },
+const STAGE_META: Record<
+  StageState,
+  { icon: typeof CheckCircle2; dot: string; label: string; text: string }
+> = {
+  completed: { icon: CheckCircle2, dot: 'text-emerald-600 bg-emerald-50 border-emerald-300', label: 'text-foreground', text: 'text-emerald-700' },
+  in_progress: { icon: Clock, dot: 'text-primary bg-primary/10 border-primary', label: 'text-foreground font-semibold', text: 'text-primary' },
+  pending: { icon: Circle, dot: 'text-muted-foreground bg-muted border-border', label: 'text-muted-foreground', text: 'text-muted-foreground' },
+  delayed: { icon: AlertTriangle, dot: 'text-red-600 bg-red-50 border-red-300', label: 'text-foreground', text: 'text-red-700' },
+  not_required: { icon: MinusCircle, dot: 'text-muted-foreground/50 bg-muted/40 border-border/50', label: 'text-muted-foreground/60 line-through', text: 'text-muted-foreground/60' },
 };
 
+const STAGE_STATE_COPY: Record<StageState, string> = {
+  completed: 'Completed',
+  in_progress: 'Current stage',
+  pending: 'Pending',
+  delayed: 'Overdue',
+  not_required: 'Skipped — not required',
+};
+
+/**
+ * Vertical workflow checklist — one row per shipment_stages entry, in
+ * sequence order. Replaces the old horizontal stepper (which needed
+ * horizontal scrolling on anything narrower than a wide desktop) with a
+ * layout that never scrolls sideways at any width.
+ */
 export function LifecycleTimeline({
   shipment,
   refreshToken,
@@ -94,47 +111,41 @@ export function LifecycleTimeline({
   }
 
   if (loading) {
-    return <div className="h-20 animate-pulse rounded-lg bg-muted" />;
+    return <div className="h-40 animate-pulse rounded-lg bg-muted" />;
   }
 
   return (
-    <div className="overflow-x-auto pb-1">
-      <ol className="flex min-w-max items-start gap-1 sm:gap-2">
-        {stages.map((stage, i) => {
-          const meta = STAGE_META[stage.state];
-          const Icon = meta.icon;
-          return (
-            <li key={stage.key} className="flex items-center">
-              <div className="flex w-[92px] flex-col items-center gap-1.5 text-center sm:w-[104px]">
-                <div
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full border-2',
-                    meta.className
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span
-                  className={cn(
-                    'text-[11px] font-medium leading-tight',
-                    stage.state === 'not_required' ? 'text-muted-foreground/50' : 'text-foreground'
-                  )}
-                >
-                  {stage.label}
-                </span>
+    <ol className="space-y-0">
+      {stages.map((stage, i) => {
+        const meta = STAGE_META[stage.state];
+        const Icon = meta.icon;
+        const isLast = i === stages.length - 1;
+        return (
+          <li key={stage.key} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2', meta.dot)}>
+                <Icon className="h-4 w-4" />
               </div>
-              {i < stages.length - 1 && (
+              {!isLast && (
                 <div
                   className={cn(
-                    'mt-4 h-0.5 w-4 shrink-0 sm:w-8',
-                    stage.state === 'completed' ? 'bg-emerald-400' : 'bg-border'
+                    'w-0.5 flex-1 min-h-[18px]',
+                    stage.state === 'completed' ? 'bg-emerald-300' : 'bg-border'
                   )}
                 />
               )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+            </div>
+            <div className={cn('flex-1 pb-4 pt-0.5', isLast && 'pb-0')}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <span className={cn('text-sm', meta.label)}>{stage.label}</span>
+                <span className={cn('text-[11px] font-medium', meta.text)}>
+                  {STAGE_STATE_COPY[stage.state]}
+                </span>
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

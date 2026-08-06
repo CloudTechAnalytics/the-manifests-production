@@ -39,8 +39,16 @@ export async function checkStageReadiness(shipmentId: string, stageKey: string):
  * skip stages" rule. Keyed by the status being ENTERED, valued by the
  * stage_key that must be done first (the stage matching the status
  * immediately before it in SHIPMENT_STATUS_FLOW). No entry (e.g.
- * awaiting_operations, the first status — nothing to complete first —
- * or archived, which has no matching stage) means no stage precondition.
+ * planning, the first status — nothing to complete first — or archived,
+ * which has no matching stage and is a manual-only action) means no
+ * stage precondition.
+ *
+ * In practice, completing a stage now advances the status automatically
+ * (complete_shipment_stage(), migration 056) — this map is what backs
+ * the manual "Update Status" dropdown as a fallback/override path (e.g.
+ * admin correcting a status by hand), so it still needs to enforce the
+ * same rule independently rather than assuming the automatic path was
+ * used.
  *
  * This deliberately does NOT duplicate the document/release-readiness
  * checks that already gate checkStageReadiness above — a stage can only
@@ -49,7 +57,6 @@ export async function checkStageReadiness(shipmentId: string, stageKey: string):
  * checking them twice.
  */
 const STATUS_PRECEDING_STAGE_KEY: Partial<Record<ShipmentStatus, string>> = {
-  planning: 'shipment_created',
   documentation: 'planning',
   awaiting_customs: 'documentation',
   customs_clearance: 'regulatory_compliance',

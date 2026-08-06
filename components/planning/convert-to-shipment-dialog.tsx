@@ -55,7 +55,7 @@ export function ConvertToShipmentDialog({
           shipment_type: plan.shipment_type,
           origin: plan.origin,
           destination: plan.destination,
-          status: 'booking_received',
+          status: 'planning',
           assigned_to: plan.assigned_to,
           booking_date: plan.booking_confirmed_date ?? new Date().toISOString().split('T')[0],
           estimated_departure: plan.planned_etd,
@@ -109,7 +109,7 @@ export function ConvertToShipmentDialog({
 
       await supabase.from('shipment_timeline').insert({
         shipment_id: shipment.id,
-        status: 'booking_received',
+        status: 'planning',
         notes: `Created from plan ${plan.plan_number ?? ''}`,
         created_by: profile.id,
       });

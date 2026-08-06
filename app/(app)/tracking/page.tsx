@@ -65,11 +65,18 @@ const STATUS_TABS: { value: StatusTab; label: string }[] = [
   { value: 'delivered', label: 'Delivered' },
 ];
 
+// Customer-facing 4-bucket simplification of the real 11-stage flow —
+// same idea as PIPELINE_STAGES in lib/utils/status.ts, kept separate
+// since this page's buckets don't line up 1:1 with that one.
 const AT_ORIGIN_STATUSES: ShipmentStatus[] = [
-  'booking_received',
+  'planning',
   'documentation',
-  'processing',
+  'awaiting_customs',
+  'customs_clearance',
+  'terminal_processing',
+  'cargo_examination',
 ];
+const IN_TRANSIT_STATUSES: ShipmentStatus[] = ['released', 'transport'];
 
 const TYPE_OPTIONS: { value: 'all' | ShipmentType; label: string }[] = [
   { value: 'all', label: 'All Modes' },
@@ -169,12 +176,12 @@ export default function TrackingPage() {
       return shipments.filter((s) => AT_ORIGIN_STATUSES.includes(s.status));
     }
     if (statusTab === 'in_transit') {
-      return shipments.filter((s) => s.status === 'in_transit');
+      return shipments.filter((s) => IN_TRANSIT_STATUSES.includes(s.status));
     }
     if (statusTab === 'at_destination') {
-      return shipments.filter((s) => s.status === 'arrived');
+      return shipments.filter((s) => s.status === 'delivered');
     }
-    return shipments.filter((s) => s.status === 'delivered');
+    return shipments.filter((s) => s.status === 'completed' || s.status === 'archived');
   }, [shipments, statusTab]);
 
   useEffect(() => {

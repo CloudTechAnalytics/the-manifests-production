@@ -12,19 +12,24 @@ same constraint quotation_status's additions already worked within
 usable in the very next migration, not just eventually.
 
 ## New values
-awaiting_operations, planning, awaiting_customs, customs_clearance,
-terminal_processing, cargo_examination, released, transport,
-completed, archived — 'documentation', 'delivered', and 'cancelled'
-already exist and are reused as-is. The 3 retired values
-(booking_received, processing, in_transit, arrived) are NOT removed —
-Postgres can't cheaply drop enum values, and shipment_timeline rows
-already store them permanently as historical fact. Migration 053
-backfills live shipments off them and the application code stops
-producing them going forward; see that migration's comment for the
-full 12-value list and the reasoning per legacy value.
+planning, awaiting_customs, customs_clearance, terminal_processing,
+cargo_examination, released, transport, completed, archived —
+'documentation', 'delivered', and 'cancelled' already exist and are
+reused as-is. There is deliberately no 'awaiting_operations' value: by
+the time a shipment row exists at all, Operations has already accepted
+it (that's what clicking "Start Shipment" means) — "awaiting
+operations" describes the accepted-but-unconverted QUOTATION, which is
+a work-queue concept (see the Awaiting Operations dashboard/work-queue
+sections), never a shipment stage. A shipment's first status is
+'planning'. The 3 retired values (booking_received, processing,
+in_transit, arrived) are NOT removed — Postgres can't cheaply drop
+enum values, and shipment_timeline rows already store them permanently
+as historical fact. Migration 053 backfills live shipments off them
+and the application code stops producing them going forward; see that
+migration's comment for the full status-value list and the reasoning
+per legacy value.
 */
 
-ALTER TYPE shipment_status ADD VALUE IF NOT EXISTS 'awaiting_operations';
 ALTER TYPE shipment_status ADD VALUE IF NOT EXISTS 'planning';
 ALTER TYPE shipment_status ADD VALUE IF NOT EXISTS 'awaiting_customs';
 ALTER TYPE shipment_status ADD VALUE IF NOT EXISTS 'customs_clearance';

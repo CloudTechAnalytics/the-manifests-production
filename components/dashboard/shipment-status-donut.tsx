@@ -8,7 +8,7 @@ import type { PipelineCounts } from '@/hooks/use-dashboard-data';
 // Only the real shipment-status stages (excludes "Quotation", which isn't
 // a shipment status — it's approved quotations that haven't shipped yet).
 const SHIPMENT_STAGE_KEYS = new Set([
-  'booking',
+  'planning',
   'documentation',
   'customs',
   'in_transit',
@@ -16,7 +16,7 @@ const SHIPMENT_STAGE_KEYS = new Set([
 ]);
 
 const STAGE_HEX: Record<string, string> = {
-  booking: '#3b82f6',
+  planning: '#3b82f6',
   documentation: '#f59e0b',
   customs: '#a855f7',
   in_transit: '#06b6d4',

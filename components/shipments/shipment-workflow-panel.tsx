@@ -200,51 +200,50 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
     }
   };
 
-  const handleSkip = async (stage: ShipmentStage) => {
+  /**
+   * Both Complete and Skip go through complete_shipment_stage() (migration
+   * 056) rather than a direct table update — that RPC is what advances
+   * shipments.status to the next value, auto-starts the next stage, and
+   * notifies the newly-responsible department, none of which a plain
+   * client-side UPDATE can do (notifications has no client INSERT policy
+   * by design). It also re-checks the department/sequence rules
+   * server-side, so the client-side checks below are UX-only.
+   */
+  const runStageAction = async (stage: ShipmentStage, action: 'complete' | 'skip') => {
     if (!profile) return;
     setBusyStageId(stage.id);
     try {
-      const { error } = await supabase
-        .from('shipment_stages')
-        .update({ status: 'skipped', updated_by: profile.id })
-        .eq('id', stage.id);
+      const { data, error } = await supabase.rpc('complete_shipment_stage', {
+        p_stage_id: stage.id,
+        p_action: action,
+      });
       if (error) throw error;
-      await logActivity('workflow_stage.skipped', `Skipped "${stage.label}" for this shipment`, stage);
-      toast.success(`${stage.label} skipped`);
+
+      const result = data as { new_status: string | null };
+      toast.success(
+        action === 'complete'
+          ? `${stage.label} completed${result.new_status ? ` — shipment moved to ${result.new_status}` : ''}`
+          : `${stage.label} skipped${result.new_status ? ` — shipment moved to ${result.new_status}` : ''}`
+      );
+      setBlockersByStage((prev) => ({ ...prev, [stage.id]: [] }));
       await loadAll();
       onChanged();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to skip stage'));
+      toast.error(getErrorMessage(err, `Failed to ${action} stage`));
     } finally {
       setBusyStageId(null);
     }
   };
 
-  const handleComplete = async (stage: ShipmentStage) => {
-    if (!profile) return;
-    setBusyStageId(stage.id);
-    try {
-      const readiness = await checkStageReadiness(shipmentId, stage.stage_key);
-      if (!readiness.ready) {
-        setBlockersByStage((prev) => ({ ...prev, [stage.id]: readiness.blockers }));
-        return;
-      }
-      setBlockersByStage((prev) => ({ ...prev, [stage.id]: [] }));
+  const handleSkip = (stage: ShipmentStage) => runStageAction(stage, 'skip');
 
-      const { error } = await supabase
-        .from('shipment_stages')
-        .update({ status: 'completed', completed_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', stage.id);
-      if (error) throw error;
-      await logActivity('workflow_stage.completed', `Completed "${stage.label}" for this shipment`, stage);
-      toast.success(`${stage.label} completed`);
-      await loadAll();
-      onChanged();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to complete stage'));
-    } finally {
-      setBusyStageId(null);
+  const handleComplete = async (stage: ShipmentStage) => {
+    const readiness = await checkStageReadiness(shipmentId, stage.stage_key);
+    if (!readiness.ready) {
+      setBlockersByStage((prev) => ({ ...prev, [stage.id]: readiness.blockers }));
+      return;
     }
+    await runStageAction(stage, 'complete');
   };
 
   const handleReassign = async (stage: ShipmentStage, userId: string) => {

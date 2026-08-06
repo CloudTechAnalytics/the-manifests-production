@@ -17,38 +17,40 @@ import type {
 } from '@/types';
 
 /**
- * The strict, non-skippable 12-stage lifecycle (migrations 052/053).
- * The 4 legacy entries at the bottom are never produced by application
- * code anymore (see SHIPMENT_STATUS_FLOW) — they're kept only so a
- * pre-migration shipment_timeline row still renders a label instead of
- * crashing on an unrecognized status.
+ * The strict, non-skippable 11-stage lifecycle (migrations 052/053/056).
+ * There is deliberately no 'awaiting_operations' value — a shipment's
+ * first status is 'planning' directly; "awaiting operations" describes
+ * the pre-conversion, accepted-but-unconverted quotation, a work-queue
+ * concept (see the dashboard/work-queue Awaiting Operations sections),
+ * never a shipment stage. The 4 legacy entries at the bottom are never
+ * produced by application code anymore (see SHIPMENT_STATUS_FLOW) —
+ * they're kept only so a pre-migration shipment_timeline row still
+ * renders a label instead of crashing on an unrecognized status.
  */
 export const SHIPMENT_STATUS_META: Record<
   ShipmentStatus,
   { label: string; color: string; step: number }
 > = {
-  awaiting_operations: { label: 'Awaiting Operations', color: 'bg-blue-100 text-blue-700', step: 0 },
-  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700', step: 1 },
-  documentation: { label: 'Documentation', color: 'bg-amber-100 text-amber-700', step: 2 },
-  awaiting_customs: { label: 'Awaiting Customs', color: 'bg-orange-100 text-orange-700', step: 3 },
-  customs_clearance: { label: 'Customs Clearance', color: 'bg-purple-100 text-purple-700', step: 4 },
-  terminal_processing: { label: 'Terminal Processing', color: 'bg-fuchsia-100 text-fuchsia-700', step: 5 },
-  cargo_examination: { label: 'Cargo Examination', color: 'bg-pink-100 text-pink-700', step: 6 },
-  released: { label: 'Released', color: 'bg-teal-100 text-teal-700', step: 7 },
-  transport: { label: 'Transport', color: 'bg-cyan-100 text-cyan-700', step: 8 },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', step: 9 },
-  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700', step: 10 },
-  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600', step: 11 },
+  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700', step: 0 },
+  documentation: { label: 'Documentation', color: 'bg-amber-100 text-amber-700', step: 1 },
+  awaiting_customs: { label: 'Awaiting Customs Documents', color: 'bg-orange-100 text-orange-700', step: 2 },
+  customs_clearance: { label: 'Customs Clearance', color: 'bg-purple-100 text-purple-700', step: 3 },
+  terminal_processing: { label: 'Terminal Processing', color: 'bg-fuchsia-100 text-fuchsia-700', step: 4 },
+  cargo_examination: { label: 'Cargo Examination', color: 'bg-pink-100 text-pink-700', step: 5 },
+  released: { label: 'Released', color: 'bg-teal-100 text-teal-700', step: 6 },
+  transport: { label: 'Transportation', color: 'bg-cyan-100 text-cyan-700', step: 7 },
+  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', step: 8 },
+  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700', step: 9 },
+  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600', step: 10 },
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', step: -1 },
   // Legacy — retired, never produced going forward.
   booking_received: { label: 'Booking Received', color: 'bg-blue-100 text-blue-700', step: 0 },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', step: 4 },
-  in_transit: { label: 'In Transit', color: 'bg-cyan-100 text-cyan-700', step: 8 },
-  arrived: { label: 'Arrived', color: 'bg-teal-100 text-teal-700', step: 7 },
+  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', step: 3 },
+  in_transit: { label: 'In Transit', color: 'bg-cyan-100 text-cyan-700', step: 7 },
+  arrived: { label: 'Arrived', color: 'bg-teal-100 text-teal-700', step: 6 },
 };
 
 export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
-  'awaiting_operations',
   'planning',
   'documentation',
   'awaiting_customs',
@@ -75,7 +77,7 @@ export const PIPELINE_STAGES: {
   statuses: ShipmentStatus[];
 }[] = [
   { key: 'quotation', label: 'Quotation', statuses: [] },
-  { key: 'operations', label: 'Awaiting Operations', statuses: ['awaiting_operations', 'planning'] },
+  { key: 'planning', label: 'Planning', statuses: ['planning'] },
   { key: 'documentation', label: 'Documentation', statuses: ['documentation'] },
   {
     key: 'customs',

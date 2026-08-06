@@ -37,7 +37,6 @@ export type CargoType = 'fcl' | 'lcl' | 'roro' | 'break_bulk';
 export type QuotationPriority = 'normal' | 'urgent' | 'vip';
 
 export type ShipmentStatus =
-  | 'awaiting_operations'
   | 'planning'
   | 'documentation'
   | 'awaiting_customs'

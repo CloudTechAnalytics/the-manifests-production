@@ -108,15 +108,10 @@ const SHIPMENT_EXPORT_COLUMNS: ExportColumn<ShipmentRow>[] = [
   { header: 'Created', value: (s) => s.created_at },
 ];
 
-const VALID_SHIPMENT_STATUSES = new Set<string>([
-  'booking_received',
-  'documentation',
-  'processing',
-  'in_transit',
-  'arrived',
-  'delivered',
-  'cancelled',
-]);
+// Derived from the real flow (+ 'cancelled') rather than a second
+// hardcoded list — a status added to SHIPMENT_STATUS_FLOW automatically
+// becomes a valid ?status= deep link value here too.
+const VALID_SHIPMENT_STATUSES = new Set<string>([...SHIPMENT_STATUS_FLOW, 'cancelled']);
 
 export default function ShipmentsPage() {
   const router = useRouter();

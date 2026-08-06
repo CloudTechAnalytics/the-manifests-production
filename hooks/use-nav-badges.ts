@@ -78,7 +78,7 @@ export function useNavBadges(): NavBadgeCounts & { loading: boolean } {
         .from('shipments')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .eq('status', 'arrived');
+        .eq('status', 'released');
       if (branchFilter) transportQuery = transportQuery.eq('branch_id', branchFilter);
 
       let invoicesQuery = supabase

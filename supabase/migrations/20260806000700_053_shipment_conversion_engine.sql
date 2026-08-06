@@ -29,11 +29,17 @@ terminal/examination require can_manage_customs(), not
 can_manage_operations()) without 7 separate client-side inserts each
 needing a different department's permission.
 
-## New 12-value shipment_status lifecycle (values added in migration 052)
-awaiting_operations -> planning -> documentation -> awaiting_customs ->
-customs_clearance -> terminal_processing -> cargo_examination ->
-released -> transport -> delivered -> completed -> archived (+ the
-existing non-linear 'cancelled' escape hatch, unchanged). The 3 retired
+## 11-value shipment_status lifecycle (values added in migration 052)
+planning -> documentation -> awaiting_customs -> customs_clearance ->
+terminal_processing -> cargo_examination -> released -> transport ->
+delivered -> completed -> archived (+ the existing non-linear
+'cancelled' escape hatch, unchanged). There is deliberately no
+'awaiting_operations' status: by the time this RPC runs, Operations has
+already taken ownership (that's what clicking "Start Shipment" means),
+so a shipment's first status is 'planning' directly — "awaiting
+operations" describes the pre-conversion, accepted-but-unconverted
+QUOTATION, which is a work-queue concept (the dashboard/work-queue
+Awaiting Operations sections), never a shipment stage. The 3 retired
 values (booking_received, processing, in_transit, arrived) are backfilled
 off existing shipments below and never produced again by application
 code, but stay in the Postgres type permanently (cannot be cheaply
@@ -41,12 +47,14 @@ dropped) so historical shipment_timeline rows still render a label.
 
 ## Stage catalog changes
 workflow_stage_catalog gains one new stage ('released', sequence 11,
-department terminal) and three relabeled rows (shipment_created ->
-"Awaiting Operations", regulatory_compliance -> "Awaiting Customs",
-terminal_operations -> "Terminal Processing") so the granular
-per-department checklist (shipment_stages) reads with the same wording
-as the new strict status field above. `key` values are NOT renamed —
-only `label`/`sequence` change — so lib/utils/workflow-rules.ts's
+department terminal) and one relabeled row (regulatory_compliance ->
+"Awaiting Customs Documents") so the granular per-department checklist
+(shipment_stages) reads with the same wording as the new strict status
+field above. shipment_created keeps its "Shipment Created" label — it's
+a checkpoint marking the shipment now exists, auto-completed the
+instant it's created, immediately followed by 'planning' as the first
+actionable, in_progress stage. `key` values are NOT renamed — only
+`label`/`sequence` change — so lib/utils/workflow-rules.ts's
 stage_key-keyed validators need no changes.
 
 ## New tables
@@ -105,7 +113,7 @@ ALTER TABLE shipments
 -- not exact semantic equivalents, so review if those buckets are
 -- non-trivial before trusting this blindly in production.
 
-UPDATE shipments SET status = 'awaiting_operations' WHERE status = 'booking_received' AND deleted_at IS NULL;
+UPDATE shipments SET status = 'planning' WHERE status = 'booking_received' AND deleted_at IS NULL;
 UPDATE shipments SET status = 'customs_clearance' WHERE status = 'processing' AND deleted_at IS NULL;
 UPDATE shipments SET status = 'transport' WHERE status = 'in_transit' AND deleted_at IS NULL;
 UPDATE shipments SET status = 'released' WHERE status = 'arrived' AND deleted_at IS NULL;
@@ -298,8 +306,7 @@ INSERT INTO workflow_stage_catalog (key, sequence, label, default_department, is
 VALUES ('released', 11, 'Released', 'terminal', false)
 ON CONFLICT (key) DO NOTHING;
 
-UPDATE workflow_stage_catalog SET label = 'Awaiting Operations' WHERE key = 'shipment_created';
-UPDATE workflow_stage_catalog SET label = 'Awaiting Customs' WHERE key = 'regulatory_compliance';
+UPDATE workflow_stage_catalog SET label = 'Awaiting Customs Documents' WHERE key = 'regulatory_compliance';
 UPDATE workflow_stage_catalog SET label = 'Terminal Processing' WHERE key = 'terminal_operations';
 
 -- shipment_stages denormalizes label/sequence at insert time — sync
@@ -451,7 +458,7 @@ BEGIN
     created_by, updated_by
   ) VALUES (
     v_quotation.customer_id, v_quotation.id, v_quotation.branch_id, v_quotation.shipment_type,
-    v_origin, v_destination, 'awaiting_operations',
+    v_origin, v_destination, 'planning',
     current_date, v_quotation.expected_shipping_date, v_quotation.expected_arrival_date,
     v_quotation.weight, v_quotation.cbm, v_quotation.notes,
     v_quotation.incoterm, v_quotation.hs_code, v_quotation.commodity_description,
@@ -494,20 +501,28 @@ BEGIN
 
   -- Stage checklist: every active catalog stage except the sales-track
   -- ones (lead/quotation/quotation_approved, which precede a shipment
-  -- and aren't part of its lifecycle). warehouse/cargo_examination are
-  -- pre-skipped when the matching service wasn't purchased.
+  -- and aren't part of its lifecycle). shipment_created is a checkpoint,
+  -- not a work item — it's auto-completed the instant this row exists,
+  -- with 'planning' immediately started as the first actionable stage.
+  -- warehouse/cargo_examination are pre-skipped when the matching
+  -- service wasn't purchased.
   INSERT INTO shipment_stages (
-    shipment_id, catalog_id, branch_id, stage_key, sequence, label, assigned_department, status, is_optional, created_by, updated_by
+    shipment_id, catalog_id, branch_id, stage_key, sequence, label, assigned_department, status, is_optional,
+    started_at, completed_at, created_by, updated_by
   )
   SELECT
     v_shipment.id, c.id, v_shipment.branch_id, c.key, c.sequence, c.label, c.default_department,
     CASE
       WHEN c.key = 'warehouse' AND NOT ('warehouse' = ANY(v_quotation.services)) THEN 'skipped'::workflow_stage_status
       WHEN c.key = 'cargo_examination' AND NOT ('examination' = ANY(v_quotation.services)) THEN 'skipped'::workflow_stage_status
-      WHEN c.key = 'shipment_created' THEN 'in_progress'::workflow_stage_status
+      WHEN c.key = 'shipment_created' THEN 'completed'::workflow_stage_status
+      WHEN c.key = 'planning' THEN 'in_progress'::workflow_stage_status
       ELSE 'pending'::workflow_stage_status
     END,
-    c.is_optional, v_uid, v_uid
+    c.is_optional,
+    CASE WHEN c.key IN ('shipment_created', 'planning') THEN v_now END,
+    CASE WHEN c.key = 'shipment_created' THEN v_now END,
+    v_uid, v_uid
   FROM workflow_stage_catalog c
   WHERE c.is_active AND c.key NOT IN ('lead', 'quotation', 'quotation_approved')
   ON CONFLICT (shipment_id, catalog_id) DO NOTHING;
@@ -550,7 +565,7 @@ BEGIN
 
   -- Timeline + activity — nothing happens silently.
   INSERT INTO shipment_timeline (shipment_id, status, notes, created_by)
-  VALUES (v_shipment.id, 'awaiting_operations', 'Shipment created from quotation ' || v_quotation.quotation_number, v_uid);
+  VALUES (v_shipment.id, 'planning', 'Shipment created from quotation ' || v_quotation.quotation_number, v_uid);
 
   INSERT INTO activities (user_id, branch_id, action, entity_type, entity_id, description, metadata)
   VALUES (
@@ -566,17 +581,19 @@ BEGIN
     jsonb_build_object('quotation_id', v_quotation.id)
   );
 
-  -- Notify Operations, branch-scoped, resolved the same way has_role()
-  -- resolves multi-role membership.
+  -- Notify Planning, not Operations — Operations already acted (that's
+  -- what "Start Shipment" means); Planning is the department that owns
+  -- the shipment's first actionable stage. Branch-scoped, resolved the
+  -- same way has_role() resolves multi-role membership.
   INSERT INTO notifications (recipient_id, branch_id, type, entity_type, entity_id, title, body)
   SELECT p.id, v_shipment.branch_id, 'shipment_created', 'shipment', v_shipment.id,
-    'New shipment ready: ' || v_shipment.reference_number,
-    'Quotation ' || v_quotation.quotation_number || ' was converted and handed over to Operations.'
+    'New shipment ready for planning: ' || v_shipment.reference_number,
+    'Quotation ' || v_quotation.quotation_number || ' was converted — planning can begin.'
   FROM profiles p
   WHERE p.branch_id = v_shipment.branch_id AND p.is_active = true
     AND (
-      p.role = 'operations'
-      OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = p.id AND ur.role = 'operations')
+      p.role = 'planning'
+      OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = p.id AND ur.role = 'planning')
     );
 
   -- Lock the quotation — this is the statement that was silently
