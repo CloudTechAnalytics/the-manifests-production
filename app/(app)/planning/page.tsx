@@ -1,11 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ClipboardList, Search, Filter } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { ClipboardList, Search, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,62 +21,35 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  PLAN_STATUS_META,
-  PLAN_STATUS_FLOW,
-  PRIORITY_META,
-  SHIPMENT_STATUS_META,
-} from '@/lib/utils/status';
+import { PRIORITY_META } from '@/lib/utils/status';
 import { ExportButton } from '@/components/ui/export-button';
 import type { ExportColumn } from '@/lib/export';
-import type { ShipmentPlan, PlanStatus, PriorityLevel, Branch, ShipmentStatus } from '@/types';
+import type { Shipment, ShipmentPlan } from '@/types';
 
-type StatusFilter = 'all' | PlanStatus;
-type PriorityFilter = 'all' | PriorityLevel;
-
-type PlanRow = ShipmentPlan & {
-  customer?: { id: string; company_name: string } | null;
-  branch?: { id: string; name: string } | null;
-  shipment?: { id: string; reference_number: string | null; origin: string | null; destination: string | null; status: ShipmentStatus } | null;
+type PlanningRow = {
+  shipment: Pick<Shipment, 'id' | 'reference_number' | 'origin' | 'destination' | 'branch_id'> & {
+    customer: { company_name: string } | null;
+  };
+  plan: Pick<ShipmentPlan, 'id' | 'priority'> | null;
 };
 
-const PLAN_EXPORT_COLUMNS: ExportColumn<PlanRow>[] = [
-  { header: 'Plan Number', value: (p) => p.plan_number },
-  { header: 'Shipment', value: (p) => p.shipment?.reference_number ?? '' },
-  { header: 'Customer', value: (p) => p.customer?.company_name ?? '' },
-  { header: 'Status', value: (p) => p.status },
-  { header: 'Priority', value: (p) => p.priority },
-  { header: 'Origin', value: (p) => p.shipment?.origin ?? '' },
-  { header: 'Destination', value: (p) => p.shipment?.destination ?? '' },
-  { header: 'Current Stage', value: (p) => p.shipment?.status ?? '' },
-  { header: 'Branch', value: (p) => p.branch?.name ?? '' },
-  { header: 'Created', value: (p) => p.created_at },
+const EXPORT_COLUMNS: ExportColumn<PlanningRow>[] = [
+  { header: 'Shipment', value: (r) => r.shipment.reference_number ?? '' },
+  { header: 'Customer', value: (r) => r.shipment.customer?.company_name ?? '' },
+  { header: 'Origin', value: (r) => r.shipment.origin ?? '' },
+  { header: 'Destination', value: (r) => r.shipment.destination ?? '' },
+  { header: 'Priority', value: (r) => r.plan?.priority ?? '' },
+  { header: 'Has Plan Record', value: (r) => (r.plan ? 'Yes' : 'No') },
 ];
-
-const VALID_STATUSES = new Set<string>([...PLAN_STATUS_FLOW, 'cancelled']);
 
 export default function PlanningPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { profile } = useAuth();
 
-  const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [rows, setRows] = useState<PlanningRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
-    const fromUrl = searchParams.get('status');
-    return fromUrl && VALID_STATUSES.has(fromUrl) ? (fromUrl as StatusFilter) : 'all';
-  });
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
-  const [branchIdFilter, setBranchIdFilter] = useState('all');
+  const [startingShipmentId, setStartingShipmentId] = useState<string | null>(null);
 
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -84,68 +60,108 @@ export default function PlanningPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    supabase
-      .from('branches')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true })
-      .then(({ data }) => setBranches((data as Branch[]) ?? []));
-  }, [isAdmin]);
-
-  const loadPlans = useCallback(async () => {
+  const loadRows = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
     try {
-      // Only shipments currently in Planning — a plan with no linked
-      // shipment predates the Planning Centre redesign (the old "create a
-      // plan before a shipment exists" flow) and is a historical record
-      // only, reachable by direct URL but not surfaced in this work list.
-      let query = supabase
-        .from('shipment_plans')
-        .select(
-          '*, customer:customers(id, company_name), branch:branches(id, name), shipment:shipments(id, reference_number, origin, destination, status)'
-        )
+      // Work-queue pattern, same as Customs/Terminal/Transportation: the
+      // shipment's own status is the source of truth for "is this in
+      // Planning", not whether a shipment_plans row happens to exist yet
+      // — every shipment currently in the planning stage shows up here,
+      // even one from before shipment_plans auto-creation existed.
+      let shipQuery = supabase
+        .from('shipments')
+        .select('id, reference_number, origin, destination, branch_id, customer:customers(company_name)')
+        .eq('status', 'planning')
         .is('deleted_at', null)
-        .not('shipment_id', 'is', null)
         .order('created_at', { ascending: false });
-
-      if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter);
+      if (!isAdmin && userBranchId) shipQuery = shipQuery.eq('branch_id', userBranchId);
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `plan_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
+        shipQuery = shipQuery.or(
+          `reference_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
 
-      const { data, error } = await query;
-      if (error) {
-        console.error('Error loading plans:', error);
-        setPlans([]);
+      const { data: shipmentRows, error: shipError } = await shipQuery;
+      if (shipError) {
+        console.error('Error loading shipments in planning:', shipError);
+        setRows([]);
         return;
       }
-      setPlans((data as PlanRow[]) ?? []);
+      const shipments = (shipmentRows as unknown as PlanningRow['shipment'][]) ?? [];
+      if (shipments.length === 0) {
+        setRows([]);
+        return;
+      }
+
+      const { data: planRows } = await supabase
+        .from('shipment_plans')
+        .select('id, shipment_id, priority')
+        .in(
+          'shipment_id',
+          shipments.map((s) => s.id)
+        )
+        .is('deleted_at', null);
+      const planByShipmentId = new Map((planRows ?? []).map((p) => [p.shipment_id, p]));
+
+      setRows(
+        shipments.map((s) => ({
+          shipment: s,
+          plan: (planByShipmentId.get(s.id) as PlanningRow['plan']) ?? null,
+        }))
+      );
     } finally {
       setLoading(false);
     }
-  }, [profile, isAdmin, userBranchId, branchIdFilter, statusFilter, priorityFilter, debouncedSearch]);
+  }, [profile, isAdmin, userBranchId, debouncedSearch]);
 
   useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
+    loadRows();
+  }, [loadRows]);
 
-  const statusOptions = useMemo(
-    () => [
-      { value: 'all', label: 'All Statuses' },
-      ...PLAN_STATUS_FLOW.map((s) => ({ value: s, label: PLAN_STATUS_META[s].label })),
-      { value: 'cancelled', label: 'Cancelled' },
-    ],
-    []
-  );
+  const handleStartPlanning = async (row: PlanningRow) => {
+    if (!profile) return;
+    setStartingShipmentId(row.shipment.id);
+    try {
+      // Customer is required on shipment_plans — look it up from the
+      // shipment rather than asking the user to pick it again.
+      const { data: fullShipment, error: shipmentError } = await supabase
+        .from('shipments')
+        .select('customer_id')
+        .eq('id', row.shipment.id)
+        .single();
+      if (shipmentError || !fullShipment) throw new Error('Could not load shipment details');
+
+      const { data: created, error } = await supabase
+        .from('shipment_plans')
+        .insert({
+          shipment_id: row.shipment.id,
+          customer_id: fullShipment.customer_id,
+          branch_id: row.shipment.branch_id,
+          created_by: profile.id,
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: row.shipment.branch_id,
+        action: 'plan.created',
+        entity_type: 'shipment_plan',
+        entity_id: created.id,
+        description: `Started planning for shipment ${row.shipment.reference_number ?? ''}`,
+        metadata: { shipment_id: row.shipment.id },
+      });
+
+      router.push(`/planning/${created.id}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to start planning'));
+    } finally {
+      setStartingShipmentId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -161,63 +177,20 @@ export default function PlanningPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
-          <ExportButton data={plans} columns={PLAN_EXPORT_COLUMNS} filename="plans" />
+          <ExportButton data={rows} columns={EXPORT_COLUMNS} filename="planning" />
         </div>
       </div>
 
       <Card>
-        <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
+        <CardContent className="p-4">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by plan number or customer…"
+              placeholder="Search by shipment reference or customer…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v as PriorityFilter)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                {(Object.keys(PRIORITY_META) as PriorityLevel[]).map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {PRIORITY_META[p].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isAdmin && (
-              <Select value={branchIdFilter} onValueChange={setBranchIdFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="All Branches" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -226,11 +199,7 @@ export default function PlanningPage() {
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold">
             Shipments in Planning
-            {!loading && (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({plans.length})
-              </span>
-            )}
+            {!loading && <span className="ml-2 text-sm font-normal text-muted-foreground">({rows.length})</span>}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -240,13 +209,13 @@ export default function PlanningPage() {
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
-          ) : plans.length === 0 ? (
+          ) : rows.length === 0 ? (
             <EmptyState
               icon={ClipboardList}
               title="No shipments in planning"
               message={
-                debouncedSearch || statusFilter !== 'all' || priorityFilter !== 'all'
-                  ? 'Try adjusting your filters.'
+                debouncedSearch
+                  ? 'Try a different search.'
                   : 'Shipments enter Planning automatically once Operations accepts them.'
               }
             />
@@ -257,60 +226,56 @@ export default function PlanningPage() {
                   <TableHead>Shipment</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Route</TableHead>
-                  <TableHead>Plan Status</TableHead>
                   <TableHead>Priority</TableHead>
-                  <TableHead>Current Stage</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {plans.map((p) => {
-                  const statusMeta = PLAN_STATUS_META[p.status] ?? {
-                    label: p.status ?? 'Unknown',
-                    color: 'bg-muted text-muted-foreground',
-                    step: -1,
-                  };
-                  const priorityMeta = PRIORITY_META[p.priority] ?? {
-                    label: p.priority ?? 'Unknown',
-                    color: 'bg-muted text-muted-foreground',
-                  };
-                  const stageMeta = p.shipment
-                    ? SHIPMENT_STATUS_META[p.shipment.status] ?? {
-                        label: p.shipment.status ?? 'Unknown',
-                        color: 'bg-muted text-muted-foreground',
-                      }
+                {rows.map((row) => {
+                  const priorityMeta = row.plan?.priority
+                    ? PRIORITY_META[row.plan.priority] ?? { label: row.plan.priority, color: 'bg-muted text-muted-foreground' }
                     : null;
                   return (
                     <TableRow
-                      key={p.id}
-                      className="cursor-pointer transition-colors hover:bg-accent/60"
-                      onClick={() => router.push(`/planning/${p.id}`)}
+                      key={row.shipment.id}
+                      className={row.plan ? 'cursor-pointer transition-colors hover:bg-accent/60' : undefined}
+                      onClick={() => row.plan && router.push(`/planning/${row.plan.id}`)}
                     >
                       <TableCell className="font-medium text-primary">
-                        {p.shipment?.reference_number ?? p.plan_number ?? '—'}
+                        {row.shipment.reference_number ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {p.customer?.company_name ?? '—'}
+                        {row.shipment.customer?.company_name ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {p.shipment?.origin ?? '—'} → {p.shipment?.destination ?? '—'}
+                        {row.shipment.origin ?? '—'} → {row.shipment.destination ?? '—'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className={`text-[11px] ${statusMeta.color}`}>
-                          {statusMeta.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={`text-[11px] ${priorityMeta.color}`}>
-                          {priorityMeta.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {stageMeta ? (
-                          <Badge variant="secondary" className={`text-[11px] ${stageMeta.color}`}>
-                            {stageMeta.label}
+                        {priorityMeta ? (
+                          <Badge variant="secondary" className={`text-[11px] ${priorityMeta.color}`}>
+                            {priorityMeta.label}
                           </Badge>
                         ) : (
                           '—'
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {row.plan ? (
+                          <Button size="sm" variant="ghost" onClick={() => router.push(`/planning/${row.plan!.id}`)}>
+                            Open
+                            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={startingShipmentId === row.shipment.id}
+                            onClick={() => handleStartPlanning(row)}
+                          >
+                            {startingShipmentId === row.shipment.id && (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            )}
+                            Start Planning
+                          </Button>
                         )}
                       </TableCell>
                     </TableRow>
