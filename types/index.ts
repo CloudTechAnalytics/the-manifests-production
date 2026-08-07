@@ -443,6 +443,13 @@ export interface Shipment {
   contact_email: string | null;
   contact_phone: string | null;
   sales_rep_id: string | null;
+  // Planning Centre — vessel/booking fields the Planning stage sets;
+  // vessel_name/voyage_number/port_of_loading/port_of_discharge/carrier/
+  // estimated_departure/estimated_arrival above already cover the rest.
+  transshipment_port: string | null;
+  booking_reference: string | null;
+  booking_confirmed: boolean;
+  booking_confirmation_document_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -472,6 +479,11 @@ export interface ShipmentContainer {
   packing_group: DGPackingGroup | null;
   status: string | null;
   notes: string | null;
+  // Planning Centre — Container Planning's expected execution dates.
+  expected_empty_pickup_date: string | null;
+  expected_stuffing_date: string | null;
+  expected_gate_in_date: string | null;
+  expected_loading_date: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -623,6 +635,15 @@ export interface ShipmentCustoms {
   duty_paid_by: string | null;
   duty_receipt_document_id: string | null;
   duty_status: DutyStatus;
+  // Planning Centre — Customs Planning's expected/target dates, distinct
+  // from the actual dates above (form_m_date, paar_date, duty_paid_date).
+  expected_paar_date: string | null;
+  expected_declaration_date: string | null;
+  expected_duty_payment_date: string | null;
+  expected_examination_date: string | null;
+  expected_release_date: string | null;
+  expected_exit_date: string | null;
+  duty_estimate_approved: boolean;
 }
 
 /**
@@ -671,6 +692,13 @@ export interface TerminalOperation {
   free_time_expiry: string | null;
   status: TerminalStatus;
   notes: string | null;
+  // Planning Centre — Terminal Planning's booking details and expected dates.
+  terminal_contact: string | null;
+  booking_slot: string | null;
+  terminal_reference: string | null;
+  expected_gate_in: string | null;
+  expected_gate_out: string | null;
+  expected_delivery_order_collection: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -713,6 +741,14 @@ export interface ShipmentTransportation {
   proof_of_delivery_document_id: string | null;
   status: TransportationStatus;
   notes: string | null;
+  // Planning Centre — Transport Planning's target fields; pickup_date/
+  // delivery_date above stay as the ACTUAL-event columns set later.
+  pickup_address: string | null;
+  delivery_address: string | null;
+  transport_company: string | null;
+  escort_required: boolean;
+  expected_pickup_date: string | null;
+  expected_delivery_date: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -733,12 +769,17 @@ export interface ShipmentWarehouseRecord {
   received_date: string | null;
   released_date: string | null;
   notes: string | null;
+  // Planning Centre — Warehouse Planning. Storage Days is deliberately
+  // NOT a column here — derived at read time from received_date/
+  // released_date, see lib/utils/planning.ts.
+  handling_instructions: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
   shipment?: { id: string; reference_number: string | null; customer?: { company_name: string } | null } | null;
+  warehouse?: { id: string; name: string } | null;
 }
 
 export type DeliveryOrderStatus = 'waiting_for_release' | 'released' | 'delivered';
@@ -1045,6 +1086,12 @@ export interface ShipmentPlan {
   planned_by: string | null;
   assigned_to: string | null;
 
+  // Planning Centre — Internal Assignments for the 2 roles with no
+  // matching shipment_stages row (Documentation/Customs/Terminal/
+  // Transport officers instead reuse shipment_stages.assigned_to).
+  finance_officer_id: string | null;
+  supervisor_id: string | null;
+
   converted_shipment_id: string | null;
   converted_at: string | null;
 
@@ -1060,6 +1107,8 @@ export interface ShipmentPlan {
   branch?: Branch | null;
   planned_by_user?: Profile | null;
   assigned_user?: Profile | null;
+  finance_officer_user?: Profile | null;
+  supervisor_user?: Profile | null;
   converted_shipment?: Shipment | null;
   tasks?: PlanTask[];
 }

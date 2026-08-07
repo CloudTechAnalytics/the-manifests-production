@@ -192,6 +192,10 @@ function ContainerFormDialog({
   const [unNumber, setUnNumber] = useState('');
   const [imdgClass, setImdgClass] = useState('');
   const [packingGroup, setPackingGroup] = useState<DGPackingGroup | ''>('');
+  const [expectedEmptyPickupDate, setExpectedEmptyPickupDate] = useState('');
+  const [expectedStuffingDate, setExpectedStuffingDate] = useState('');
+  const [expectedGateInDate, setExpectedGateInDate] = useState('');
+  const [expectedLoadingDate, setExpectedLoadingDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -206,6 +210,10 @@ function ContainerFormDialog({
     setUnNumber(existing?.un_number ?? '');
     setImdgClass(existing?.imdg_class ?? '');
     setPackingGroup(existing?.packing_group ?? '');
+    setExpectedEmptyPickupDate(existing?.expected_empty_pickup_date ?? '');
+    setExpectedStuffingDate(existing?.expected_stuffing_date ?? '');
+    setExpectedGateInDate(existing?.expected_gate_in_date ?? '');
+    setExpectedLoadingDate(existing?.expected_loading_date ?? '');
   }, [open, existing]);
 
   const handleSubmit = async () => {
@@ -223,6 +231,10 @@ function ContainerFormDialog({
         un_number: isDangerousGoods ? unNumber.trim() || null : null,
         imdg_class: isDangerousGoods ? imdgClass.trim() || null : null,
         packing_group: isDangerousGoods ? packingGroup || null : null,
+        expected_empty_pickup_date: expectedEmptyPickupDate || null,
+        expected_stuffing_date: expectedStuffingDate || null,
+        expected_gate_in_date: expectedGateInDate || null,
+        expected_loading_date: expectedLoadingDate || null,
         updated_by: profile.id,
       };
 
@@ -351,6 +363,50 @@ function ContainerFormDialog({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Planning Targets (Expected Dates)
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cn-exp-pickup">Expected Empty Pickup Date</Label>
+                <Input
+                  id="cn-exp-pickup"
+                  type="date"
+                  value={expectedEmptyPickupDate}
+                  onChange={(e) => setExpectedEmptyPickupDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cn-exp-stuffing">Expected Stuffing Date</Label>
+                <Input
+                  id="cn-exp-stuffing"
+                  type="date"
+                  value={expectedStuffingDate}
+                  onChange={(e) => setExpectedStuffingDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cn-exp-gate-in">Expected Gate In Date</Label>
+                <Input
+                  id="cn-exp-gate-in"
+                  type="date"
+                  value={expectedGateInDate}
+                  onChange={(e) => setExpectedGateInDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cn-exp-loading">Expected Loading Date</Label>
+                <Input
+                  id="cn-exp-loading"
+                  type="date"
+                  value={expectedLoadingDate}
+                  onChange={(e) => setExpectedLoadingDate(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </div>
         <DialogFooter>

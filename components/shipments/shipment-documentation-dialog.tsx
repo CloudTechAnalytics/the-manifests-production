@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
+import { uploadDocumentFile } from '@/lib/utils/document-upload';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +21,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import type { Shipment } from '@/types';
+
+const MAX_BOOKING_DOC_SIZE_BYTES = 50 * 1024 * 1024;
 
 interface ShipmentDocumentationDialogProps {
   open: boolean;
@@ -48,7 +52,17 @@ export function ShipmentDocumentationDialog({
   const [goodsValueCurrency, setGoodsValueCurrency] = useState('NGN');
   const [actualWeight, setActualWeight] = useState('');
   const [volumetricWeight, setVolumetricWeight] = useState('');
+  const [carrier, setCarrier] = useState('');
+  const [estimatedDeparture, setEstimatedDeparture] = useState('');
+  const [estimatedArrival, setEstimatedArrival] = useState('');
+  const [transshipmentPort, setTransshipmentPort] = useState('');
+  const [bookingReference, setBookingReference] = useState('');
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [bookingDocId, setBookingDocId] = useState<string | null>(null);
+  const [bookingDocName, setBookingDocName] = useState<string | null>(null);
+  const [uploadingBookingDoc, setUploadingBookingDoc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +80,31 @@ export function ShipmentDocumentationDialog({
     setGoodsValueCurrency(shipment.goods_value_currency || 'NGN');
     setActualWeight(shipment.actual_weight != null ? String(shipment.actual_weight) : '');
     setVolumetricWeight(shipment.volumetric_weight != null ? String(shipment.volumetric_weight) : '');
+    setCarrier(shipment.carrier ?? '');
+    setEstimatedDeparture(shipment.estimated_departure ?? '');
+    setEstimatedArrival(shipment.estimated_arrival ?? '');
+    setTransshipmentPort(shipment.transshipment_port ?? '');
+    setBookingReference(shipment.booking_reference ?? '');
+    setBookingConfirmed(shipment.booking_confirmed ?? false);
+    setBookingDocId(shipment.booking_confirmation_document_id ?? null);
+    setBookingDocName(null);
   }, [open, shipment]);
+
+  useEffect(() => {
+    if (!open || !bookingDocId) return;
+    let cancelled = false;
+    supabase
+      .from('documents')
+      .select('name')
+      .eq('id', bookingDocId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setBookingDocName(data?.name ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, bookingDocId]);
 
   // Chargeable weight is the greater of actual and volumetric — the
   // industry-standard rule for both air (volumetric = L*W*H/6000) and
@@ -77,6 +115,39 @@ export function ShipmentDocumentationDialog({
     if (!actual && !volumetric) return null;
     return Math.max(actual, volumetric);
   }, [actualWeight, volumetricWeight]);
+
+  const handleBookingDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !profile) return;
+    if (file.size > MAX_BOOKING_DOC_SIZE_BYTES) {
+      toast.error('File is too large (max 50MB)');
+      return;
+    }
+    setUploadingBookingDoc(true);
+    try {
+      const result = await uploadDocumentFile({
+        file,
+        branchId: shipment.branch_id,
+        shipmentId: shipment.id,
+        category: 'other',
+        templateId: null,
+        stageId: null,
+        replacesDocumentId: null,
+        createdBy: profile.id,
+      });
+      if (!result.success || !result.documentId) {
+        throw new Error(result.error ?? 'Failed to upload booking confirmation');
+      }
+      setBookingDocId(result.documentId);
+      setBookingDocName(file.name);
+      toast.success('Booking confirmation uploaded');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload booking confirmation'));
+    } finally {
+      setUploadingBookingDoc(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!profile) return;
@@ -98,6 +169,13 @@ export function ShipmentDocumentationDialog({
         actual_weight: actualWeight ? Number(actualWeight) : null,
         volumetric_weight: volumetricWeight ? Number(volumetricWeight) : null,
         chargeable_weight: chargeableWeight,
+        carrier: carrier.trim() || null,
+        estimated_departure: estimatedDeparture || null,
+        estimated_arrival: estimatedArrival || null,
+        transshipment_port: transshipmentPort.trim() || null,
+        booking_reference: bookingReference.trim() || null,
+        booking_confirmed: bookingConfirmed,
+        booking_confirmation_document_id: bookingDocId,
         updated_by: profile.id,
       };
 
@@ -168,7 +246,7 @@ export function ShipmentDocumentationDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="sd-vessel">Vessel Name</Label>
               <Input id="sd-vessel" value={vesselName} onChange={(e) => setVesselName(e.target.value)} />
@@ -177,9 +255,13 @@ export function ShipmentDocumentationDialog({
               <Label htmlFor="sd-voyage">Voyage Number</Label>
               <Input id="sd-voyage" value={voyageNumber} onChange={(e) => setVoyageNumber(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sd-carrier">Shipping Line</Label>
+              <Input id="sd-carrier" value={carrier} onChange={(e) => setCarrier(e.target.value)} />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="sd-pol">Port of Loading</Label>
               <Input id="sd-pol" value={portOfLoading} onChange={(e) => setPortOfLoading(e.target.value)} />
@@ -191,6 +273,81 @@ export function ShipmentDocumentationDialog({
                 value={portOfDischarge}
                 onChange={(e) => setPortOfDischarge(e.target.value)}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sd-transshipment">Transshipment Port (optional)</Label>
+              <Input
+                id="sd-transshipment"
+                value={transshipmentPort}
+                onChange={(e) => setTransshipmentPort(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sd-etd">Estimated Departure</Label>
+              <Input
+                id="sd-etd"
+                type="date"
+                value={estimatedDeparture}
+                onChange={(e) => setEstimatedDeparture(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sd-eta">Estimated Arrival</Label>
+              <Input
+                id="sd-eta"
+                type="date"
+                value={estimatedArrival}
+                onChange={(e) => setEstimatedArrival(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Booking
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="sd-booking-ref">Booking Reference</Label>
+              <Input
+                id="sd-booking-ref"
+                value={bookingReference}
+                onChange={(e) => setBookingReference(e.target.value)}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={bookingConfirmed} onCheckedChange={(c) => setBookingConfirmed(c === true)} />
+              Booking confirmed
+            </label>
+            <div className="space-y-1.5">
+              <Label>Booking Confirmation Document</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleBookingDocSelect}
+                accept=".pdf,.jpg,.jpeg,.png"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={uploadingBookingDoc}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingBookingDoc ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                {bookingDocId ? 'Replace Document' : 'Upload Document'}
+              </Button>
+              {bookingDocId && (
+                <p className="truncate text-xs text-muted-foreground">{bookingDocName ?? 'Document on file'}</p>
+              )}
             </div>
           </div>
 

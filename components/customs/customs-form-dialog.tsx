@@ -79,6 +79,13 @@ export function CustomsFormDialog({
   const [paarDate, setPaarDate] = useState('');
   const [soncapNumber, setSoncapNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [expectedPaarDate, setExpectedPaarDate] = useState('');
+  const [expectedDeclarationDate, setExpectedDeclarationDate] = useState('');
+  const [expectedDutyPaymentDate, setExpectedDutyPaymentDate] = useState('');
+  const [expectedExaminationDate, setExpectedExaminationDate] = useState('');
+  const [expectedReleaseDate, setExpectedReleaseDate] = useState('');
+  const [expectedExitDate, setExpectedExitDate] = useState('');
+  const [dutyEstimateApproved, setDutyEstimateApproved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -99,6 +106,13 @@ export function CustomsFormDialog({
     setPaarDate(existing?.paar_date ?? '');
     setSoncapNumber(existing?.soncap_number ?? '');
     setNotes(existing?.notes ?? '');
+    setExpectedPaarDate(existing?.expected_paar_date ?? '');
+    setExpectedDeclarationDate(existing?.expected_declaration_date ?? '');
+    setExpectedDutyPaymentDate(existing?.expected_duty_payment_date ?? '');
+    setExpectedExaminationDate(existing?.expected_examination_date ?? '');
+    setExpectedReleaseDate(existing?.expected_release_date ?? '');
+    setExpectedExitDate(existing?.expected_exit_date ?? '');
+    setDutyEstimateApproved(existing?.duty_estimate_approved ?? false);
   }, [open, existing]);
 
   const handleSubmit = async () => {
@@ -121,6 +135,13 @@ export function CustomsFormDialog({
         paar_date: paarDate || null,
         soncap_number: soncapNumber.trim() || null,
         notes: notes.trim() || null,
+        expected_paar_date: expectedPaarDate || null,
+        expected_declaration_date: expectedDeclarationDate || null,
+        expected_duty_payment_date: expectedDutyPaymentDate || null,
+        expected_examination_date: expectedExaminationDate || null,
+        expected_release_date: expectedReleaseDate || null,
+        expected_exit_date: expectedExitDate || null,
+        duty_estimate_approved: dutyEstimateApproved,
         updated_by: profile.id,
       };
 
@@ -342,6 +363,78 @@ export function CustomsFormDialog({
             <Label htmlFor="cf-duty-paid" className="font-normal">
               Duty has been paid
             </Label>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Planning Targets (Expected Dates)
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-paar">Expected PAAR Date</Label>
+                <Input
+                  id="cf-exp-paar"
+                  type="date"
+                  value={expectedPaarDate}
+                  onChange={(e) => setExpectedPaarDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-declaration">Expected Declaration Date</Label>
+                <Input
+                  id="cf-exp-declaration"
+                  type="date"
+                  value={expectedDeclarationDate}
+                  onChange={(e) => setExpectedDeclarationDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-duty">Expected Duty Payment Date</Label>
+                <Input
+                  id="cf-exp-duty"
+                  type="date"
+                  value={expectedDutyPaymentDate}
+                  onChange={(e) => setExpectedDutyPaymentDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-examination">Expected Examination Date</Label>
+                <Input
+                  id="cf-exp-examination"
+                  type="date"
+                  value={expectedExaminationDate}
+                  onChange={(e) => setExpectedExaminationDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-release">Expected Release Date</Label>
+                <Input
+                  id="cf-exp-release"
+                  type="date"
+                  value={expectedReleaseDate}
+                  onChange={(e) => setExpectedReleaseDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cf-exp-exit">Expected Exit Date</Label>
+                <Input
+                  id="cf-exp-exit"
+                  type="date"
+                  value={expectedExitDate}
+                  onChange={(e) => setExpectedExitDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="cf-duty-approved"
+                checked={dutyEstimateApproved}
+                onCheckedChange={(c) => setDutyEstimateApproved(c === true)}
+              />
+              <Label htmlFor="cf-duty-approved" className="font-normal">
+                Duty estimate approved
+              </Label>
+            </div>
           </div>
 
           <div className="space-y-1.5">

@@ -1,5 +1,6 @@
 import { checkCustomsReleased, checkReleaseReadiness, type ReleaseReadiness } from '@/lib/utils/release-readiness';
 import { getDocumentChecklist } from '@/lib/utils/document-templates';
+import { checkPlanningReadiness } from '@/lib/utils/planning';
 import { supabase } from '@/lib/supabase/client';
 import type { ShipmentStatus } from '@/types';
 
@@ -15,12 +16,12 @@ export async function checkDocumentsForStage(shipmentId: string, stageKey: strin
 
 /**
  * One validator per gated stage. Stages not listed here (lead,
- * quotation, quotation_approved, shipment_created, planning,
- * cargo_examination, warehouse, delivered, completed) have no
- * precondition and are always advanceable — developer-defined scope,
- * not exhaustive.
+ * quotation, quotation_approved, shipment_created, cargo_examination,
+ * warehouse, delivered, completed) have no precondition and are always
+ * advanceable — developer-defined scope, not exhaustive.
  */
 const STAGE_VALIDATORS: Record<string, (shipmentId: string) => Promise<StageReadiness>> = {
+  planning: (id) => checkPlanningReadiness(id),
   documentation: (id) => checkDocumentsForStage(id, 'documentation'),
   regulatory_compliance: (id) => checkDocumentsForStage(id, 'documentation'),
   customs_clearance: (id) => checkCustomsReleased(id),

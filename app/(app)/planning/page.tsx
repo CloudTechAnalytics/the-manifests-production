@@ -1,13 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ClipboardList, Plus, Search, Filter } from 'lucide-react';
+import { ClipboardList, Search, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,11 +29,11 @@ import {
   PLAN_STATUS_META,
   PLAN_STATUS_FLOW,
   PRIORITY_META,
-  formatDate,
+  SHIPMENT_STATUS_META,
 } from '@/lib/utils/status';
 import { ExportButton } from '@/components/ui/export-button';
 import type { ExportColumn } from '@/lib/export';
-import type { ShipmentPlan, PlanStatus, PriorityLevel, Branch } from '@/types';
+import type { ShipmentPlan, PlanStatus, PriorityLevel, Branch, ShipmentStatus } from '@/types';
 
 type StatusFilter = 'all' | PlanStatus;
 type PriorityFilter = 'all' | PriorityLevel;
@@ -43,21 +41,18 @@ type PriorityFilter = 'all' | PriorityLevel;
 type PlanRow = ShipmentPlan & {
   customer?: { id: string; company_name: string } | null;
   branch?: { id: string; name: string } | null;
+  shipment?: { id: string; reference_number: string | null; origin: string | null; destination: string | null; status: ShipmentStatus } | null;
 };
 
 const PLAN_EXPORT_COLUMNS: ExportColumn<PlanRow>[] = [
   { header: 'Plan Number', value: (p) => p.plan_number },
+  { header: 'Shipment', value: (p) => p.shipment?.reference_number ?? '' },
   { header: 'Customer', value: (p) => p.customer?.company_name ?? '' },
   { header: 'Status', value: (p) => p.status },
   { header: 'Priority', value: (p) => p.priority },
-  { header: 'Type', value: (p) => p.shipment_type ?? '' },
-  { header: 'Origin', value: (p) => p.origin },
-  { header: 'Destination', value: (p) => p.destination },
-  { header: 'Commodity', value: (p) => p.commodity },
-  { header: 'Planned ETD', value: (p) => p.planned_etd },
-  { header: 'Planned ETA', value: (p) => p.planned_eta },
-  { header: 'Est. Cost', value: (p) => p.estimated_cost },
-  { header: 'Est. Revenue', value: (p) => p.estimated_revenue },
+  { header: 'Origin', value: (p) => p.shipment?.origin ?? '' },
+  { header: 'Destination', value: (p) => p.shipment?.destination ?? '' },
+  { header: 'Current Stage', value: (p) => p.shipment?.status ?? '' },
   { header: 'Branch', value: (p) => p.branch?.name ?? '' },
   { header: 'Created', value: (p) => p.created_at },
 ];
@@ -103,10 +98,17 @@ export default function PlanningPage() {
     if (!profile) return;
     setLoading(true);
     try {
+      // Only shipments currently in Planning — a plan with no linked
+      // shipment predates the Planning Centre redesign (the old "create a
+      // plan before a shipment exists" flow) and is a historical record
+      // only, reachable by direct URL but not surfaced in this work list.
       let query = supabase
         .from('shipment_plans')
-        .select('*, customer:customers(id, company_name), branch:branches(id, name)')
+        .select(
+          '*, customer:customers(id, company_name), branch:branches(id, name), shipment:shipments(id, reference_number, origin, destination, status)'
+        )
         .is('deleted_at', null)
+        .not('shipment_id', 'is', null)
         .order('created_at', { ascending: false });
 
       if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
@@ -154,17 +156,12 @@ export default function PlanningPage() {
             Planning
           </h1>
           <p className="text-sm text-muted-foreground">
-            Draft and prepare shipments before booking.
+            Shipments currently in Planning — coordinate vessel, container, customs, terminal, and
+            transport execution.
           </p>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton data={plans} columns={PLAN_EXPORT_COLUMNS} filename="plans" />
-          <Link href="/planning/new">
-            <Button size="sm" className="w-full sm:w-auto">
-              <Plus className="mr-1.5 h-4 w-4" />
-              New Plan
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -228,7 +225,7 @@ export default function PlanningPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold">
-            All Plans
+            Shipments in Planning
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({plans.length})
@@ -246,24 +243,23 @@ export default function PlanningPage() {
           ) : plans.length === 0 ? (
             <EmptyState
               icon={ClipboardList}
-              title="No plans found"
+              title="No shipments in planning"
               message={
                 debouncedSearch || statusFilter !== 'all' || priorityFilter !== 'all'
                   ? 'Try adjusting your filters.'
-                  : 'Get started by creating a new plan.'
+                  : 'Shipments enter Planning automatically once Operations accepts them.'
               }
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Plan No.</TableHead>
+                  <TableHead>Shipment</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Route</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Plan Status</TableHead>
                   <TableHead>Priority</TableHead>
-                  <TableHead>Planned ETD</TableHead>
-                  <TableHead>Converted</TableHead>
+                  <TableHead>Current Stage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -277,6 +273,12 @@ export default function PlanningPage() {
                     label: p.priority ?? 'Unknown',
                     color: 'bg-muted text-muted-foreground',
                   };
+                  const stageMeta = p.shipment
+                    ? SHIPMENT_STATUS_META[p.shipment.status] ?? {
+                        label: p.shipment.status ?? 'Unknown',
+                        color: 'bg-muted text-muted-foreground',
+                      }
+                    : null;
                   return (
                     <TableRow
                       key={p.id}
@@ -284,13 +286,13 @@ export default function PlanningPage() {
                       onClick={() => router.push(`/planning/${p.id}`)}
                     >
                       <TableCell className="font-medium text-primary">
-                        {p.plan_number ?? '—'}
+                        {p.shipment?.reference_number ?? p.plan_number ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {p.customer?.company_name ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {p.origin ?? '—'} → {p.destination ?? '—'}
+                        {p.shipment?.origin ?? '—'} → {p.shipment?.destination ?? '—'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={`text-[11px] ${statusMeta.color}`}>
@@ -303,12 +305,9 @@ export default function PlanningPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {formatDate(p.planned_etd)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {p.converted_shipment_id ? (
-                          <Badge variant="secondary" className="bg-green-100 text-[11px] text-green-700">
-                            Converted
+                        {stageMeta ? (
+                          <Badge variant="secondary" className={`text-[11px] ${stageMeta.color}`}>
+                            {stageMeta.label}
                           </Badge>
                         ) : (
                           '—'

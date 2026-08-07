@@ -4,17 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  ClipboardList,
-  Pencil,
-  Trash2,
-  ArrowRightLeft,
-  Loader2,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ClipboardList, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage } from '@/lib/utils';
 import { canDeleteOwnRecord } from '@/lib/utils/ownership';
+import { checkStageReadiness } from '@/lib/utils/workflow-rules';
+import { getDocumentChecklist } from '@/lib/utils/document-templates';
+import { computePlanningMilestones, computePlanningRisks } from '@/lib/utils/planning';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,71 +35,42 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Textarea } from '@/components/ui/textarea';
 import { PlanStatusCard } from '@/components/planning/plan-status-card';
 import { PlanSummaryCard } from '@/components/planning/plan-summary-card';
-import { PlanMilestones } from '@/components/planning/plan-milestones';
 import { PlanTasksPanel } from '@/components/planning/plan-tasks-panel';
 import { PlanDocumentsPanel } from '@/components/planning/plan-documents-panel';
-import { ConvertToShipmentDialog } from '@/components/planning/convert-to-shipment-dialog';
-import { PlanSectionEditDialog, type SectionFieldDef } from '@/components/planning/plan-section-edit-dialog';
-import { EditOverviewDialog } from '@/components/planning/edit-overview-dialog';
 import { EditFinancialsDialog } from '@/components/planning/edit-financials-dialog';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  PLAN_STATUS_META,
-  PRIORITY_META,
-  formatCurrency,
-  formatDate,
-} from '@/lib/utils/status';
-import type { ShipmentPlan, Quotation, Profile } from '@/types';
+import { PlanningShipmentHeader } from '@/components/planning/planning-shipment-header';
+import { PlanningRiskBanner } from '@/components/planning/planning-risk-banner';
+import { PlanningMilestonesCard } from '@/components/planning/planning-milestones-card';
+import { InternalAssignmentsCard } from '@/components/planning/internal-assignments-card';
+import { VesselPlanningCard } from '@/components/planning/vessel-planning-card';
+import { CustomsPlanningCard } from '@/components/planning/customs-planning-card';
+import { TerminalPlanningCard } from '@/components/planning/terminal-planning-card';
+import { TransportPlanningCard } from '@/components/planning/transport-planning-card';
+import { WarehousePlanningCard } from '@/components/planning/warehouse-planning-card';
+import { ShipmentContainersPanel } from '@/components/shipments/shipment-containers-panel';
+import { PRIORITY_META, formatCurrency, formatDate } from '@/lib/utils/status';
+import type {
+  ShipmentPlan,
+  Shipment,
+  ShipmentContainer,
+  ShipmentCustoms,
+  TerminalOperation,
+  ShipmentTransportation,
+  ShipmentWarehouseRecord,
+  ShipmentStage,
+  Profile,
+} from '@/types';
 
-const CONTAINER_FIELDS: SectionFieldDef[] = [
-  { key: 'container_type', label: 'Container Type', type: 'text' },
-  { key: 'container_quantity', label: 'Quantity', type: 'number' },
-  { key: 'equipment_supplier', label: 'Equipment Supplier', type: 'text' },
-  { key: 'container_pickup_date', label: 'Pick Up Date', type: 'date' },
-  { key: 'container_return_date', label: 'Return Date', type: 'date' },
-];
-
-const VESSEL_FIELDS: SectionFieldDef[] = [
-  { key: 'carrier_line', label: 'Carrier / Line', type: 'text' },
-  { key: 'vessel_name', label: 'Vessel', type: 'text' },
-  { key: 'voyage_number', label: 'Voyage', type: 'text' },
-  { key: 'service_route', label: 'Service', type: 'text' },
-  { key: 'port_of_loading', label: 'Port of Loading', type: 'text' },
-  { key: 'port_of_discharge', label: 'Port of Discharge', type: 'text' },
-];
-
-const TRANSPORT_FIELDS: SectionFieldDef[] = [
-  { key: 'pre_carriage_mode', label: 'Pre-Carriage', type: 'text' },
-  { key: 'transport_carrier', label: 'Carrier / Driver', type: 'text' },
-  { key: 'truck_number', label: 'Truck Number', type: 'text' },
-  { key: 'estimated_transport_time', label: 'Estimated Time', type: 'text' },
-];
-
-const MILESTONE_FIELDS: SectionFieldDef[] = [
-  { key: 'booking_confirmed_date', label: 'Booking Confirmed', type: 'date' },
-  { key: 'documentation_date', label: 'Documentation', type: 'date' },
-  { key: 'cargo_ready_date', label: 'Cargo Ready', type: 'date' },
-  { key: 'planned_etd', label: 'Planned ETD', type: 'date' },
-  { key: 'planned_eta', label: 'Planned ETA', type: 'date' },
-  { key: 'delivery_date', label: 'Delivery', type: 'date' },
-];
-
-type PlanDetail = ShipmentPlan & {
-  customer: { id: string; company_name: string } | null;
-  quotation: Quotation | null;
-  planned_by_user: { id: string; full_name: string } | null;
-  assigned_user: Profile | null;
-  converted_shipment: { id: string; reference_number: string | null } | null;
-};
-
-type TabKey = 'overview' | 'financials' | 'tasks' | 'documents' | 'notes';
+type TabKey = 'execution' | 'assignments' | 'financials' | 'tasks' | 'documents' | 'notes';
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
+  { key: 'execution', label: 'Execution Plan' },
+  { key: 'assignments', label: 'Assignments & Milestones' },
   { key: 'financials', label: 'Financials' },
-  { key: 'tasks', label: 'Tasks & Milestones' },
+  { key: 'tasks', label: 'Tasks' },
   { key: 'documents', label: 'Documents' },
   { key: 'notes', label: 'Notes' },
 ];
@@ -125,44 +92,101 @@ export default function PlanDetailPage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [plan, setPlan] = useState<PlanDetail | null>(null);
+  const [plan, setPlan] = useState<ShipmentPlan | null>(null);
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [containers, setContainers] = useState<ShipmentContainer[]>([]);
+  const [customs, setCustoms] = useState<ShipmentCustoms | null>(null);
+  const [terminal, setTerminal] = useState<TerminalOperation | null>(null);
+  const [transportation, setTransportation] = useState<ShipmentTransportation[]>([]);
+  const [warehouseRecord, setWarehouseRecord] = useState<ShipmentWarehouseRecord | null>(null);
+  const [stages, setStages] = useState<ShipmentStage[]>([]);
+  const [documentsAllSatisfied, setDocumentsAllSatisfied] = useState(false);
   const [staff, setStaff] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
-  const [convertOpen, setConvertOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('execution');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const canDelete = !!plan && canDeleteOwnRecord({ hasRole });
 
-  const [overviewEditOpen, setOverviewEditOpen] = useState(false);
-  const [containerEditOpen, setContainerEditOpen] = useState(false);
-  const [vesselEditOpen, setVesselEditOpen] = useState(false);
-  const [transportEditOpen, setTransportEditOpen] = useState(false);
-  const [milestonesEditOpen, setMilestonesEditOpen] = useState(false);
   const [financialsEditOpen, setFinancialsEditOpen] = useState(false);
-
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+
+  const [completeBlockers, setCompleteBlockers] = useState<string[]>([]);
+  const [checkingComplete, setCheckingComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   const loadPlan = useCallback(async () => {
     if (!planId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: planRow, error: planError } = await supabase
         .from('shipment_plans')
         .select(
-          '*, customer:customers(id, company_name), quotation:quotations(*), planned_by_user:profiles!shipment_plans_planned_by_fkey(id, full_name), assigned_user:profiles!shipment_plans_assigned_to_fkey(*), converted_shipment:shipments(id, reference_number)'
+          '*, quotation:quotations(*), planned_by_user:profiles!shipment_plans_planned_by_fkey(id, full_name), finance_officer_user:profiles!shipment_plans_finance_officer_id_fkey(id, full_name), supervisor_user:profiles!shipment_plans_supervisor_id_fkey(id, full_name)'
         )
         .eq('id', planId)
         .is('deleted_at', null)
         .maybeSingle();
 
-      if (error || !data) {
+      if (planError || !planRow) {
         setPlan(null);
         return;
       }
-      setPlan(data as unknown as PlanDetail);
+      const p = planRow as unknown as ShipmentPlan;
+      setPlan(p);
+
+      if (!p.shipment_id) {
+        // Legacy plan predating the Planning Centre redesign — no linked
+        // shipment to load operational data from.
+        return;
+      }
+
+      const [
+        { data: shipRow },
+        { data: containerRows },
+        { data: customsRow },
+        { data: terminalRow },
+        { data: transportRows },
+        { data: warehouseRow },
+        { data: stageRows },
+      ] = await Promise.all([
+        supabase
+          .from('shipments')
+          .select('*, customer:customers(*), branch:branches(*)')
+          .eq('id', p.shipment_id)
+          .maybeSingle(),
+        supabase
+          .from('shipment_containers')
+          .select('*')
+          .eq('shipment_id', p.shipment_id)
+          .is('deleted_at', null),
+        supabase.from('shipment_customs').select('*').eq('shipment_id', p.shipment_id).maybeSingle(),
+        supabase.from('terminal_operations').select('*').eq('shipment_id', p.shipment_id).maybeSingle(),
+        supabase
+          .from('shipment_transportation')
+          .select('*')
+          .eq('shipment_id', p.shipment_id)
+          .is('deleted_at', null),
+        supabase
+          .from('shipment_warehouse_records')
+          .select('*, warehouse:warehouses(id, name)')
+          .eq('shipment_id', p.shipment_id)
+          .maybeSingle(),
+        supabase.from('shipment_stages').select('*, assigned_user:profiles!shipment_stages_assigned_to_fkey(id, full_name)').eq('shipment_id', p.shipment_id),
+      ]);
+
+      setShipment((shipRow as Shipment) ?? null);
+      setContainers((containerRows as ShipmentContainer[]) ?? []);
+      setCustoms((customsRow as ShipmentCustoms) ?? null);
+      setTerminal((terminalRow as TerminalOperation) ?? null);
+      setTransportation((transportRows as ShipmentTransportation[]) ?? []);
+      setWarehouseRecord((warehouseRow as ShipmentWarehouseRecord) ?? null);
+      setStages((stageRows as ShipmentStage[]) ?? []);
+
+      const checklist = await getDocumentChecklist(p.shipment_id, 'documentation');
+      setDocumentsAllSatisfied(checklist.every((item) => item.satisfied));
     } finally {
       setLoading(false);
     }
@@ -193,19 +217,14 @@ export default function PlanDetailPage() {
     try {
       const { error } = await supabase
         .from('shipment_plans')
-        .update({
-          notes: notesDraft || null,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ notes: notesDraft || null, updated_by: profile.id, updated_at: new Date().toISOString() })
         .eq('id', planId);
       if (error) throw error;
       toast.success('Notes updated');
       setEditingNotes(false);
       loadPlan();
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to update notes');
-      toast.error(message);
+      toast.error(getErrorMessage(err, 'Failed to update notes'));
     } finally {
       setSavingNotes(false);
     }
@@ -233,11 +252,54 @@ export default function PlanDetailPage() {
       toast.success('Plan deleted');
       router.push('/planning');
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to delete plan');
-      toast.error(message);
+      toast.error(getErrorMessage(err, 'Failed to delete plan'));
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
+    }
+  };
+
+  const planningStage = stages.find((s) => s.stage_key === 'planning');
+
+  const handleCompletePlanning = async () => {
+    if (!shipment || !plan || !profile || !planningStage) return;
+    setCheckingComplete(true);
+    setCompleteBlockers([]);
+    try {
+      const readiness = await checkStageReadiness(shipment.id, 'planning');
+      if (!readiness.ready) {
+        setCompleteBlockers(readiness.blockers);
+        return;
+      }
+
+      setCompleting(true);
+      const { error } = await supabase.rpc('complete_shipment_stage', {
+        p_stage_id: planningStage.id,
+        p_action: 'complete',
+      });
+      if (error) throw error;
+
+      await supabase
+        .from('shipment_plans')
+        .update({ status: 'completed', updated_by: profile.id })
+        .eq('id', plan.id);
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        branch_id: plan.branch_id,
+        action: 'plan.completed',
+        entity_type: 'shipment_plan',
+        entity_id: plan.id,
+        description: 'Planning completed — status changed to Documentation',
+      });
+
+      toast.success('Planning complete — shipment moved to Documentation');
+      loadPlan();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to complete planning'));
+    } finally {
+      setCheckingComplete(false);
+      setCompleting(false);
     }
   };
 
@@ -275,25 +337,38 @@ export default function PlanDetailPage() {
     );
   }
 
-  const statusMeta = PLAN_STATUS_META[plan.status] ?? {
-    label: plan.status ?? 'Unknown',
-    color: 'bg-muted text-muted-foreground',
-    step: -1,
-  };
-  const priorityMeta = PRIORITY_META[plan.priority] ?? {
-    label: plan.priority ?? 'Unknown',
-    color: 'bg-muted text-muted-foreground',
-  };
-  const isConverted = !!plan.converted_shipment_id;
-  const isCancelled = plan.status === 'cancelled';
+  if (!plan.shipment_id || !shipment) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+          <ClipboardList className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Historical record only</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            This plan predates the Planning Centre redesign and has no linked shipment — it&apos;s no
+            longer editable here.
+          </p>
+        </div>
+        <Link href="/planning">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back to Planning
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
-  const transitDays =
-    plan.planned_etd && plan.planned_eta
-      ? Math.round(
-          (new Date(plan.planned_eta).getTime() - new Date(plan.planned_etd).getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      : null;
+  const risks = computePlanningRisks({ shipment, containers, customs, terminal, transportation });
+  const milestones = computePlanningMilestones({
+    shipment,
+    containers,
+    customs,
+    terminal,
+    transportation,
+    documentsAllSatisfied,
+  });
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -319,37 +394,18 @@ export default function PlanDetailPage() {
             </Button>
           </Link>
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="page-title">{plan.plan_number}</h1>
-              <Badge variant="secondary" className={statusMeta.color}>
-                {statusMeta.label}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {plan.customer?.company_name ?? 'Unknown customer'}
-            </p>
+            <h1 className="page-title">{plan.plan_number}</h1>
+            <p className="text-sm text-muted-foreground">Planning Centre</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isConverted && !isCancelled && (
-            <Button size="sm" onClick={() => setConvertOpen(true)}>
-              <ArrowRightLeft className="mr-1.5 h-4 w-4" />
-              Convert to Shipment
+          {plan.status !== 'completed' && plan.status !== 'cancelled' && (
+            <Button size="sm" disabled={checkingComplete || completing} onClick={handleCompletePlanning}>
+              {(checkingComplete || completing) && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {!checkingComplete && !completing && <CheckCircle2 className="mr-1.5 h-4 w-4" />}
+              Complete Planning
             </Button>
           )}
-          {isConverted && plan.converted_shipment && (
-            <Link href={`/shipments/${plan.converted_shipment.id}`}>
-              <Button size="sm" variant="outline">
-                View Shipment {plan.converted_shipment.reference_number}
-              </Button>
-            </Link>
-          )}
-          <Link href={`/planning/${planId}/edit`}>
-            <Button size="sm" variant="outline">
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit All Details
-            </Button>
-          </Link>
           {canDelete && (
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
               <DialogTrigger asChild>
@@ -364,10 +420,13 @@ export default function PlanDetailPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-red-600" />Delete plan?</DialogTitle>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Trash2 className="h-5 w-5 text-red-600" />
+                    Delete plan?
+                  </DialogTitle>
                   <DialogDescription>
-                    This will soft-delete &quot;{plan.plan_number}&quot;. This does not affect any
-                    shipment it was already converted to.
+                    This will soft-delete &quot;{plan.plan_number}&quot;. It does not affect the linked
+                    shipment.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -385,6 +444,20 @@ export default function PlanDetailPage() {
         </div>
       </div>
 
+      {completeBlockers.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-700">Planning isn&apos;t complete yet</p>
+          <ul className="ml-5 list-disc text-sm text-amber-700">
+            {completeBlockers.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <PlanningShipmentHeader shipment={shipment} containers={containers} />
+      <PlanningRiskBanner risks={risks} />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
@@ -397,125 +470,53 @@ export default function PlanDetailPage() {
             </TabsList>
           </Tabs>
 
-          {activeTab === 'overview' && (
+          {activeTab === 'execution' && (
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                  <CardTitle className="text-lg font-semibold">Plan Overview</CardTitle>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOverviewEditOpen(true)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-x-6 gap-y-2 px-4 pb-4 pt-0 sm:grid-cols-3">
-                  <InfoRow label="Shipment Type" value={plan.shipment_type} />
-                  <InfoRow label="Total Volume" value={plan.total_volume ? `${plan.total_volume} CBM` : null} />
-                  <InfoRow label="Planned ETD" value={formatDate(plan.planned_etd)} />
-                  <InfoRow label="Incoterm" value={plan.incoterm} />
-                  <InfoRow
-                    label="Goods Value"
-                    value={plan.goods_value ? formatCurrency(plan.goods_value, plan.goods_value_currency) : null}
-                  />
-                  <InfoRow label="Planned ETA" value={formatDate(plan.planned_eta)} />
-                  <InfoRow label="Commodity" value={plan.commodity} />
-                  <InfoRow label="Insurance" value={plan.insurance_required ? 'Required' : 'Not Required'} />
-                  <InfoRow label="Transit Time" value={transitDays !== null ? `${transitDays} Days` : null} />
-                  <InfoRow label="Total Packages" value={plan.total_packages} />
-                  <InfoRow
-                    label="Priority"
-                    value={
-                      <Badge variant="secondary" className={`text-[11px] ${priorityMeta.color}`}>
-                        {priorityMeta.label}
-                      </Badge>
-                    }
-                  />
-                  <InfoRow label="Total Weight" value={plan.total_weight ? `${plan.total_weight} kg` : null} />
-                  {plan.special_instructions && (
-                    <div className="col-span-full pt-1">
-                      <span className="text-sm text-muted-foreground">Special Instructions: </span>
-                      <span className="text-sm font-medium">{plan.special_instructions}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <PlanMilestones
-                plan={plan}
-                quotation={plan.quotation}
-                onEdit={() => setMilestonesEditOpen(true)}
+              <VesselPlanningCard shipment={shipment} onChanged={loadPlan} />
+              <ShipmentContainersPanel
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                containers={containers}
+                onReload={loadPlan}
               />
+              <TransportPlanningCard
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                legs={transportation}
+                onChanged={loadPlan}
+              />
+              <CustomsPlanningCard
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                customs={customs}
+                customsOfficerStage={stages.find((s) => s.stage_key === 'customs_clearance')}
+                onChanged={loadPlan}
+              />
+              <TerminalPlanningCard
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                terminal={terminal}
+                onChanged={loadPlan}
+              />
+              <WarehousePlanningCard
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                record={warehouseRecord}
+                onChanged={loadPlan}
+              />
+            </div>
+          )}
 
-              <div>
-                <h2 className="mb-3 text-sm font-semibold">Planning Details</h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Card>
-                    <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                      <CardTitle className="text-sm font-semibold">Cargo Information</CardTitle>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOverviewEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                      <InfoRow label="Commodity" value={plan.commodity} />
-                      <InfoRow label="Packages" value={plan.total_packages} />
-                      <InfoRow label="Weight" value={plan.total_weight ? `${plan.total_weight} kg` : null} />
-                      <InfoRow label="Volume" value={plan.total_volume ? `${plan.total_volume} CBM` : null} />
-                      <InfoRow label="HS Code" value={plan.hs_code} />
-                      {plan.cargo_description && (
-                        <p className="pt-1 text-sm text-muted-foreground">{plan.cargo_description}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                      <CardTitle className="text-sm font-semibold">Container Plan</CardTitle>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setContainerEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                      <InfoRow label="Container Type" value={plan.container_type} />
-                      <InfoRow label="Quantity" value={plan.container_quantity} />
-                      <InfoRow label="Equipment Supplier" value={plan.equipment_supplier} />
-                      <InfoRow label="Pick Up Date" value={formatDate(plan.container_pickup_date)} />
-                      <InfoRow label="Return Date" value={formatDate(plan.container_return_date)} />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                      <CardTitle className="text-sm font-semibold">Vessel & Routing</CardTitle>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setVesselEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                      <InfoRow label="Carrier / Line" value={plan.carrier_line} />
-                      <InfoRow label="Vessel" value={plan.vessel_name} />
-                      <InfoRow label="Voyage" value={plan.voyage_number} />
-                      <InfoRow label="Port of Loading" value={plan.port_of_loading} />
-                      <InfoRow label="Port of Discharge" value={plan.port_of_discharge} />
-                      <InfoRow label="Service" value={plan.service_route} />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                      <CardTitle className="text-sm font-semibold">Transport Plan</CardTitle>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTransportEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                      <InfoRow label="Pre-Carriage" value={plan.pre_carriage_mode} />
-                      <InfoRow label="Carrier / Driver" value={plan.transport_carrier} />
-                      <InfoRow label="Truck Number" value={plan.truck_number} />
-                      <InfoRow label="Delivery To Port" value={plan.port_of_loading} />
-                      <InfoRow label="Estimated Time" value={plan.estimated_transport_time} />
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+          {activeTab === 'assignments' && (
+            <div className="space-y-4">
+              <InternalAssignmentsCard
+                shipmentId={shipment.id}
+                branchId={shipment.branch_id}
+                plan={plan}
+                stages={stages}
+                onChanged={loadPlan}
+              />
+              <PlanningMilestonesCard milestones={milestones} />
             </div>
           )}
 
@@ -523,8 +524,13 @@ export default function PlanDetailPage() {
             <Card>
               <CardHeader className="flex-row items-center justify-between px-4 py-3">
                 <CardTitle className="text-lg font-semibold">Financials</CardTitle>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFinancialsEditOpen(true)}>
-                  <Pencil className="h-3.5 w-3.5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setFinancialsEditOpen(true)}
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
                 </Button>
               </CardHeader>
               <CardContent className="space-y-2 px-4 pb-4 pt-0">
@@ -552,8 +558,13 @@ export default function PlanDetailPage() {
                   label="Risk Level"
                   value={
                     plan.risk_level ? (
-                      <Badge variant="secondary" className={`text-[11px] ${PRIORITY_META[plan.risk_level].color}`}>
-                        {PRIORITY_META[plan.risk_level].label}
+                      <Badge
+                        variant="secondary"
+                        className={`text-[11px] ${
+                          (PRIORITY_META[plan.risk_level] ?? { color: 'bg-muted text-muted-foreground' }).color
+                        }`}
+                      >
+                        {PRIORITY_META[plan.risk_level]?.label ?? plan.risk_level}
                       </Badge>
                     ) : null
                   }
@@ -594,19 +605,14 @@ export default function PlanDetailPage() {
                       setEditingNotes(true);
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <ClipboardList className="h-3.5 w-3.5" />
                   </Button>
                 )}
               </CardHeader>
               <CardContent className="px-4 pb-4 pt-0">
                 {editingNotes ? (
                   <div className="space-y-3">
-                    <Textarea
-                      rows={5}
-                      value={notesDraft}
-                      onChange={(e) => setNotesDraft(e.target.value)}
-                      autoFocus
-                    />
+                    <Textarea rows={5} value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} autoFocus />
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => setEditingNotes(false)}>
                         Cancel
@@ -628,62 +634,11 @@ export default function PlanDetailPage() {
         </div>
 
         <div className="space-y-4">
-          <PlanStatusCard plan={plan} onUpdated={loadPlan} />
+          <PlanStatusCard plan={plan} />
           <PlanSummaryCard plan={plan} onUpdated={loadPlan} />
         </div>
       </div>
 
-      <ConvertToShipmentDialog
-        plan={plan}
-        open={convertOpen}
-        onOpenChange={setConvertOpen}
-        onConverted={loadPlan}
-      />
-
-      <EditOverviewDialog
-        plan={plan}
-        staff={staff}
-        open={overviewEditOpen}
-        onOpenChange={setOverviewEditOpen}
-        onSaved={loadPlan}
-      />
-      <PlanSectionEditDialog
-        planId={planId}
-        title="Container Plan"
-        fields={CONTAINER_FIELDS}
-        initialValues={plan as unknown as Record<string, unknown>}
-        open={containerEditOpen}
-        onOpenChange={setContainerEditOpen}
-        onSaved={loadPlan}
-      />
-      <PlanSectionEditDialog
-        planId={planId}
-        title="Vessel & Routing"
-        fields={VESSEL_FIELDS}
-        initialValues={plan as unknown as Record<string, unknown>}
-        open={vesselEditOpen}
-        onOpenChange={setVesselEditOpen}
-        onSaved={loadPlan}
-      />
-      <PlanSectionEditDialog
-        planId={planId}
-        title="Transport Plan"
-        fields={TRANSPORT_FIELDS}
-        initialValues={plan as unknown as Record<string, unknown>}
-        open={transportEditOpen}
-        onOpenChange={setTransportEditOpen}
-        onSaved={loadPlan}
-      />
-      <PlanSectionEditDialog
-        planId={planId}
-        title="Milestones"
-        description="Planned dates — fill in as the plan progresses."
-        fields={MILESTONE_FIELDS}
-        initialValues={plan as unknown as Record<string, unknown>}
-        open={milestonesEditOpen}
-        onOpenChange={setMilestonesEditOpen}
-        onSaved={loadPlan}
-      />
       <EditFinancialsDialog
         plan={plan}
         open={financialsEditOpen}

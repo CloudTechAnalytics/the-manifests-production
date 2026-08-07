@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,12 @@ export function TransportationFormDialog({
   const [deliveryDate, setDeliveryDate] = useState('');
   const [status, setStatus] = useState<TransportationStatus>('assigned');
   const [notes, setNotes] = useState('');
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [transportCompany, setTransportCompany] = useState('');
+  const [escortRequired, setEscortRequired] = useState(false);
+  const [expectedPickupDate, setExpectedPickupDate] = useState('');
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [blockers, setBlockers] = useState<string[]>([]);
@@ -82,6 +89,12 @@ export function TransportationFormDialog({
     setDeliveryDate(existing?.delivery_date ?? '');
     setStatus(existing?.status ?? 'assigned');
     setNotes(existing?.notes ?? '');
+    setPickupAddress(existing?.pickup_address ?? '');
+    setDeliveryAddress(existing?.delivery_address ?? '');
+    setTransportCompany(existing?.transport_company ?? '');
+    setEscortRequired(existing?.escort_required ?? false);
+    setExpectedPickupDate(existing?.expected_pickup_date ?? '');
+    setExpectedDeliveryDate(existing?.expected_delivery_date ?? '');
     setBlockers([]);
   }, [open, existing]);
 
@@ -113,6 +126,12 @@ export function TransportationFormDialog({
         delivery_date: deliveryDate || null,
         status,
         notes: notes.trim() || null,
+        pickup_address: pickupAddress.trim() || null,
+        delivery_address: deliveryAddress.trim() || null,
+        transport_company: transportCompany.trim() || null,
+        escort_required: escortRequired,
+        expected_pickup_date: expectedPickupDate || null,
+        expected_delivery_date: expectedDeliveryDate || null,
         updated_by: profile.id,
       };
 
@@ -197,6 +216,65 @@ export function TransportationFormDialog({
               </ul>
             </div>
           )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-company">Transport Company</Label>
+              <Input
+                id="trf-company"
+                value={transportCompany}
+                onChange={(e) => setTransportCompany(e.target.value)}
+              />
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={escortRequired} onCheckedChange={(c) => setEscortRequired(c === true)} />
+                Escort required?
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-pickup-address">Pickup Address</Label>
+              <Textarea
+                id="trf-pickup-address"
+                rows={2}
+                value={pickupAddress}
+                onChange={(e) => setPickupAddress(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-delivery-address">Delivery Address</Label>
+              <Textarea
+                id="trf-delivery-address"
+                rows={2}
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-exp-pickup">Expected Pickup Date</Label>
+              <Input
+                id="trf-exp-pickup"
+                type="date"
+                value={expectedPickupDate}
+                onChange={(e) => setExpectedPickupDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-exp-delivery">Expected Delivery Date</Label>
+              <Input
+                id="trf-exp-delivery"
+                type="date"
+                value={expectedDeliveryDate}
+                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

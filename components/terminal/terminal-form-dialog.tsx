@@ -68,6 +68,12 @@ export function TerminalFormDialog({
   const [freeTimeExpiry, setFreeTimeExpiry] = useState('');
   const [status, setStatus] = useState<TerminalStatus>('waiting');
   const [notes, setNotes] = useState('');
+  const [terminalContact, setTerminalContact] = useState('');
+  const [bookingSlot, setBookingSlot] = useState('');
+  const [terminalReference, setTerminalReference] = useState('');
+  const [expectedGateIn, setExpectedGateIn] = useState('');
+  const [expectedGateOut, setExpectedGateOut] = useState('');
+  const [expectedDoCollection, setExpectedDoCollection] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -86,6 +92,12 @@ export function TerminalFormDialog({
     setFreeTimeExpiry(existing?.free_time_expiry ?? '');
     setStatus(existing?.status ?? 'waiting');
     setNotes(existing?.notes ?? '');
+    setTerminalContact(existing?.terminal_contact ?? '');
+    setBookingSlot(existing?.booking_slot ?? '');
+    setTerminalReference(existing?.terminal_reference ?? '');
+    setExpectedGateIn(existing?.expected_gate_in ?? '');
+    setExpectedGateOut(existing?.expected_gate_out ?? '');
+    setExpectedDoCollection(existing?.expected_delivery_order_collection ?? '');
   }, [open, existing]);
 
   const handleSubmit = async () => {
@@ -106,6 +118,12 @@ export function TerminalFormDialog({
         free_time_expiry: freeTimeExpiry || null,
         status,
         notes: notes.trim() || null,
+        terminal_contact: terminalContact.trim() || null,
+        booking_slot: bookingSlot.trim() || null,
+        terminal_reference: terminalReference.trim() || null,
+        expected_gate_in: expectedGateIn || null,
+        expected_gate_out: expectedGateOut || null,
+        expected_delivery_order_collection: expectedDoCollection || null,
         updated_by: profile.id,
       };
 
@@ -181,8 +199,20 @@ export function TerminalFormDialog({
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="tf-terminal">Terminal Name</Label>
-              <Input id="tf-terminal" value={terminalName} onChange={(e) => setTerminalName(e.target.value)} />
+              <Label htmlFor="tf-terminal">Terminal</Label>
+              <Input
+                id="tf-terminal"
+                list="tf-terminal-suggestions"
+                value={terminalName}
+                onChange={(e) => setTerminalName(e.target.value)}
+                placeholder="PTML, APM, TICT, ENL…"
+              />
+              <datalist id="tf-terminal-suggestions">
+                <option value="PTML" />
+                <option value="APM Terminals" />
+                <option value="TICT" />
+                <option value="ENL Consortium" />
+              </datalist>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tf-arrival">Arrival Date</Label>
@@ -308,6 +338,63 @@ export function TerminalFormDialog({
                     From arrival
                   </Button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Terminal Booking (Planning)
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-contact">Terminal Contact</Label>
+                <Input
+                  id="tf-contact"
+                  value={terminalContact}
+                  onChange={(e) => setTerminalContact(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-slot">Booking Slot</Label>
+                <Input id="tf-slot" value={bookingSlot} onChange={(e) => setBookingSlot(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-reference">Terminal Reference</Label>
+                <Input
+                  id="tf-reference"
+                  value={terminalReference}
+                  onChange={(e) => setTerminalReference(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-exp-gate-in">Expected Gate In</Label>
+                <Input
+                  id="tf-exp-gate-in"
+                  type="date"
+                  value={expectedGateIn}
+                  onChange={(e) => setExpectedGateIn(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-exp-gate-out">Expected Gate Out</Label>
+                <Input
+                  id="tf-exp-gate-out"
+                  type="date"
+                  value={expectedGateOut}
+                  onChange={(e) => setExpectedGateOut(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-exp-do">Expected DO Collection</Label>
+                <Input
+                  id="tf-exp-do"
+                  type="date"
+                  value={expectedDoCollection}
+                  onChange={(e) => setExpectedDoCollection(e.target.value)}
+                />
               </div>
             </div>
           </div>
