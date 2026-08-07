@@ -18,6 +18,10 @@ import type {
   ExposureType,
   ResponsibleParty,
   ExposureStatus,
+  BookingStatus,
+  ChecklistDocumentStatus,
+  PlanAssignmentStatus,
+  PlanCostCategory,
 } from '@/types';
 
 /**
@@ -285,6 +289,41 @@ export const EXPOSURE_STATUS_META: Record<ExposureStatus, { label: string; color
   disputed: { label: 'Disputed', color: 'bg-red-100 text-red-700' },
   approved: { label: 'Approved', color: 'bg-blue-100 text-blue-700' },
   paid: { label: 'Paid', color: 'bg-green-100 text-green-700' },
+};
+
+export const BOOKING_STATUS_META: Record<BookingStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
+  confirmed: { label: 'Confirmed', color: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-700' },
+};
+
+export const CHECKLIST_DOCUMENT_STATUS_META: Record<ChecklistDocumentStatus, { label: string; color: string }> = {
+  not_received: { label: 'Not Received', color: 'bg-gray-100 text-gray-700' },
+  received: { label: 'Received', color: 'bg-blue-100 text-blue-700' },
+  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+};
+
+export const PLAN_ASSIGNMENT_STATUS_META: Record<PlanAssignmentStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
+  working: { label: 'Working', color: 'bg-blue-100 text-blue-700' },
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
+  blocked: { label: 'Blocked', color: 'bg-red-100 text-red-700' },
+};
+
+/** Financial Planning's 10 cost categories (Planning Command Center §11). */
+export const PLAN_COST_CATEGORY_LABELS: Record<PlanCostCategory, string> = {
+  ocean_freight: 'Ocean/Air Freight',
+  thc: 'Terminal Handling Charges',
+  documentation: 'Documentation Fees',
+  terminal_charges: 'Terminal Charges',
+  transport: 'Transport',
+  warehouse: 'Warehouse',
+  duty: 'Customs Duty',
+  inspection: 'Inspection Fees',
+  agency_fees: 'Agency Fees',
+  miscellaneous: 'Miscellaneous',
 };
 
 export function formatDate(date: string | null): string {

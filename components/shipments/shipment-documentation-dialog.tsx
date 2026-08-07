@@ -20,9 +20,36 @@ import {
   DialogTitle,
   DialogClose,
 } from '@/components/ui/dialog';
-import type { Shipment } from '@/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { BOOKING_STATUS_META } from '@/lib/utils/status';
+import type { BookingStatus, Shipment, ShipmentType } from '@/types';
 
 const MAX_BOOKING_DOC_SIZE_BYTES = 50 * 1024 * 1024;
+
+const BOOKING_STATUS_OPTIONS = (Object.keys(BOOKING_STATUS_META) as BookingStatus[]).map((value) => ({
+  value,
+  label: BOOKING_STATUS_META[value].label,
+}));
+
+/**
+ * Mode-conditional labels for the same underlying vessel/routing/AWB
+ * columns — this app has no precedent for hiding fields per mode, but
+ * relabeling generic columns is the lowest-risk way to cover Sea/Air/
+ * Rail without inventing 6 near-duplicate columns. Road hides this
+ * whole section (its primary movement IS the Transport Planning leg).
+ */
+export const VESSEL_LABELS: Partial<Record<ShipmentType, { vessel: string; voyage: string; carrier: string; pol: string; pod: string }>> = {
+  sea: { vessel: 'Vessel Name', voyage: 'Voyage Number', carrier: 'Shipping Line', pol: 'Port of Loading', pod: 'Port of Discharge' },
+  air: { vessel: 'Airline', voyage: 'Flight Number', carrier: 'Airline', pol: 'Departure Airport', pod: 'Arrival Airport' },
+  rail: { vessel: 'Train Number', voyage: 'Train Number', carrier: 'Rail Operator', pol: 'Origin Station', pod: 'Destination Station' },
+  multimodal: { vessel: 'Vessel Name', voyage: 'Voyage Number', carrier: 'Carrier', pol: 'Port of Loading', pod: 'Port of Discharge' },
+};
 
 interface ShipmentDocumentationDialogProps {
   open: boolean;
@@ -57,7 +84,9 @@ export function ShipmentDocumentationDialog({
   const [estimatedArrival, setEstimatedArrival] = useState('');
   const [transshipmentPort, setTransshipmentPort] = useState('');
   const [bookingReference, setBookingReference] = useState('');
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [bookingRequested, setBookingRequested] = useState(false);
+  const [bookingStatus, setBookingStatus] = useState<BookingStatus>('pending');
+  const [bookingDate, setBookingDate] = useState('');
   const [bookingDocId, setBookingDocId] = useState<string | null>(null);
   const [bookingDocName, setBookingDocName] = useState<string | null>(null);
   const [uploadingBookingDoc, setUploadingBookingDoc] = useState(false);
@@ -85,7 +114,9 @@ export function ShipmentDocumentationDialog({
     setEstimatedArrival(shipment.estimated_arrival ?? '');
     setTransshipmentPort(shipment.transshipment_port ?? '');
     setBookingReference(shipment.booking_reference ?? '');
-    setBookingConfirmed(shipment.booking_confirmed ?? false);
+    setBookingRequested(shipment.booking_requested ?? false);
+    setBookingStatus(shipment.booking_status ?? 'pending');
+    setBookingDate(shipment.booking_date ?? '');
     setBookingDocId(shipment.booking_confirmation_document_id ?? null);
     setBookingDocName(null);
   }, [open, shipment]);
@@ -115,6 +146,9 @@ export function ShipmentDocumentationDialog({
     if (!actual && !volumetric) return null;
     return Math.max(actual, volumetric);
   }, [actualWeight, volumetricWeight]);
+
+  const isRoad = shipment.shipment_type === 'road';
+  const vesselLabels = (shipment.shipment_type && VESSEL_LABELS[shipment.shipment_type]) || VESSEL_LABELS.sea!;
 
   const handleBookingDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,7 +208,13 @@ export function ShipmentDocumentationDialog({
         estimated_arrival: estimatedArrival || null,
         transshipment_port: transshipmentPort.trim() || null,
         booking_reference: bookingReference.trim() || null,
-        booking_confirmed: bookingConfirmed,
+        booking_requested: bookingRequested,
+        booking_status: bookingStatus,
+        booking_date: bookingDate || null,
+        // booking_confirmed stays a denormalized "= booking_status ===
+        // 'confirmed'" flag, kept in sync here — same precedent as
+        // shipment_customs.duty_paid vs duty_status.
+        booking_confirmed: bookingStatus === 'confirmed',
         booking_confirmation_document_id: bookingDocId,
         updated_by: profile.id,
       };
@@ -189,6 +229,7 @@ export function ShipmentDocumentationDialog({
         entity_type: 'shipment',
         entity_id: shipment.id,
         description: `Updated trade documentation for shipment ${shipment.reference_number ?? ''}`,
+        metadata: { shipment_id: shipment.id },
       });
 
       toast.success('Trade documentation updated');
@@ -246,43 +287,52 @@ export function ShipmentDocumentationDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-vessel">Vessel Name</Label>
-              <Input id="sd-vessel" value={vesselName} onChange={(e) => setVesselName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-voyage">Voyage Number</Label>
-              <Input id="sd-voyage" value={voyageNumber} onChange={(e) => setVoyageNumber(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-carrier">Shipping Line</Label>
-              <Input id="sd-carrier" value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-            </div>
-          </div>
+          {isRoad ? (
+            <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+              Road shipments move by truck — plan the movement in the Transport Planning card instead of
+              vessel/flight details.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-vessel">{vesselLabels.vessel}</Label>
+                  <Input id="sd-vessel" value={vesselName} onChange={(e) => setVesselName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-voyage">{vesselLabels.voyage}</Label>
+                  <Input id="sd-voyage" value={voyageNumber} onChange={(e) => setVoyageNumber(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-carrier">{vesselLabels.carrier}</Label>
+                  <Input id="sd-carrier" value={carrier} onChange={(e) => setCarrier(e.target.value)} />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-pol">Port of Loading</Label>
-              <Input id="sd-pol" value={portOfLoading} onChange={(e) => setPortOfLoading(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-pod">Port of Discharge</Label>
-              <Input
-                id="sd-pod"
-                value={portOfDischarge}
-                onChange={(e) => setPortOfDischarge(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sd-transshipment">Transshipment Port (optional)</Label>
-              <Input
-                id="sd-transshipment"
-                value={transshipmentPort}
-                onChange={(e) => setTransshipmentPort(e.target.value)}
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-pol">{vesselLabels.pol}</Label>
+                  <Input id="sd-pol" value={portOfLoading} onChange={(e) => setPortOfLoading(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-pod">{vesselLabels.pod}</Label>
+                  <Input
+                    id="sd-pod"
+                    value={portOfDischarge}
+                    onChange={(e) => setPortOfDischarge(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-transshipment">Transshipment Port (optional)</Label>
+                  <Input
+                    id="sd-transshipment"
+                    value={transshipmentPort}
+                    onChange={(e) => setTransshipmentPort(e.target.value)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -318,9 +368,38 @@ export function ShipmentDocumentationDialog({
               />
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={bookingConfirmed} onCheckedChange={(c) => setBookingConfirmed(c === true)} />
-              Booking confirmed
+              <Checkbox
+                checked={bookingRequested}
+                onCheckedChange={(c) => setBookingRequested(c === true)}
+              />
+              Booking requested
             </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="sd-booking-status">Booking Status</Label>
+                <Select value={bookingStatus} onValueChange={(v) => setBookingStatus(v as BookingStatus)}>
+                  <SelectTrigger id="sd-booking-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BOOKING_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sd-booking-date">Booking Date</Label>
+                <Input
+                  id="sd-booking-date"
+                  type="date"
+                  value={bookingDate}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                />
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Booking Confirmation Document</Label>
               <input

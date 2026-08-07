@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { formatDate } from '@/lib/utils/status';
+import { formatDate, formatCurrency } from '@/lib/utils/status';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +56,14 @@ export function TransportPlanningCard({ shipmentId, branchId, legs, onChanged }:
                 <span>Delivery: {leg.delivery_address || '—'}</span>
                 <span>Exp. Pickup: {formatDate(leg.expected_pickup_date)}</span>
                 <span>Exp. Delivery: {formatDate(leg.expected_delivery_date)}</span>
+                <span>Truck Type: {leg.truck_type || '—'}</span>
+                <span>Route: {leg.route || '—'}</span>
+                <span>Distance: {leg.estimated_distance_km != null ? `${leg.estimated_distance_km} km` : '—'}</span>
+                <span>Est. Cost: {leg.estimated_transport_cost != null ? formatCurrency(leg.estimated_transport_cost) : '—'}</span>
+                <span>
+                  Delivery Contact:{' '}
+                  {[leg.delivery_contact_name, leg.delivery_contact_phone].filter(Boolean).join(' · ') || '—'}
+                </span>
               </div>
             </div>
           ))

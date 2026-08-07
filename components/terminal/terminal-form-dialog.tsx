@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -74,6 +75,10 @@ export function TerminalFormDialog({
   const [expectedGateIn, setExpectedGateIn] = useState('');
   const [expectedGateOut, setExpectedGateOut] = useState('');
   const [expectedDoCollection, setExpectedDoCollection] = useState('');
+  const [expectedArrivalDate, setExpectedArrivalDate] = useState('');
+  const [terminalBookingRequired, setTerminalBookingRequired] = useState(true);
+  const [releaseOrderNeeded, setReleaseOrderNeeded] = useState(false);
+  const [expectedPickupDate, setExpectedPickupDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -98,6 +103,10 @@ export function TerminalFormDialog({
     setExpectedGateIn(existing?.expected_gate_in ?? '');
     setExpectedGateOut(existing?.expected_gate_out ?? '');
     setExpectedDoCollection(existing?.expected_delivery_order_collection ?? '');
+    setExpectedArrivalDate(existing?.expected_arrival_date ?? '');
+    setTerminalBookingRequired(existing?.terminal_booking_required ?? true);
+    setReleaseOrderNeeded(existing?.release_order_needed ?? false);
+    setExpectedPickupDate(existing?.expected_pickup_date ?? '');
   }, [open, existing]);
 
   const handleSubmit = async () => {
@@ -124,6 +133,10 @@ export function TerminalFormDialog({
         expected_gate_in: expectedGateIn || null,
         expected_gate_out: expectedGateOut || null,
         expected_delivery_order_collection: expectedDoCollection || null,
+        expected_arrival_date: expectedArrivalDate || null,
+        terminal_booking_required: terminalBookingRequired,
+        release_order_needed: releaseOrderNeeded,
+        expected_pickup_date: expectedPickupDate || null,
         updated_by: profile.id,
       };
 
@@ -141,6 +154,7 @@ export function TerminalFormDialog({
           entity_type: 'terminal_operations',
           entity_id: existing.id,
           description: `Updated terminal record (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Terminal record updated');
       } else {
@@ -158,6 +172,7 @@ export function TerminalFormDialog({
           entity_type: 'terminal_operations',
           entity_id: created?.id,
           description: `Created terminal record (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Terminal record created');
       }
@@ -396,6 +411,37 @@ export function TerminalFormDialog({
                   onChange={(e) => setExpectedDoCollection(e.target.value)}
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-exp-arrival">Expected Arrival</Label>
+                <Input
+                  id="tf-exp-arrival"
+                  type="date"
+                  value={expectedArrivalDate}
+                  onChange={(e) => setExpectedArrivalDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tf-exp-pickup">Expected Container Pickup</Label>
+                <Input
+                  id="tf-exp-pickup"
+                  type="date"
+                  value={expectedPickupDate}
+                  onChange={(e) => setExpectedPickupDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={terminalBookingRequired}
+                  onCheckedChange={(c) => setTerminalBookingRequired(c === true)}
+                />
+                Terminal booking required?
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={releaseOrderNeeded} onCheckedChange={(c) => setReleaseOrderNeeded(c === true)} />
+                Release order needed?
+              </label>
             </div>
           </div>
 

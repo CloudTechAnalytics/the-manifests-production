@@ -10,11 +10,11 @@ import { getErrorMessage } from '@/lib/utils';
 import { canDeleteOwnRecord } from '@/lib/utils/ownership';
 import { checkStageReadiness } from '@/lib/utils/workflow-rules';
 import { getDocumentChecklist } from '@/lib/utils/document-templates';
-import { computePlanningMilestones, computePlanningRisks } from '@/lib/utils/planning';
+import { checkPlanningReadiness, computePlanningMilestones, computePlanningRisks } from '@/lib/utils/planning';
+import { getPlanningSuggestions } from '@/lib/utils/planning-suggestions';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -40,9 +40,9 @@ import { PlanStatusCard } from '@/components/planning/plan-status-card';
 import { PlanSummaryCard } from '@/components/planning/plan-summary-card';
 import { PlanTasksPanel } from '@/components/planning/plan-tasks-panel';
 import { PlanDocumentsPanel } from '@/components/planning/plan-documents-panel';
-import { EditFinancialsDialog } from '@/components/planning/edit-financials-dialog';
 import { PlanningShipmentHeader } from '@/components/planning/planning-shipment-header';
 import { PlanningRiskBanner } from '@/components/planning/planning-risk-banner';
+import { PlanningSuggestionsBanner } from '@/components/planning/planning-suggestions-banner';
 import { PlanningMilestonesCard } from '@/components/planning/planning-milestones-card';
 import { InternalAssignmentsCard } from '@/components/planning/internal-assignments-card';
 import { VesselPlanningCard } from '@/components/planning/vessel-planning-card';
@@ -50,8 +50,11 @@ import { CustomsPlanningCard } from '@/components/planning/customs-planning-card
 import { TerminalPlanningCard } from '@/components/planning/terminal-planning-card';
 import { TransportPlanningCard } from '@/components/planning/transport-planning-card';
 import { WarehousePlanningCard } from '@/components/planning/warehouse-planning-card';
+import { DocumentationPlanningPanel } from '@/components/planning/documentation-planning-panel';
+import { PlanningTimelineTab } from '@/components/planning/planning-timeline-tab';
+import { FinancialPlanningTab } from '@/components/planning/financial-planning-tab';
 import { ShipmentContainersPanel } from '@/components/shipments/shipment-containers-panel';
-import { PRIORITY_META, formatCurrency, formatDate } from '@/lib/utils/status';
+import { formatDate } from '@/lib/utils/status';
 import type {
   ShipmentPlan,
   Shipment,
@@ -64,25 +67,26 @@ import type {
   Profile,
 } from '@/types';
 
-type TabKey = 'execution' | 'assignments' | 'financials' | 'tasks' | 'documents' | 'notes';
+type TabKey =
+  | 'execution'
+  | 'assignments'
+  | 'documentation'
+  | 'financials'
+  | 'tasks'
+  | 'documents'
+  | 'timeline'
+  | 'notes';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'execution', label: 'Execution Plan' },
   { key: 'assignments', label: 'Assignments & Milestones' },
+  { key: 'documentation', label: 'Documentation' },
   { key: 'financials', label: 'Financials' },
   { key: 'tasks', label: 'Tasks' },
   { key: 'documents', label: 'Documents' },
+  { key: 'timeline', label: 'Timeline' },
   { key: 'notes', label: 'Notes' },
 ];
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value ?? '—'}</span>
-    </div>
-  );
-}
 
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
@@ -108,7 +112,6 @@ export default function PlanDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const canDelete = !!plan && canDeleteOwnRecord({ hasRole });
 
-  const [financialsEditOpen, setFinancialsEditOpen] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
@@ -116,6 +119,7 @@ export default function PlanDetailPage() {
   const [completeBlockers, setCompleteBlockers] = useState<string[]>([]);
   const [checkingComplete, setCheckingComplete] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [completionPercent, setCompletionPercent] = useState<number | null>(null);
 
   const loadPlan = useCallback(async () => {
     if (!planId) return;
@@ -187,6 +191,9 @@ export default function PlanDetailPage() {
 
       const checklist = await getDocumentChecklist(p.shipment_id, 'documentation');
       setDocumentsAllSatisfied(checklist.every((item) => item.satisfied));
+
+      const readiness = await checkPlanningReadiness(p.shipment_id);
+      setCompletionPercent(readiness.completionPercent);
     } finally {
       setLoading(false);
     }
@@ -247,6 +254,7 @@ export default function PlanDetailPage() {
         entity_type: 'shipment_plan',
         entity_id: planId,
         description: `Deleted plan ${plan.plan_number ?? ''}`,
+        metadata: { shipment_id: plan.shipment_id },
       });
 
       toast.success('Plan deleted');
@@ -291,7 +299,50 @@ export default function PlanDetailPage() {
         entity_type: 'shipment_plan',
         entity_id: plan.id,
         description: 'Planning completed — status changed to Documentation',
+        metadata: { shipment_id: shipment.id },
       });
+
+      // Workflow Automation (§14) — complete_shipment_stage() only flips
+      // the next stage to in_progress server-side, it doesn't seed tasks.
+      // Mirror shipment-workflow-panel.tsx's handleStart() seeding here so
+      // Documentation isn't waiting on someone to open the Workflow tab.
+      const { data: docStage } = await supabase
+        .from('shipment_stages')
+        .select('id, stage_key, assigned_department')
+        .eq('shipment_id', shipment.id)
+        .eq('stage_key', 'documentation')
+        .maybeSingle();
+
+      if (docStage) {
+        const { count } = await supabase
+          .from('shipment_tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('stage_id', docStage.id);
+
+        if (!count) {
+          const { data: templates } = await supabase
+            .from('stage_task_templates')
+            .select('*')
+            .eq('stage_key', 'documentation')
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+
+          if (templates && templates.length > 0) {
+            await supabase.from('shipment_tasks').insert(
+              templates.map((t) => ({
+                shipment_id: shipment.id,
+                stage_id: docStage.id,
+                template_id: t.id,
+                branch_id: shipment.branch_id,
+                title: t.title,
+                assigned_department: t.default_department ?? docStage.assigned_department,
+                priority: t.default_priority,
+                created_by: profile.id,
+              }))
+            );
+          }
+        }
+      }
 
       toast.success('Planning complete — shipment moved to Documentation');
       loadPlan();
@@ -369,6 +420,7 @@ export default function PlanDetailPage() {
     transportation,
     documentsAllSatisfied,
   });
+  const suggestions = getPlanningSuggestions({ shipment, containers, customs, terminal });
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -444,6 +496,21 @@ export default function PlanDetailPage() {
         </div>
       </div>
 
+      {plan.status !== 'completed' && plan.status !== 'cancelled' && completionPercent !== null && (
+        <div className="space-y-1.5 rounded-lg border border-border px-4 py-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold">Planning Completion</span>
+            <span className="font-semibold">{completionPercent}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${completionPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {completeBlockers.length > 0 && (
         <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-700">Planning isn&apos;t complete yet</p>
@@ -472,6 +539,7 @@ export default function PlanDetailPage() {
 
           {activeTab === 'execution' && (
             <div className="space-y-4">
+              <PlanningSuggestionsBanner suggestions={suggestions} />
               <VesselPlanningCard shipment={shipment} onChanged={loadPlan} />
               <ShipmentContainersPanel
                 shipmentId={shipment.id}
@@ -512,7 +580,6 @@ export default function PlanDetailPage() {
               <InternalAssignmentsCard
                 shipmentId={shipment.id}
                 branchId={shipment.branch_id}
-                plan={plan}
                 stages={stages}
                 onChanged={loadPlan}
               />
@@ -520,67 +587,17 @@ export default function PlanDetailPage() {
             </div>
           )}
 
+          {activeTab === 'documentation' && (
+            <DocumentationPlanningPanel shipmentId={shipment.id} branchId={shipment.branch_id} />
+          )}
+
           {activeTab === 'financials' && (
-            <Card>
-              <CardHeader className="flex-row items-center justify-between px-4 py-3">
-                <CardTitle className="text-lg font-semibold">Financials</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setFinancialsEditOpen(true)}
-                >
-                  <ClipboardList className="h-3.5 w-3.5" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-2 px-4 pb-4 pt-0">
-                <InfoRow
-                  label="Estimated Cost"
-                  value={plan.estimated_cost !== null ? formatCurrency(plan.estimated_cost, plan.goods_value_currency) : null}
-                />
-                <InfoRow
-                  label="Estimated Revenue"
-                  value={
-                    plan.estimated_revenue !== null
-                      ? formatCurrency(plan.estimated_revenue, plan.goods_value_currency)
-                      : null
-                  }
-                />
-                <InfoRow
-                  label="Planned Profit"
-                  value={
-                    plan.estimated_cost !== null && plan.estimated_revenue !== null
-                      ? formatCurrency(plan.estimated_revenue - plan.estimated_cost, plan.goods_value_currency)
-                      : null
-                  }
-                />
-                <InfoRow
-                  label="Risk Level"
-                  value={
-                    plan.risk_level ? (
-                      <Badge
-                        variant="secondary"
-                        className={`text-[11px] ${
-                          (PRIORITY_META[plan.risk_level] ?? { color: 'bg-muted text-muted-foreground' }).color
-                        }`}
-                      >
-                        {PRIORITY_META[plan.risk_level]?.label ?? plan.risk_level}
-                      </Badge>
-                    ) : null
-                  }
-                />
-                {plan.quotation && (
-                  <InfoRow
-                    label="Linked Quotation"
-                    value={
-                      <Link href={`/quotations/${plan.quotation.id}`} className="text-primary hover:underline">
-                        {plan.quotation.quotation_number}
-                      </Link>
-                    }
-                  />
-                )}
-              </CardContent>
-            </Card>
+            <FinancialPlanningTab
+              shipmentId={shipment.id}
+              branchId={shipment.branch_id}
+              plan={plan}
+              onChanged={loadPlan}
+            />
           )}
 
           {activeTab === 'tasks' && plan.branch_id && (
@@ -590,6 +607,8 @@ export default function PlanDetailPage() {
           {activeTab === 'documents' && plan.branch_id && (
             <PlanDocumentsPanel planId={planId} branchId={plan.branch_id} />
           )}
+
+          {activeTab === 'timeline' && <PlanningTimelineTab shipmentId={shipment.id} />}
 
           {activeTab === 'notes' && (
             <Card>
@@ -638,13 +657,6 @@ export default function PlanDetailPage() {
           <PlanSummaryCard plan={plan} onUpdated={loadPlan} />
         </div>
       </div>
-
-      <EditFinancialsDialog
-        plan={plan}
-        open={financialsEditOpen}
-        onOpenChange={setFinancialsEditOpen}
-        onSaved={loadPlan}
-      />
     </div>
   );
 }

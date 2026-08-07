@@ -26,6 +26,7 @@ import { TodaySchedule } from '@/components/dashboard/today-schedule';
 import { RecentShipmentsTable } from '@/components/dashboard/recent-shipments-table';
 import { AwaitingOperationsCard } from '@/components/dashboard/awaiting-operations-card';
 import { FinancialExposureAlertCard } from '@/components/dashboard/financial-exposure-alert-card';
+import { PlanningCommandCenterCard } from '@/components/dashboard/planning-command-center-card';
 import { ShipmentStageBreakdown } from '@/components/dashboard/shipment-stage-breakdown';
 import { FinanceSummary } from '@/components/dashboard/finance-summary';
 import { PlanningOverview } from '@/components/dashboard/planning-overview';
@@ -239,6 +240,9 @@ export default function DashboardPage() {
 
       {/* 5b. Financial exposure — full width for the currency-figure weight */}
       <FinancialExposureAlertCard />
+
+      {/* 5c. Planning Command Center — full width for the 10-tile stat grid */}
+      <PlanningCommandCenterCard />
 
       {/* 6. Recent shipments + awaiting operations */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

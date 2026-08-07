@@ -86,6 +86,11 @@ export function CustomsFormDialog({
   const [expectedReleaseDate, setExpectedReleaseDate] = useState('');
   const [expectedExitDate, setExpectedExitDate] = useState('');
   const [dutyEstimateApproved, setDutyEstimateApproved] = useState(false);
+  const [dutyEstimate, setDutyEstimate] = useState('');
+  const [inspectionRequired, setInspectionRequired] = useState(false);
+  const [sonRequired, setSonRequired] = useState(false);
+  const [nafdacRequired, setNafdacRequired] = useState(false);
+  const [nesreaRequired, setNesreaRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -113,6 +118,11 @@ export function CustomsFormDialog({
     setExpectedReleaseDate(existing?.expected_release_date ?? '');
     setExpectedExitDate(existing?.expected_exit_date ?? '');
     setDutyEstimateApproved(existing?.duty_estimate_approved ?? false);
+    setDutyEstimate(existing?.duty_estimate != null ? String(existing.duty_estimate) : '');
+    setInspectionRequired(existing?.inspection_required ?? false);
+    setSonRequired(existing?.son_required ?? false);
+    setNafdacRequired(existing?.nafdac_required ?? false);
+    setNesreaRequired(existing?.nesrea_required ?? false);
   }, [open, existing]);
 
   const handleSubmit = async () => {
@@ -142,6 +152,11 @@ export function CustomsFormDialog({
         expected_release_date: expectedReleaseDate || null,
         expected_exit_date: expectedExitDate || null,
         duty_estimate_approved: dutyEstimateApproved,
+        duty_estimate: dutyEstimate ? Number(dutyEstimate) : null,
+        inspection_required: inspectionRequired,
+        son_required: sonRequired,
+        nafdac_required: nafdacRequired,
+        nesrea_required: nesreaRequired,
         updated_by: profile.id,
       };
 
@@ -159,6 +174,7 @@ export function CustomsFormDialog({
           entity_type: 'shipment_customs',
           entity_id: existing.id,
           description: `Updated customs record (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Customs record updated');
       } else {
@@ -176,6 +192,7 @@ export function CustomsFormDialog({
           entity_type: 'shipment_customs',
           entity_id: created?.id,
           description: `Created customs record (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Customs record created');
       }
@@ -425,6 +442,17 @@ export function CustomsFormDialog({
                 />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-duty-estimate">Duty Estimate</Label>
+              <Input
+                id="cf-duty-estimate"
+                type="number"
+                min="0"
+                step="0.01"
+                value={dutyEstimate}
+                onChange={(e) => setDutyEstimate(e.target.value)}
+              />
+            </div>
             <div className="flex items-center gap-2">
               <Checkbox
                 id="cf-duty-approved"
@@ -434,6 +462,24 @@ export function CustomsFormDialog({
               <Label htmlFor="cf-duty-approved" className="font-normal">
                 Duty estimate approved
               </Label>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={inspectionRequired} onCheckedChange={(c) => setInspectionRequired(c === true)} />
+                Inspection required
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={sonRequired} onCheckedChange={(c) => setSonRequired(c === true)} />
+                SON required
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={nafdacRequired} onCheckedChange={(c) => setNafdacRequired(c === true)} />
+                NAFDAC required
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={nesreaRequired} onCheckedChange={(c) => setNesreaRequired(c === true)} />
+                NESREA required
+              </label>
             </div>
           </div>
 

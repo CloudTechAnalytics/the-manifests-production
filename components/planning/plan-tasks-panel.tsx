@@ -81,6 +81,39 @@ export function PlanTasksPanel({ planId, branchId, staff }: PlanTasksPanelProps)
     loadTasks();
   }, [loadTasks]);
 
+  // Planning Tasks auto-generation (§9) — mirrors shipment-workflow-panel's
+  // handleStart() seeding logic exactly: fires once per plan, only when no
+  // tasks exist yet, so manual add/delete afterwards is never overwritten.
+  useEffect(() => {
+    if (loading || tasks.length > 0 || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: templates } = await supabase
+        .from('stage_task_templates')
+        .select('*')
+        .eq('stage_key', 'planning')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (cancelled || !templates || templates.length === 0) return;
+
+      const { error } = await supabase.from('plan_tasks').insert(
+        templates.map((t) => ({
+          plan_id: planId,
+          branch_id: branchId,
+          title: t.title,
+          template_id: t.id,
+          priority: t.default_priority,
+          created_by: profile.id,
+        }))
+      );
+      if (!cancelled && !error) loadTasks();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tasks.length, profile?.id, planId, branchId]);
+
   const resetForm = () => {
     setTitle('');
     setAssignedTo('');

@@ -109,6 +109,33 @@ export type ResponsibleParty =
 
 export type ExposureStatus = 'pending' | 'disputed' | 'approved' | 'paid';
 
+export type BookingStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled';
+
+export type ChecklistDocumentStatus = 'not_received' | 'received' | 'verified' | 'rejected';
+
+export type PlanAssignmentRole =
+  | 'documentation'
+  | 'customs'
+  | 'terminal'
+  | 'finance'
+  | 'transport'
+  | 'warehouse'
+  | 'supervisor';
+
+export type PlanAssignmentStatus = 'pending' | 'working' | 'completed' | 'blocked';
+
+export type PlanCostCategory =
+  | 'ocean_freight'
+  | 'thc'
+  | 'documentation'
+  | 'terminal_charges'
+  | 'transport'
+  | 'warehouse'
+  | 'duty'
+  | 'inspection'
+  | 'agency_fees'
+  | 'miscellaneous';
+
 export interface Branch {
   id: string;
   name: string;
@@ -450,6 +477,13 @@ export interface Shipment {
   booking_reference: string | null;
   booking_confirmed: boolean;
   booking_confirmation_document_id: string | null;
+  // Booking Management (Planning Command Center) — booking_status is the
+  // authoritative workflow field; booking_confirmed above is kept in sync
+  // (true iff booking_status === 'confirmed'), same precedent as
+  // shipment_customs.duty_paid vs duty_status. booking_date already
+  // existed on the base table (migration 004) — reused, not duplicated.
+  booking_requested: boolean;
+  booking_status: BookingStatus;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -644,6 +678,14 @@ export interface ShipmentCustoms {
   expected_release_date: string | null;
   expected_exit_date: string | null;
   duty_estimate_approved: boolean;
+  // Customs Planning enrichment (Planning Command Center). Risk Level
+  // reuses inspection_channel; Customs Broker reuses officer — no new
+  // columns for those two.
+  duty_estimate: number | null;
+  inspection_required: boolean;
+  son_required: boolean;
+  nafdac_required: boolean;
+  nesrea_required: boolean;
 }
 
 /**
@@ -699,6 +741,12 @@ export interface TerminalOperation {
   expected_gate_in: string | null;
   expected_gate_out: string | null;
   expected_delivery_order_collection: string | null;
+  // Terminal Planning enrichment (Planning Command Center). Slot Booked
+  // is derived from booking_slot; Storage Free Days reuses free_time_days.
+  expected_arrival_date: string | null;
+  terminal_booking_required: boolean;
+  release_order_needed: boolean;
+  expected_pickup_date: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -749,6 +797,14 @@ export interface ShipmentTransportation {
   escort_required: boolean;
   expected_pickup_date: string | null;
   expected_delivery_date: string | null;
+  // Transport Planning enrichment (Planning Command Center).
+  truck_type: string | null;
+  route: string | null;
+  estimated_distance_km: number | null;
+  fuel_estimate: number | null;
+  estimated_transport_cost: number | null;
+  delivery_contact_name: string | null;
+  delivery_contact_phone: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -1044,6 +1100,11 @@ export interface ShipmentPlan {
   goods_value: number | null;
   goods_value_currency: string;
   insurance_required: boolean;
+  // Smart Automation suggestion engine (Planning Command Center) —
+  // shipment_plans never had this concept before; copied from the
+  // shipment at plan-load time.
+  dangerous_cargo: boolean;
+  temperature_controlled: boolean;
   special_instructions: string | null;
   total_packages: number | null;
   total_weight: number | null;
@@ -1122,10 +1183,78 @@ export interface PlanTask {
   due_date: string | null;
   status: PlanTaskStatus;
   priority: PriorityLevel;
+  // Auto-generation support (Planning Command Center), mirrors
+  // shipment_tasks.template_id.
+  template_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   assigned_user?: Profile | null;
+}
+
+/**
+ * Documentation Planning checklist (Planning Command Center). Tracks
+ * document readiness BEFORE a real file exists — a `documents` row only
+ * ever appears once something is uploaded, so "Not Received" lives here
+ * instead, optionally linking to a real `documents` row once one is.
+ */
+export interface PlanDocumentChecklistItem {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  template_id: string | null;
+  custom_label: string | null;
+  status: ChecklistDocumentStatus;
+  document_number: string | null;
+  document_id: string | null;
+  uploaded_by: string | null;
+  upload_date: string | null;
+  remarks: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  template?: DocumentTemplate | null;
+  uploaded_by_user?: Profile | null;
+}
+
+/**
+ * Internal Department Assignment workload record (Planning Command
+ * Center) — one row per (shipment, role), independent status/dates per
+ * assignment. Replaces writing straight to shipment_stages.assigned_to;
+ * the 4 roles with a matching stage are still synced there too so the
+ * shipment's Workflow tab stays consistent.
+ */
+export interface PlanAssignment {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  role: PlanAssignmentRole;
+  assigned_to: string | null;
+  assigned_date: string | null;
+  due_date: string | null;
+  status: PlanAssignmentStatus;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_user?: Profile | null;
+}
+
+/** Financial Planning line item (Planning Command Center) — one row per
+ *  cost category, per shipment. */
+export interface PlanCostEstimate {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  category: PlanCostCategory;
+  estimated_amount: number;
+  currency: string;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ============================================================

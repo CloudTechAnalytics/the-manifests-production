@@ -2,14 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Pencil } from 'lucide-react';
+import { AlertTriangle, Download, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { formatDate } from '@/lib/utils/status';
+import { BOOKING_STATUS_META, formatDate } from '@/lib/utils/status';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShipmentDocumentationDialog } from '@/components/shipments/shipment-documentation-dialog';
-import type { Shipment } from '@/types';
+import { ShipmentDocumentationDialog, VESSEL_LABELS } from '@/components/shipments/shipment-documentation-dialog';
+import type { Shipment, ShipmentType } from '@/types';
+
+const CARD_TITLES: Partial<Record<ShipmentType, string>> = {
+  sea: 'Vessel Planning',
+  air: 'Flight Planning',
+  rail: 'Rail Planning',
+  road: 'Booking',
+  multimodal: 'Vessel Planning',
+};
 
 interface InfoRowProps {
   label: string;
@@ -75,31 +83,52 @@ export function VesselPlanningCard({ shipment, onChanged }: VesselPlanningCardPr
     }
   };
 
+  const isRoad = shipment.shipment_type === 'road';
+  const labels = (shipment.shipment_type && VESSEL_LABELS[shipment.shipment_type]) || VESSEL_LABELS.sea!;
+  const bookingStatus = shipment.booking_status ?? 'pending';
+  const bookingMeta = BOOKING_STATUS_META[bookingStatus] ?? { label: bookingStatus, color: 'bg-muted text-muted-foreground' };
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-base font-semibold">Vessel Planning</CardTitle>
+        <CardTitle className="text-base font-semibold">
+          {(shipment.shipment_type && CARD_TITLES[shipment.shipment_type]) || 'Vessel Planning'}
+        </CardTitle>
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setDialogOpen(true)}>
           <Pencil className="h-3.5 w-3.5" />
           Edit
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
+        {bookingStatus !== 'confirmed' && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Booking has not yet been confirmed ({bookingMeta.label}). Planning cannot be completed until
+              booking is confirmed.
+            </span>
+          </div>
+        )}
+        {!isRoad && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <InfoRow label={labels.vessel} value={shipment.vessel_name || '—'} />
+            <InfoRow label={labels.voyage} value={shipment.voyage_number || '—'} />
+            <InfoRow label={labels.carrier} value={shipment.carrier || '—'} />
+            <InfoRow label="Est. Departure" value={formatDate(shipment.estimated_departure)} />
+            <InfoRow label="Est. Arrival" value={formatDate(shipment.estimated_arrival)} />
+            <InfoRow label={labels.pol} value={shipment.port_of_loading || '—'} />
+            <InfoRow label={labels.pod} value={shipment.port_of_discharge || '—'} />
+            <InfoRow label="Transshipment Port" value={shipment.transshipment_port || '—'} />
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <InfoRow label="Vessel" value={shipment.vessel_name || '—'} />
-          <InfoRow label="Voyage Number" value={shipment.voyage_number || '—'} />
-          <InfoRow label="Shipping Line" value={shipment.carrier || '—'} />
-          <InfoRow label="Est. Departure" value={formatDate(shipment.estimated_departure)} />
-          <InfoRow label="Est. Arrival" value={formatDate(shipment.estimated_arrival)} />
-          <InfoRow label="Port of Loading" value={shipment.port_of_loading || '—'} />
-          <InfoRow label="Port of Discharge" value={shipment.port_of_discharge || '—'} />
-          <InfoRow label="Transshipment Port" value={shipment.transshipment_port || '—'} />
           <InfoRow label="Booking Reference" value={shipment.booking_reference || '—'} />
+          <InfoRow label="Booking Date" value={formatDate(shipment.booking_date)} />
           <InfoRow
-            label="Booking Confirmed"
+            label="Booking Status"
             value={
-              <Badge variant="secondary" className={shipment.booking_confirmed ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}>
-                {shipment.booking_confirmed ? 'Yes' : 'No'}
+              <Badge variant="secondary" className={bookingMeta.color}>
+                {bookingMeta.label}
               </Badge>
             }
           />

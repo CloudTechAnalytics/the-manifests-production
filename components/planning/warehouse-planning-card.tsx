@@ -62,12 +62,16 @@ export function WarehousePlanningCard({ shipmentId, branchId, record, onChanged 
     if (!profile) return;
     setMarkingRequired(true);
     try {
-      const { error } = await supabase.from('shipment_warehouse_records').insert({
-        shipment_id: shipmentId,
-        branch_id: branchId,
-        status: 'awaiting_arrival',
-        created_by: profile.id,
-      });
+      const { data: created, error } = await supabase
+        .from('shipment_warehouse_records')
+        .insert({
+          shipment_id: shipmentId,
+          branch_id: branchId,
+          status: 'awaiting_arrival',
+          created_by: profile.id,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
 
       await supabase.from('activities').insert({
@@ -75,7 +79,9 @@ export function WarehousePlanningCard({ shipmentId, branchId, record, onChanged 
         branch_id: branchId,
         action: 'warehouse_record.created',
         entity_type: 'shipment_warehouse_record',
+        entity_id: (created as { id: string } | null)?.id ?? null,
         description: 'Marked warehousing as required for this shipment',
+        metadata: { shipment_id: shipmentId },
       });
       toast.success('Warehousing marked as required');
       onChanged();
@@ -206,6 +212,7 @@ function WarehousePlanningDialog({
         entity_type: 'shipment_warehouse_record',
         entity_id: existing.id,
         description: 'Updated warehouse planning details',
+        metadata: { shipment_id: existing.shipment_id },
       });
 
       toast.success('Warehouse plan updated');

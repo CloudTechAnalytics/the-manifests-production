@@ -73,6 +73,13 @@ export function TransportationFormDialog({
   const [escortRequired, setEscortRequired] = useState(false);
   const [expectedPickupDate, setExpectedPickupDate] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
+  const [truckType, setTruckType] = useState('');
+  const [route, setRoute] = useState('');
+  const [estimatedDistanceKm, setEstimatedDistanceKm] = useState('');
+  const [fuelEstimate, setFuelEstimate] = useState('');
+  const [estimatedTransportCost, setEstimatedTransportCost] = useState('');
+  const [deliveryContactName, setDeliveryContactName] = useState('');
+  const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [blockers, setBlockers] = useState<string[]>([]);
@@ -95,6 +102,15 @@ export function TransportationFormDialog({
     setEscortRequired(existing?.escort_required ?? false);
     setExpectedPickupDate(existing?.expected_pickup_date ?? '');
     setExpectedDeliveryDate(existing?.expected_delivery_date ?? '');
+    setTruckType(existing?.truck_type ?? '');
+    setRoute(existing?.route ?? '');
+    setEstimatedDistanceKm(existing?.estimated_distance_km != null ? String(existing.estimated_distance_km) : '');
+    setFuelEstimate(existing?.fuel_estimate != null ? String(existing.fuel_estimate) : '');
+    setEstimatedTransportCost(
+      existing?.estimated_transport_cost != null ? String(existing.estimated_transport_cost) : ''
+    );
+    setDeliveryContactName(existing?.delivery_contact_name ?? '');
+    setDeliveryContactPhone(existing?.delivery_contact_phone ?? '');
     setBlockers([]);
   }, [open, existing]);
 
@@ -132,6 +148,13 @@ export function TransportationFormDialog({
         escort_required: escortRequired,
         expected_pickup_date: expectedPickupDate || null,
         expected_delivery_date: expectedDeliveryDate || null,
+        truck_type: truckType.trim() || null,
+        route: route.trim() || null,
+        estimated_distance_km: estimatedDistanceKm ? Number(estimatedDistanceKm) : null,
+        fuel_estimate: fuelEstimate ? Number(fuelEstimate) : null,
+        estimated_transport_cost: estimatedTransportCost ? Number(estimatedTransportCost) : null,
+        delivery_contact_name: deliveryContactName.trim() || null,
+        delivery_contact_phone: deliveryContactPhone.trim() || null,
         updated_by: profile.id,
       };
 
@@ -149,6 +172,7 @@ export function TransportationFormDialog({
           entity_type: 'shipment_transportation',
           entity_id: existing.id,
           description: `Updated transportation leg (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Transportation leg updated');
       } else {
@@ -166,6 +190,7 @@ export function TransportationFormDialog({
           entity_type: 'shipment_transportation',
           entity_id: created?.id,
           description: `Created transportation leg (status: ${status})`,
+          metadata: { shipment_id: shipmentId },
         });
         toast.success('Transportation leg created');
       }
@@ -276,7 +301,7 @@ export function TransportationFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="trf-truck">Truck</Label>
               <Input id="trf-truck" value={truckNumber} onChange={(e) => setTruckNumber(e.target.value)} />
@@ -284,6 +309,75 @@ export function TransportationFormDialog({
             <div className="space-y-1.5">
               <Label htmlFor="trf-trailer">Trailer</Label>
               <Input id="trf-trailer" value={trailerNumber} onChange={(e) => setTrailerNumber(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-truck-type">Truck Type</Label>
+              <Input
+                id="trf-truck-type"
+                value={truckType}
+                onChange={(e) => setTruckType(e.target.value)}
+                placeholder="Flatbed, Container, Tanker…"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="trf-route">Route</Label>
+            <Input id="trf-route" value={route} onChange={(e) => setRoute(e.target.value)} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-distance">Estimated Distance (km)</Label>
+              <Input
+                id="trf-distance"
+                type="number"
+                min="0"
+                step="0.1"
+                value={estimatedDistanceKm}
+                onChange={(e) => setEstimatedDistanceKm(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-fuel">Fuel Estimate</Label>
+              <Input
+                id="trf-fuel"
+                type="number"
+                min="0"
+                step="0.01"
+                value={fuelEstimate}
+                onChange={(e) => setFuelEstimate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-cost">Estimated Transport Cost</Label>
+              <Input
+                id="trf-cost"
+                type="number"
+                min="0"
+                step="0.01"
+                value={estimatedTransportCost}
+                onChange={(e) => setEstimatedTransportCost(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-delivery-contact">Delivery Contact Name</Label>
+              <Input
+                id="trf-delivery-contact"
+                value={deliveryContactName}
+                onChange={(e) => setDeliveryContactName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trf-delivery-contact-phone">Delivery Contact Phone</Label>
+              <Input
+                id="trf-delivery-contact-phone"
+                value={deliveryContactPhone}
+                onChange={(e) => setDeliveryContactPhone(e.target.value)}
+              />
             </div>
           </div>
 
