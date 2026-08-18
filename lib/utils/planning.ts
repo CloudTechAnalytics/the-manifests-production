@@ -5,14 +5,24 @@ import type {
   ShipmentCustoms,
   TerminalOperation,
   ShipmentTransportation,
+  ShipmentStage,
 } from '@/types';
 import type { StageReadiness } from '@/lib/utils/workflow-rules';
 
-export interface PlanningMilestone {
-  key: string;
-  label: string;
-  done: boolean;
-}
+/**
+ * The Planning Centre page's tab keys, defined here (not locally in
+ * page.tsx) because risk/checklist items now carry an `actionTab` that
+ * navigates the user straight to the section that fixes them.
+ */
+export type PlanningTabKey =
+  | 'execution'
+  | 'assignments'
+  | 'documentation'
+  | 'financials'
+  | 'tasks'
+  | 'documents'
+  | 'timeline'
+  | 'notes';
 
 export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -20,7 +30,28 @@ export interface PlanningRisk {
   id: string;
   message: string;
   severity: RiskSeverity;
+  /** When set, the risk banner renders an action button that jumps to `actionTab`. */
+  actionLabel?: string;
+  actionTab?: PlanningTabKey;
 }
+
+/** The 4 department stages every plan needs an officer assigned to. */
+const DEPARTMENT_STAGE_KEYS = ['documentation', 'customs_clearance', 'terminal_operations', 'transportation'] as const;
+
+const DEPARTMENT_ROLE_LABELS: Record<string, string> = {
+  documentation: 'Documentation Officer',
+  customs_clearance: 'Customs Officer',
+  terminal_operations: 'Terminal Officer',
+  transportation: 'Transport Officer',
+};
+
+/** Per-stage SLA target, in hours. No `sla_hours` column exists anywhere
+ *  in the schema — this is a fixed default for the Ownership header's
+ *  "Overdue" flag; a per-branch configurable value would be a natural
+ *  Settings addition later if wanted. */
+export const STAGE_SLA_HOURS: Record<string, number> = {
+  planning: 24,
+};
 
 interface PlanningDataInput {
   shipment: Shipment;
@@ -28,44 +59,18 @@ interface PlanningDataInput {
   customs: ShipmentCustoms | null;
   terminal: TerminalOperation | null;
   transportation: ShipmentTransportation[];
-}
-
-/**
- * Fixed, derived-on-read checklist — no separate stored checklist table.
- * Every item is a plain boolean expression over the same operational
- * tables the Execution Plan sections write to, so it's automatically in
- * sync with zero duplication. "Documents received" is sourced from the
- * Documentation Planning checklist (plan_document_checklist) — every
- * required row Received/Verified — falling back to the upload-backed
- * document checklist if the caller hasn't loaded the former.
- */
-export function computePlanningMilestones(
-  input: PlanningDataInput & { documentsAllSatisfied: boolean }
-): PlanningMilestone[] {
-  const { shipment, customs, terminal, transportation, documentsAllSatisfied } = input;
-
-  return [
-    { key: 'booking_confirmed', label: 'Booking confirmed', done: shipment.booking_status === 'confirmed' },
-    { key: 'vessel_allocated', label: 'Vessel allocated', done: !!shipment.vessel_name },
-    { key: 'truck_allocated', label: 'Truck allocated', done: transportation.some((t) => !!t.truck_number) },
-    { key: 'driver_assigned', label: 'Driver assigned', done: transportation.some((t) => !!t.driver_name) },
-    { key: 'documents_received', label: 'Documents received', done: documentsAllSatisfied },
-    { key: 'form_m_available', label: 'Form M available', done: !!customs?.form_m_number },
-    { key: 'paar_expected', label: 'PAAR expected', done: !!customs?.expected_paar_date },
-    { key: 'duty_estimate_approved', label: 'Duty estimate approved', done: customs?.duty_estimate_approved === true },
-    { key: 'terminal_slot_booked', label: 'Terminal slot booked', done: !!terminal?.booking_slot },
-    {
-      key: 'delivery_schedule_agreed',
-      label: 'Delivery schedule agreed',
-      done: transportation.some((t) => !!t.expected_delivery_date),
-    },
-  ];
+  /** Optional — only risks/checklist items that need per-role assignment
+   *  status (officer-missing risks, "Officers Assigned") use this. */
+  stages?: ShipmentStage[];
 }
 
 /**
  * Automated risk warnings — same derived-at-read-time convention as
  * DemurrageAlert / computeExposureAccrual / isInvoiceOverdue: no stored
  * "at risk" flag, no scheduled job, recomputed fresh on every render.
+ * Every risk now carries an optional action (label + tab) so the risk
+ * banner can render a "Confirm Booking →"-style button that navigates
+ * straight to the fix, instead of being purely informational text.
  *
  * "Container already planned elsewhere" (a container_number reused on a
  * different open shipment) needs a cross-shipment query and is
@@ -74,7 +79,7 @@ export function computePlanningMilestones(
 export function computePlanningRisks(
   input: PlanningDataInput & { hasExamination?: boolean }
 ): PlanningRisk[] {
-  const { shipment, customs, terminal, transportation, hasExamination } = input;
+  const { shipment, customs, terminal, transportation, stages, hasExamination } = input;
   const risks: PlanningRisk[] = [];
   const today = new Date().toISOString().split('T')[0];
 
@@ -85,36 +90,78 @@ export function computePlanningRisks(
   };
 
   if (shipment.booking_status !== 'confirmed' && soonOrPast(shipment.estimated_departure, 7)) {
-    risks.push({ id: 'booking-not-confirmed', message: 'Booking not confirmed.', severity: 'high' });
+    risks.push({
+      id: 'booking-not-confirmed',
+      message: 'Booking not confirmed.',
+      severity: 'high',
+      actionLabel: 'Confirm Booking',
+      actionTab: 'execution',
+    });
   }
 
   if (customs?.expected_paar_date && shipment.estimated_arrival && customs.expected_paar_date > shipment.estimated_arrival) {
-    risks.push({ id: 'paar-after-arrival', message: 'PAAR expected after vessel arrival.', severity: 'medium' });
+    risks.push({
+      id: 'paar-after-arrival',
+      message: 'PAAR expected after vessel arrival.',
+      severity: 'medium',
+      actionLabel: 'Review Customs Timeline',
+      actionTab: 'execution',
+    });
   }
 
   const hasTruck = transportation.some((t) => !!t.truck_number);
   const pickupSoon = transportation.some((t) => soonOrPast(t.expected_pickup_date, 3));
   if (!hasTruck && pickupSoon) {
-    risks.push({ id: 'truck-not-assigned', message: 'Truck not assigned.', severity: 'medium' });
+    risks.push({
+      id: 'truck-not-assigned',
+      message: 'Truck not assigned.',
+      severity: 'medium',
+      actionLabel: 'Assign Transport',
+      actionTab: 'execution',
+    });
   }
 
   const deliveryBeforeEta = transportation.some(
     (t) => t.expected_delivery_date && shipment.estimated_arrival && t.expected_delivery_date < shipment.estimated_arrival
   );
   if (deliveryBeforeEta) {
-    risks.push({ id: 'delivery-before-eta', message: 'Delivery date earlier than vessel ETA.', severity: 'critical' });
+    risks.push({
+      id: 'delivery-before-eta',
+      message: 'Delivery date earlier than vessel ETA.',
+      severity: 'critical',
+      actionLabel: 'Review Transport Plan',
+      actionTab: 'execution',
+    });
   }
 
   if (customs?.expected_duty_payment_date && customs.expected_duty_payment_date < today && !customs.duty_paid) {
-    risks.push({ id: 'duty-deadline-exceeded', message: 'Duty payment deadline exceeded.', severity: 'critical' });
+    risks.push({
+      id: 'duty-deadline-exceeded',
+      message: 'Duty payment deadline exceeded.',
+      severity: 'critical',
+      actionLabel: 'Review Customs Timeline',
+      actionTab: 'execution',
+    });
   }
 
   if (!terminal?.booking_slot) {
-    risks.push({ id: 'no-terminal-slot', message: 'No terminal slot booked.', severity: 'medium' });
+    risks.push({
+      id: 'no-terminal-slot',
+      message: 'Terminal slot has not been planned.',
+      severity: 'medium',
+      actionLabel: 'Plan Terminal Slot',
+      actionTab: 'execution',
+    });
   }
 
   if (soonOrPast(shipment.estimated_arrival, 2) && !soonOrPast(shipment.estimated_arrival, -1)) {
-    risks.push({ id: 'container-arriving-soon', message: 'Container arriving in 2 days.', severity: 'medium' });
+    risks.push({
+      id: 'container-arriving-soon',
+      message: 'Container arriving in 2 days.',
+      severity: 'medium',
+      actionLabel: 'Review Container Details',
+      actionTab: 'execution',
+    });
   }
 
   const demurrageRisk = computeDemurrageRisk(terminal?.free_time_expiry ?? null);
@@ -126,11 +173,37 @@ export function computePlanningRisks(
           ? 'Storage free days have been exhausted — demurrage is accruing.'
           : 'Storage free days are almost exhausted.',
       severity: demurrageRisk === 'red' ? 'critical' : 'high',
+      actionLabel: 'Review Terminal Planning',
+      actionTab: 'execution',
     });
   }
 
   if (customs?.inspection_required && hasExamination === false) {
-    risks.push({ id: 'inspection-pending', message: 'Inspection pending.', severity: 'medium' });
+    risks.push({
+      id: 'inspection-pending',
+      message: 'Inspection pending.',
+      severity: 'medium',
+      actionLabel: 'Review Customs Planning',
+      actionTab: 'execution',
+    });
+  }
+
+  // Internal Department Assignment — one risk per unassigned role. This
+  // is new: officer gaps were previously only a Complete-Planning
+  // blocker, never a visible risk.
+  if (stages) {
+    for (const stageKey of DEPARTMENT_STAGE_KEYS) {
+      const stage = stages.find((s) => s.stage_key === stageKey);
+      if (!stage?.assigned_to) {
+        risks.push({
+          id: `officer-missing-${stageKey}`,
+          message: `${DEPARTMENT_ROLE_LABELS[stageKey]} has not been assigned.`,
+          severity: 'medium',
+          actionLabel: 'Assign Officer',
+          actionTab: 'assignments',
+        });
+      }
+    }
   }
 
   return risks;
@@ -162,95 +235,239 @@ export function computeDemurrageRisk(freeTimeExpiry: string | null): 'green' | '
   return 'green';
 }
 
+// ============================================================
+// PLANNING CHECKLIST — the single source of truth for the checklist
+// UI, the weighted completion %, and the Complete Planning gate.
+// ============================================================
+
+export interface PlanningChecklistItem {
+  key: string;
+  label: string;
+  /** Percentage points this item contributes when done — sums to 100
+   *  across the full list. */
+  weight: number;
+  done: boolean;
+  /** Required for the Complete Planning gate. "Vessel Assigned" is the
+   *  one non-mandatory item — informative, but not itself a blocker. */
+  mandatory: boolean;
+  tabKey: PlanningTabKey;
+}
+
+interface PlanningChecklistInput {
+  shipment: Pick<Shipment, 'shipment_type' | 'booking_status' | 'vessel_name' | 'required_documents'>;
+  containerCount: number;
+  transportation: Pick<ShipmentTransportation, 'pickup_address' | 'truck_number' | 'expected_pickup_date'>[];
+  customs: Pick<
+    ShipmentCustoms,
+    | 'expected_paar_date'
+    | 'expected_declaration_date'
+    | 'expected_duty_payment_date'
+    | 'expected_examination_date'
+    | 'expected_release_date'
+    | 'expected_exit_date'
+  > | null;
+  terminal: Pick<TerminalOperation, 'booking_slot'> | null;
+  stages: Pick<ShipmentStage, 'stage_key' | 'assigned_to'>[];
+}
+
+/**
+ * The canonical 8-item Planning Checklist (spec sections 1+2+11
+ * reconciled into one list — see the plan file for how the two
+ * slightly-different example lists were merged). Pure and synchronous:
+ * driven entirely by data the Planning Centre page already has loaded,
+ * so the checklist/%/gate are always instantly in sync with what's on
+ * screen, no separate round trip.
+ */
+export function buildPlanningChecklist(input: PlanningChecklistInput): PlanningChecklistItem[] {
+  const { shipment, containerCount, transportation, customs, terminal, stages } = input;
+
+  const officersAssigned = DEPARTMENT_STAGE_KEYS.every((key) =>
+    stages.some((s) => s.stage_key === key && !!s.assigned_to)
+  );
+
+  const hasCustomsTimeline =
+    !!customs &&
+    (!!customs.expected_paar_date ||
+      !!customs.expected_declaration_date ||
+      !!customs.expected_duty_payment_date ||
+      !!customs.expected_examination_date ||
+      !!customs.expected_release_date ||
+      !!customs.expected_exit_date);
+
+  const transportPlanCreated = transportation.some(
+    (t) => !!t.pickup_address || !!t.truck_number || !!t.expected_pickup_date
+  );
+
+  return [
+    {
+      key: 'booking_confirmed',
+      label: 'Booking Confirmed',
+      weight: 20,
+      mandatory: true,
+      tabKey: 'execution',
+      done: shipment.booking_status === 'confirmed',
+    },
+    {
+      key: 'vessel_assigned',
+      label: 'Vessel Assigned',
+      weight: 10,
+      mandatory: false,
+      tabKey: 'execution',
+      // Road shipments have no vessel concept — auto-satisfied.
+      done: shipment.shipment_type === 'road' ? true : !!shipment.vessel_name,
+    },
+    {
+      key: 'container_added',
+      label: 'Container Added',
+      weight: 15,
+      mandatory: true,
+      tabKey: 'execution',
+      done: containerCount > 0,
+    },
+    {
+      key: 'transport_plan_created',
+      label: 'Transport Plan Created',
+      weight: 10,
+      mandatory: true,
+      tabKey: 'execution',
+      done: transportPlanCreated,
+    },
+    {
+      key: 'officers_assigned',
+      label: 'Officers Assigned',
+      weight: 10,
+      mandatory: true,
+      tabKey: 'assignments',
+      done: officersAssigned,
+    },
+    {
+      key: 'required_documents_identified',
+      label: 'Required Documents Identified',
+      weight: 10,
+      mandatory: true,
+      tabKey: 'documentation',
+      done: (shipment.required_documents?.length ?? 0) > 0,
+    },
+    {
+      key: 'customs_timeline_planned',
+      label: 'Customs Timeline Planned',
+      weight: 15,
+      mandatory: true,
+      tabKey: 'execution',
+      done: hasCustomsTimeline,
+    },
+    {
+      key: 'terminal_slot_planned',
+      label: 'Terminal Slot Planned',
+      weight: 10,
+      mandatory: true,
+      tabKey: 'execution',
+      done: !!terminal?.booking_slot,
+    },
+  ];
+}
+
+/** Rolls a checklist up into the "{doneCount}/{totalCount}" counter and
+ *  the weighted percent shown on the progress bar. */
+export function summarizeChecklist(items: PlanningChecklistItem[]): {
+  doneCount: number;
+  totalCount: number;
+  percent: number;
+} {
+  const doneCount = items.filter((i) => i.done).length;
+  const percent = items.reduce((sum, i) => sum + (i.done ? i.weight : 0), 0);
+  return { doneCount, totalCount: items.length, percent };
+}
+
 /**
  * Client-side "Complete Planning" gate — plugged into
- * lib/utils/workflow-rules.ts's STAGE_VALIDATORS as the `planning` entry.
- * Returns completionPercent alongside the standard ready/blockers shape
- * (a strict superset of StageReadiness — safe to use anywhere a
- * StageReadiness is expected, per TypeScript's covariant return typing).
+ * lib/utils/workflow-rules.ts's STAGE_VALIDATORS as the `planning` entry
+ * (also called from the shipment's own Workflow tab, which has no
+ * preloaded Planning-page state, so this stays async/self-fetching).
+ * Builds the exact same checklist + risks the page displays, so the
+ * gate can never disagree with what's on screen — it's a fresh-fetch
+ * safety net, not a separately-maintained set of rules.
  */
 export interface PlanningReadiness extends StageReadiness {
   completionPercent: number;
 }
 
 export async function checkPlanningReadiness(shipmentId: string): Promise<PlanningReadiness> {
-  const blockers: string[] = [];
-  const checks: boolean[] = [];
-
   const [
     { data: shipment },
+    { count: containerCount },
     { data: stages },
     { data: transportation },
     { data: customs },
     { data: terminal },
-    { data: checklist },
   ] = await Promise.all([
-    supabase.from('shipments').select('vessel_name, booking_status').eq('id', shipmentId).maybeSingle(),
+    supabase
+      .from('shipments')
+      .select('shipment_type, booking_status, vessel_name, required_documents, estimated_departure, estimated_arrival')
+      .eq('id', shipmentId)
+      .maybeSingle(),
+    supabase
+      .from('shipment_containers')
+      .select('id', { count: 'exact', head: true })
+      .eq('shipment_id', shipmentId)
+      .is('deleted_at', null),
     supabase
       .from('shipment_stages')
       .select('stage_key, assigned_to')
       .eq('shipment_id', shipmentId)
-      .in('stage_key', ['documentation', 'customs_clearance', 'terminal_operations', 'transportation']),
+      .in('stage_key', DEPARTMENT_STAGE_KEYS as unknown as string[]),
     supabase
       .from('shipment_transportation')
-      .select('truck_number, driver_name')
+      .select('pickup_address, truck_number, expected_pickup_date, expected_delivery_date')
       .eq('shipment_id', shipmentId)
       .is('deleted_at', null),
     supabase
       .from('shipment_customs')
       .select(
-        'expected_paar_date, expected_declaration_date, expected_duty_payment_date, expected_examination_date, expected_release_date, expected_exit_date'
+        'expected_paar_date, expected_declaration_date, expected_duty_payment_date, expected_examination_date, expected_release_date, expected_exit_date, inspection_required, duty_paid'
       )
       .eq('shipment_id', shipmentId)
       .maybeSingle(),
-    supabase.from('terminal_operations').select('booking_slot').eq('shipment_id', shipmentId).maybeSingle(),
-    supabase.from('plan_document_checklist').select('status').eq('shipment_id', shipmentId),
+    supabase.from('terminal_operations').select('booking_slot, free_time_expiry').eq('shipment_id', shipmentId).maybeSingle(),
   ]);
 
-  const pushCheck = (satisfied: boolean, blockerMessage: string) => {
-    checks.push(satisfied);
-    if (!satisfied) blockers.push(blockerMessage);
-  };
-
-  pushCheck(!!shipment?.vessel_name, 'Select a vessel before completing planning.');
-  pushCheck(shipment?.booking_status === 'confirmed', 'Confirm the booking before completing planning.');
-
-  const roleLabels: Record<string, string> = {
-    documentation: 'Documentation Officer',
-    customs_clearance: 'Customs Officer',
-    terminal_operations: 'Terminal Officer',
-    transportation: 'Transport Officer',
-  };
-  for (const [stageKey, label] of Object.entries(roleLabels)) {
-    const stage = (stages ?? []).find((s) => s.stage_key === stageKey);
-    pushCheck(!!stage?.assigned_to, `Assign a ${label} before completing planning.`);
+  if (!shipment) {
+    return { ready: false, blockers: ['Shipment not found.'], completionPercent: 0 };
   }
 
-  pushCheck(
-    (transportation ?? []).some((t) => !!t.truck_number || !!t.driver_name),
-    'Assign a truck or driver before completing planning.'
-  );
+  const stageRows = stages ?? [];
+  const transportRows = transportation ?? [];
 
-  const hasCustomsTimeline =
-    !!customs &&
-    (customs.expected_paar_date ||
-      customs.expected_declaration_date ||
-      customs.expected_duty_payment_date ||
-      customs.expected_examination_date ||
-      customs.expected_release_date ||
-      customs.expected_exit_date);
-  pushCheck(!!hasCustomsTimeline, 'Set at least one customs deadline before completing planning.');
+  const checklist = buildPlanningChecklist({
+    shipment,
+    containerCount: containerCount ?? 0,
+    transportation: transportRows,
+    customs: customs ?? null,
+    terminal: terminal ?? null,
+    stages: stageRows,
+  });
 
-  pushCheck(!!terminal?.booking_slot, 'Book a terminal slot before completing planning.');
+  const risks = computePlanningRisks({
+    shipment: shipment as Shipment,
+    containers: [],
+    customs: customs as ShipmentCustoms | null,
+    terminal: terminal as TerminalOperation | null,
+    transportation: transportRows as ShipmentTransportation[],
+    stages: stageRows as ShipmentStage[],
+  });
 
-  const checklistRows = checklist ?? [];
-  const documentsReady =
-    checklistRows.length === 0 || checklistRows.every((c) => c.status === 'received' || c.status === 'verified');
-  pushCheck(documentsReady, 'Mark all required documents as received before completing planning.');
+  const blockers: string[] = checklist
+    .filter((item) => item.mandatory && !item.done)
+    .map((item) => `${item.label} — not yet done.`);
 
-  const completionPercent = checks.length === 0 ? 100 : Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  const criticalRisks = risks.filter((r) => r.severity === 'critical');
+  for (const risk of criticalRisks) {
+    blockers.push(`Blocked by risk: ${risk.message}`);
+  }
 
-  return { ready: blockers.length === 0, blockers, completionPercent };
+  const { percent } = summarizeChecklist(checklist);
+
+  return { ready: blockers.length === 0, blockers, completionPercent: percent };
 }
 
 /**
