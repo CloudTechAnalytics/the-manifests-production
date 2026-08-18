@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { getErrorMessage, cn } from '@/lib/utils';
-import { formatDate, formatCurrency } from '@/lib/utils/status';
+import { formatDate, formatCurrency, ORGANIZATION_STATUS_META, ORGANIZATION_ORIGIN_META } from '@/lib/utils/status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,7 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Organization, Plan, BillingCycle } from '@/types';
+import type { Organization, OrganizationOrigin, Plan, BillingCycle } from '@/types';
 
 // A new org starts on a 14-day trial, matching how the Subscriptions page
 // treats a fresh assignment.
@@ -100,6 +100,11 @@ export default function PlatformOrganizationsPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof OrgForm, string>>>({});
   const [createPlanId, setCreatePlanId] = useState('');
   const [createCycle, setCreateCycle] = useState<BillingCycle>('monthly');
+  // Never 'self_service' here — this dialog is the assisted/administrative
+  // path (spec section 24); self-service registration is exclusively
+  // /register. Demo/Internal keep those workspaces clearly distinguished
+  // from real customers on this table (spec section 25).
+  const [createOrigin, setCreateOrigin] = useState<Exclude<OrganizationOrigin, 'self_service'>>('platform_admin');
   const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<Organization | null>(null);
@@ -183,6 +188,8 @@ export default function PlatformOrganizationsPage() {
           email: form.email.trim() || null,
           created_by: profile.id,
           is_active: true,
+          status: 'active_trial',
+          origin: createOrigin,
         })
         .select()
         .single();
@@ -190,13 +197,24 @@ export default function PlatformOrganizationsPage() {
       if (error) throw error;
       const newOrg = data as Organization;
 
+      // Auto-provision the Head Office branch + default departments —
+      // closes the gap where an admin-created org previously had neither
+      // (migration 064's provision_branch_and_departments). Not fatal if
+      // it fails; the org still exists and this is retryable/idempotent.
+      const { error: provisionError } = await supabase.rpc('provision_branch_and_departments', {
+        p_org_id: newOrg.id,
+      });
+      if (provisionError) {
+        console.error('provision_branch_and_departments error:', provisionError.message);
+      }
+
       await supabase.from('activities').insert({
         user_id: profile.id,
         organization_id: newOrg.id,
         action: 'organization.created',
         entity_type: 'organization',
         entity_id: newOrg.id,
-        description: `Created organization "${newOrg.name}"`,
+        description: `Created organization "${newOrg.name}" (${createOrigin})`,
       });
 
       if (createPlanId === TRIAL_ONLY) {
@@ -307,9 +325,24 @@ export default function PlatformOrganizationsPage() {
     setToggling(true);
     try {
       const newState = !toggleTarget.is_active;
+      let newStatus: Organization['status'] = 'suspended';
+      if (newState) {
+        // Reactivating: recompute status from the subscription, rather
+        // than guessing — a suspended trial should come back as a trial,
+        // not silently become a paid "active" org.
+        const { data: sub } = await supabase
+          .from('org_subscriptions')
+          .select('status')
+          .eq('organization_id', toggleTarget.id)
+          .maybeSingle();
+        newStatus =
+          sub?.status === 'trial' ? 'active_trial' :
+          sub?.status === 'cancelled' ? 'cancelled' :
+          'active_subscription';
+      }
       const { error } = await supabase
         .from('organizations')
-        .update({ is_active: newState })
+        .update({ is_active: newState, status: newStatus })
         .eq('id', toggleTarget.id);
       if (error) throw error;
 
@@ -414,6 +447,7 @@ export default function PlatformOrganizationsPage() {
                 <TableRow>
                   <TableHead>Organization</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="w-10" />
@@ -442,14 +476,13 @@ export default function PlatformOrganizationsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={cn(
-                          org.is_active
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-red-50 text-red-700'
-                        )}
-                      >
-                        {org.is_active ? 'Active' : 'Suspended'}
+                      <Badge className={cn(ORGANIZATION_ORIGIN_META[org.origin]?.color)}>
+                        {ORGANIZATION_ORIGIN_META[org.origin]?.label ?? org.origin}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
+                        {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -509,6 +542,7 @@ export default function PlatformOrganizationsPage() {
             setForm(EMPTY_FORM);
             setSlugTouched(false);
             setErrors({});
+            setCreateOrigin('platform_admin');
           }
         }}
       >
@@ -591,6 +625,24 @@ export default function PlatformOrganizationsPage() {
                 />
                 {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="org-origin">Organization Type</Label>
+              <Select value={createOrigin} onValueChange={(v) => setCreateOrigin(v as typeof createOrigin)}>
+                <SelectTrigger id="org-origin">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="platform_admin">Assisted Onboarding (real customer)</SelectItem>
+                  <SelectItem value="demo">Demo</SelectItem>
+                  <SelectItem value="internal">Internal</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Normal customers should use self-service registration at /register. Use this for enterprise,
+                assisted, demo, or internal workspaces.
+              </p>
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">

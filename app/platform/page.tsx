@@ -10,6 +10,8 @@ import {
   TrendingUp,
   DollarSign,
   Hourglass,
+  AlertTriangle,
+  UserCheck,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { usePlatformDashboardData } from '@/hooks/use-platform-dashboard-data';
@@ -75,11 +77,25 @@ export default function PlatformDashboardPage() {
       color: 'bg-amber-50 text-amber-600',
     },
     {
+      label: 'Expired Trials',
+      value: stats.expiredTrialCount,
+      icon: AlertTriangle,
+      href: '/platform/subscriptions',
+      color: 'bg-orange-50 text-orange-600',
+    },
+    {
       label: 'Total Users',
       value: stats.totalUsers,
       icon: Users,
       href: '/platform/organization-users',
       color: 'bg-primary/10 text-primary',
+    },
+    {
+      label: 'Active Users',
+      value: stats.activeUsers,
+      icon: UserCheck,
+      href: '/platform/organization-users',
+      color: 'bg-emerald-50 text-emerald-600',
     },
   ];
 

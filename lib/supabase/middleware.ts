@@ -4,8 +4,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 // '/' is the marketing landing page, shown to every visitor regardless of
 // session (app/page.tsx no longer redirects an authenticated user away).
 // '/track' is the no-login shipment tracker customers use directly.
+// '/register' and '/verify-email' back self-service signup — same
+// treatment as '/accept-invite', reachable with no session by design.
 // Everything else requires a session.
-const PUBLIC_PATHS = ['/', '/login', '/accept-invite', '/track'];
+const PUBLIC_PATHS = ['/', '/login', '/accept-invite', '/track', '/register', '/verify-email', '/terms', '/privacy'];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

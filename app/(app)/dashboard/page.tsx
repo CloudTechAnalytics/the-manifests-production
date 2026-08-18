@@ -32,6 +32,7 @@ import { FinanceSummary } from '@/components/dashboard/finance-summary';
 import { PlanningOverview } from '@/components/dashboard/planning-overview';
 import { WarehouseSummary } from '@/components/warehouse/warehouse-summary';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
+import { TrialStatusBanner } from '@/components/dashboard/trial-status-banner';
 
 export default function DashboardPage() {
   const { profile, hasRole } = useAuth();
@@ -142,6 +143,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 p-6 lg:p-8">
+      <TrialStatusBanner organizationId={profile?.organization_id} />
+
       {/* Greeting + quick actions. Global search now lives in the top bar. */}
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-6">
         <div className="shrink-0">

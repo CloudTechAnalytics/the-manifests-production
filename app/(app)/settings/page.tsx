@@ -76,6 +76,7 @@ import { cn, getErrorMessage } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/status';
 import { useTheme } from '@/contexts/theme-context';
 import { WebhookSettingsPanel } from '@/components/settings/webhook-settings-panel';
+import { DepartmentsManager } from '@/components/organization/departments-manager';
 import type { Branch, UserRole, UserPreferences } from '@/types';
 
 // --- Constants -------------------------------------------------------------
@@ -769,7 +770,7 @@ function SettingsPageInner() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-6">
           <TabsTrigger value="company" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Company</span>
@@ -777,6 +778,10 @@ function SettingsPageInner() {
           <TabsTrigger value="branches" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Branches</span>
+          </TabsTrigger>
+          <TabsTrigger value="departments" className="gap-1.5">
+            <Building2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Departments</span>
           </TabsTrigger>
           <TabsTrigger value="profile" className="gap-1.5">
             <UserIcon className="h-4 w-4" />
@@ -1220,6 +1225,38 @@ function SettingsPageInner() {
               </Card>
             </>
           )}
+        </TabsContent>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* Tab: Departments — spec section 8. Configurable, org-scoped;   */}
+        {/* labeling only, never read by RLS (see migration 062).         */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        <TabsContent value="departments" className="space-y-6">
+          {!isAdmin ? (
+            <Card className="max-w-md mx-auto">
+              <CardContent className="flex flex-col items-center gap-4 pt-8 pb-8 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+                  <ShieldAlert className="h-8 w-8 text-red-500" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-xl font-bold tracking-tight">Admin Access Required</h2>
+                  <p className="text-sm text-muted-foreground">
+                    You do not have permission to manage departments. This area is restricted to administrators only.
+                  </p>
+                </div>
+                <Badge variant="secondary" className="text-[11px]">Your role: {roleMeta.label}</Badge>
+              </CardContent>
+            </Card>
+          ) : profile?.organization_id ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">Departments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DepartmentsManager organizationId={profile.organization_id} />
+              </CardContent>
+            </Card>
+          ) : null}
         </TabsContent>
 
         {/* ──────────────────────────────────────────────────────────── */}

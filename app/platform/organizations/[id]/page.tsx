@@ -20,7 +20,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { getErrorMessage, cn } from '@/lib/utils';
-import { formatDate, formatDateTime } from '@/lib/utils/status';
+import { formatDate, formatDateTime, ORGANIZATION_STATUS_META, ORGANIZATION_ORIGIN_META } from '@/lib/utils/status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { Organization, Invitation, Profile } from '@/types';
+import type { Organization, Invitation, Profile, OrgSubscription, Plan } from '@/types';
 
 const ROLE_LABEL: Record<string, string> = {
   platform_admin: 'Platform Admin',
@@ -81,6 +81,7 @@ export default function OrganizationDetailPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [members, setMembers] = useState<Profile[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
+  const [subscription, setSubscription] = useState<(OrgSubscription & { plan: Plan }) | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -106,7 +107,7 @@ export default function OrganizationDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [orgRes, membersRes, invitesRes] = await Promise.all([
+      const [orgRes, membersRes, invitesRes, subRes] = await Promise.all([
         supabase.from('organizations').select('*').eq('id', orgId).maybeSingle(),
         supabase
           .from('profiles')
@@ -121,6 +122,7 @@ export default function OrganizationDetailPage() {
           .is('accepted_at', null)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
+        supabase.from('org_subscriptions').select('*, plan:plans(*)').eq('organization_id', orgId).maybeSingle(),
       ]);
 
       if (orgRes.error) throw orgRes.error;
@@ -132,6 +134,7 @@ export default function OrganizationDetailPage() {
       setOrg(orgRes.data as Organization);
       setMembers((membersRes.data as Profile[]) ?? []);
       setInvites((invitesRes.data as Invitation[]) ?? []);
+      setSubscription((subRes.data as (OrgSubscription & { plan: Plan }) | null) ?? null);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load organization'));
     } finally {
@@ -433,12 +436,11 @@ export default function OrganizationDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="page-title">{org.name}</h1>
-            <Badge
-              className={cn(
-                org.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-              )}
-            >
-              {org.is_active ? 'Active' : 'Suspended'}
+            <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
+              {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
+            </Badge>
+            <Badge className={cn(ORGANIZATION_ORIGIN_META[org.origin]?.color)}>
+              {ORGANIZATION_ORIGIN_META[org.origin]?.label ?? org.origin}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -473,6 +475,55 @@ export default function OrganizationDetailPage() {
             <Mail className="h-4 w-4 text-muted-foreground" />
             <span>{org.email || '—'}</span>
           </div>
+          <div className="text-sm">
+            <p className="text-xs text-muted-foreground">Business Type</p>
+            <p>{org.business_type ?? '—'}</p>
+          </div>
+          <div className="text-sm">
+            <p className="text-xs text-muted-foreground">Registration Number</p>
+            <p>{org.registration_number ?? '—'}</p>
+          </div>
+          <div className="text-sm">
+            <p className="text-xs text-muted-foreground">Website</p>
+            <p>{org.website ?? '—'}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Subscription &amp; Usage</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {subscription ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Plan</p>
+                <p className="font-medium">{subscription.plan?.name ?? '—'}</p>
+              </div>
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Status</p>
+                <p className="font-medium capitalize">{subscription.status}</p>
+              </div>
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">
+                  {subscription.status === 'trial' ? 'Trial ends' : 'Started'}
+                </p>
+                <p className="font-medium">
+                  {formatDate(subscription.status === 'trial' ? subscription.trial_ends_at : subscription.started_at)}
+                </p>
+              </div>
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Users</p>
+                <p className="font-medium">{members.length} / {subscription.plan?.max_users ?? 'Unlimited'}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No subscription assigned yet — set one on{' '}
+              <a href="/platform/subscriptions" className="font-medium underline">Subscriptions</a>.
+            </p>
+          )}
         </CardContent>
       </Card>
 

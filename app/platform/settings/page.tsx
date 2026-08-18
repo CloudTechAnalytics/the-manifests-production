@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/contexts/theme-context';
-import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/auth-context';
+import { supabase } from '@/lib/supabase/client';
+import { cn, getErrorMessage } from '@/lib/utils';
 import {
   Card,
   CardContent,
@@ -14,18 +16,159 @@ import {
 } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { UserPreferences } from '@/types';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import type { UserPreferences, PlatformSettings, Plan } from '@/types';
 
 /*
- * Platform-console preferences.
+ * Platform-console preferences AND platform-wide configuration.
  *
- * Preferences live in user_preferences keyed by user_id, so the platform
- * admin's theme and notification choices are their own row — entirely
- * separate from any organization's admin. Changing a company's settings
- * inside a tenant workspace can never move the platform admin's theme,
- * and vice versa. This page simply gives the platform admin the same
- * controls the tenant app already exposes under Settings → Preferences.
+ * The two are deliberately kept in separate cards. "My Preferences" lives
+ * in user_preferences keyed by user_id — the platform admin's own theme
+ * and notification choices, entirely separate from any organization's
+ * settings. "Platform Configuration" below it is the real global config
+ * (migration 063's platform_settings, a single row, RLS-gated to
+ * is_platform_admin()) — trial length, the default trial plan, and the
+ * self-service kill switch, so none of that is hardcoded in the app.
  */
+
+function PlatformConfigurationCard() {
+  const { profile } = useAuth();
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [trialDays, setTrialDays] = useState('14');
+  const [defaultPlanId, setDefaultPlanId] = useState('');
+  const [selfRegEnabled, setSelfRegEnabled] = useState(true);
+  const [termsVersion, setTermsVersion] = useState('v1');
+  const [privacyVersion, setPrivacyVersion] = useState('v1');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [{ data: s }, { data: p }] = await Promise.all([
+        supabase.from('platform_settings').select('*').eq('id', true).maybeSingle(),
+        supabase.from('plans').select('*').is('deleted_at', null).order('sort_order', { ascending: true }),
+      ]);
+      if (s) {
+        setSettings(s as PlatformSettings);
+        setTrialDays(String(s.trial_duration_days));
+        setDefaultPlanId(s.default_trial_plan_id ?? '');
+        setSelfRegEnabled(s.self_registration_enabled);
+        setTermsVersion(s.terms_version);
+        setPrivacyVersion(s.privacy_version);
+      }
+      setPlans((p ?? []) as Plan[]);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to load platform configuration'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async () => {
+    if (!profile) return;
+    const days = parseInt(trialDays, 10);
+    if (!Number.isFinite(days) || days <= 0) {
+      toast.error('Trial duration must be a positive number of days');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('platform_settings')
+        .update({
+          trial_duration_days: days,
+          default_trial_plan_id: defaultPlanId || null,
+          self_registration_enabled: selfRegEnabled,
+          terms_version: termsVersion.trim() || 'v1',
+          privacy_version: privacyVersion.trim() || 'v1',
+          updated_by: profile.id,
+        })
+        .eq('id', true);
+      if (error) throw error;
+
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        action: 'platform_settings.updated',
+        entity_type: 'platform_settings',
+        description: `Updated platform settings: trial=${days}d, self-registration=${selfRegEnabled ? 'on' : 'off'}`,
+      });
+
+      toast.success('Platform configuration saved');
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to save platform configuration'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Skeleton className="h-64 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+            <Settings2 className="h-5 w-5" />
+          </div>
+          Platform Configuration
+        </CardTitle>
+        <CardDescription>
+          Applies to every new self-service registration — nothing here is hardcoded in the app.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+          <div>
+            <p className="text-sm font-medium">Self-service registration</p>
+            <p className="text-xs text-muted-foreground">
+              Turn off to temporarily stop new organizations registering at /register.
+            </p>
+          </div>
+          <Switch checked={selfRegEnabled} onCheckedChange={setSelfRegEnabled} disabled={saving} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="trial-days">Trial duration (days)</Label>
+            <Input id="trial-days" type="number" min={1} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Default trial plan</Label>
+            <Select value={defaultPlanId || undefined} onValueChange={setDefaultPlanId}>
+              <SelectTrigger><SelectValue placeholder="Select a plan" /></SelectTrigger>
+              <SelectContent>
+                {plans.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="terms-version">Terms of Service version</Label>
+            <Input id="terms-version" value={termsVersion} onChange={(e) => setTermsVersion(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="privacy-version">Privacy Policy version</Label>
+            <Input id="privacy-version" value={privacyVersion} onChange={(e) => setPrivacyVersion(e.target.value)} />
+          </div>
+        </div>
+
+        <Button onClick={handleSave} disabled={saving}>
+          {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          Save platform configuration
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 const NOTIF_GROUPS = [
   {
@@ -75,12 +218,14 @@ export default function PlatformSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="page-title">Preferences</h1>
+        <h1 className="page-title">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your own console settings. These are saved to your account and are
-          separate from any organization&apos;s settings.
+          Platform-wide configuration below; your own console preferences further down — the two are
+          saved separately and never affect any organization&apos;s own settings.
         </p>
       </div>
+
+      <PlatformConfigurationCard />
 
       {loading ? (
         <div className="space-y-6">
@@ -89,6 +234,9 @@ export default function PlatformSettingsPage() {
         </div>
       ) : (
         <>
+          <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            My Preferences
+          </p>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">

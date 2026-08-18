@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { isTrialExpired } from '@/lib/utils/status';
 import type { ActivityItem } from '@/hooks/use-dashboard-data';
 import type { Organization, Plan, OrgSubscription } from '@/types';
 
@@ -10,11 +11,13 @@ export interface PlatformStats {
   activeOrganizations: number;
   suspendedOrganizations: number;
   totalUsers: number;
+  activeUsers: number;
   platformTeamCount: number;
   newUsersThisMonth: number;
   mrr: number;
   arr: number;
   trialCount: number;
+  expiredTrialCount: number;
 }
 
 export interface OrgGrowthPoint {
@@ -62,11 +65,13 @@ export function usePlatformDashboardData(): PlatformDashboardData {
     activeOrganizations: 0,
     suspendedOrganizations: 0,
     totalUsers: 0,
+    activeUsers: 0,
     platformTeamCount: 0,
     newUsersThisMonth: 0,
     mrr: 0,
     arr: 0,
     trialCount: 0,
+    expiredTrialCount: 0,
   });
   const [growth, setGrowth] = useState<OrgGrowthPoint[]>([]);
   const [recentOrganizations, setRecentOrganizations] = useState<RecentOrganization[]>([]);
@@ -91,7 +96,7 @@ export function usePlatformDashboardData(): PlatformDashboardData {
             .order('created_at', { ascending: false }),
           supabase
             .from('profiles')
-            .select('id, role, organization_id, created_at')
+            .select('id, role, organization_id, created_at, is_active')
             .is('deleted_at', null),
           supabase
             .from('activities')
@@ -118,7 +123,12 @@ export function usePlatformDashboardData(): PlatformDashboardData {
 
         const activeSubs = subs.filter((s) => s.status === 'active');
         const mrr = activeSubs.reduce((sum, s) => sum + monthlyEquivalent(s), 0);
-        const trialCount = subs.filter((s) => s.status === 'trial').length;
+        const trialSubs = subs.filter((s) => s.status === 'trial');
+        const trialCount = trialSubs.length;
+        // Lazily computed, same as effectiveOrganizationStatus() — no
+        // stored status is flipped by a background job, so this is always
+        // exactly as current as each subscription's trial_ends_at.
+        const expiredTrialCount = trialSubs.filter((s) => isTrialExpired('active_trial', s.trial_ends_at)).length;
 
         // --- Stats ------------------------------------------------------------
         const totalOrganizations = orgs.length;
@@ -137,6 +147,7 @@ export function usePlatformDashboardData(): PlatformDashboardData {
           (p) => p.role !== 'platform_admin' && p.organization_id && activeOrgIds.has(p.organization_id)
         );
         const totalUsers = tenantProfiles.length;
+        const activeUsers = tenantProfiles.filter((p) => p.is_active).length;
         const platformTeamCount = profiles.filter((p) => p.role === 'platform_admin').length;
         const newUsersThisMonth = tenantProfiles.filter(
           (p) => new Date(p.created_at) >= startOfMonth
@@ -147,11 +158,13 @@ export function usePlatformDashboardData(): PlatformDashboardData {
           activeOrganizations,
           suspendedOrganizations,
           totalUsers,
+          activeUsers,
           platformTeamCount,
           newUsersThisMonth,
           mrr,
           arr: mrr * 12,
           trialCount,
+          expiredTrialCount,
         });
 
         // --- Organization growth (last 6 months, cumulative) -------------------

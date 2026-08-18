@@ -157,9 +157,11 @@ export interface Profile {
   id: string;
   email: string;
   full_name: string;
+  phone: string | null;
   role: UserRole;
   branch_id: string | null;
   organization_id: string | null;
+  department_id: string | null;
   is_active: boolean;
   must_change_password: boolean;
   created_by: string | null;
@@ -169,7 +171,25 @@ export interface Profile {
   deleted_at: string | null;
   branch?: Branch | null;
   organization?: Organization | null;
+  department?: Department | null;
 }
+
+/**
+ * pending_verification: registered, email not yet confirmed.
+ * active_trial / active_subscription: normal operating states.
+ * trial_expired: computed at display/enforcement time, never stored — see
+ *   isTrialExpired() in lib/utils/status.ts.
+ * suspended / cancelled: set explicitly by Platform Admin action.
+ */
+export type OrganizationStatus =
+  | 'pending_verification'
+  | 'active_trial'
+  | 'active_subscription'
+  | 'trial_expired'
+  | 'suspended'
+  | 'cancelled';
+
+export type OrganizationOrigin = 'self_service' | 'platform_admin' | 'demo' | 'internal';
 
 export interface Organization {
   id: string;
@@ -182,6 +202,15 @@ export interface Organization {
   email: string | null;
   logo_url: string | null;
   is_active: boolean;
+  status: OrganizationStatus;
+  origin: OrganizationOrigin;
+  business_type: string | null;
+  registration_number: string | null;
+  website: string | null;
+  expected_users: number | null;
+  expected_monthly_shipments: number | null;
+  referral_source: string | null;
+  onboarding_completed_at: string | null;
   quotation_approval_required: boolean;
   quotation_discount_threshold_percent: number | null;
   quotation_amount_threshold: number | null;
@@ -189,6 +218,43 @@ export interface Organization {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+export interface Department {
+  id: string;
+  organization_id: string;
+  name: string;
+  is_active: boolean;
+  is_default: boolean;
+  sort_order: number;
+  linked_role: UserRole | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ConsentRecord {
+  id: string;
+  profile_id: string;
+  organization_id: string;
+  terms_version: string;
+  privacy_version: string;
+  accepted_at: string;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface PlatformSettings {
+  id: true;
+  trial_duration_days: number;
+  default_trial_plan_id: string | null;
+  self_registration_enabled: boolean;
+  terms_version: string;
+  privacy_version: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type SubscriptionStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
@@ -207,6 +273,7 @@ export interface Plan {
   support_level: string | null;
   features: string[];
   is_active: boolean;
+  is_public: boolean;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -498,6 +565,8 @@ export interface Shipment {
 
 export type DGPackingGroup = 'I' | 'II' | 'III';
 
+export type ContainerDoStatus = 'pending' | 'issued' | 'collected';
+
 export interface ShipmentContainer {
   id: string;
   shipment_id: string;
@@ -518,6 +587,12 @@ export interface ShipmentContainer {
   expected_stuffing_date: string | null;
   expected_gate_in_date: string | null;
   expected_loading_date: string | null;
+  // Container Management enrichment (Planning workflow/intelligence pass).
+  expected_arrival_date: string | null;
+  gate_out_date: string | null;
+  returned_empty_date: string | null;
+  current_location: string | null;
+  do_status: ContainerDoStatus;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

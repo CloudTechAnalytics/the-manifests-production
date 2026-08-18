@@ -69,6 +69,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatDate, formatDateTime } from '@/lib/utils/status';
+import { CONTACT_EMAIL } from '@/lib/contact';
 import { ExportButton } from '@/components/ui/export-button';
 import type { ExportColumn } from '@/lib/export';
 import type { Profile, Branch, UserRole, Invitation } from '@/types';
@@ -173,6 +174,7 @@ interface InviteForm {
   full_name: string;
   role: UserRole;
   branch_id: string;
+  department_id: string;
 }
 
 // --- Component -------------------------------------------------------------
@@ -247,11 +249,21 @@ export default function UsersPage() {
     full_name: '',
     role: 'operations',
     branch_id: '',
+    department_id: '',
   });
   const [inviteFormErrors, setInviteFormErrors] = useState<Partial<Record<keyof InviteForm, string>>>({});
   const [inviting, setInviting] = useState(false);
   const [revokeInviteTarget, setRevokeInviteTarget] = useState<Invitation | null>(null);
   const [revokingInvite, setRevokingInvite] = useState(false);
+
+  // Plan-based seat usage (migration 064's org_user_count/org_user_limit —
+  // the same rule create-user/invite-user/accept-invite enforce
+  // server-side; null limit means unlimited). Purely informational here —
+  // the edge functions are the actual gate.
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [userCount, setUserCount] = useState<number | null>(null);
+  const [userLimit, setUserLimit] = useState<number | null>(null);
+  const atUserLimit = userLimit !== null && userCount !== null && userCount >= userLimit;
 
   const isAdmin = hasRole('admin');
 
@@ -369,11 +381,30 @@ export default function UsersPage() {
     }
   }, [profile]);
 
+  const loadUsageAndDepartments = useCallback(async () => {
+    if (!profile?.organization_id) return;
+    const [{ data: deptRows }, { data: limit }, { data: count }] = await Promise.all([
+      supabase
+        .from('departments')
+        .select('id, name')
+        .eq('organization_id', profile.organization_id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('sort_order', { ascending: true }),
+      supabase.rpc('org_user_limit', { p_org_id: profile.organization_id }),
+      supabase.rpc('org_user_count', { p_org_id: profile.organization_id }),
+    ]);
+    setDepartments((deptRows ?? []) as { id: string; name: string }[]);
+    setUserLimit(typeof limit === 'number' ? limit : null);
+    setUserCount(typeof count === 'number' ? count : null);
+  }, [profile?.organization_id]);
+
   useEffect(() => {
     if (isAdmin) {
       loadBranches();
+      loadUsageAndDepartments();
     }
-  }, [isAdmin, loadBranches]);
+  }, [isAdmin, loadBranches, loadUsageAndDepartments]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -483,10 +514,16 @@ export default function UsersPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
-        const message = result.error ?? `Request failed (${response.status})`;
-        toast.error(message);
+        if (result.code === 'user_limit_reached') {
+          toast.error(result.error, {
+            action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
+          });
+        } else {
+          toast.error(result.error ?? `Request failed (${response.status})`);
+        }
         return;
       }
+      loadUsageAndDepartments();
 
       // Log activity client-side (edge function also logs, but we log for the
       // admin's own audit trail with richer metadata)
@@ -570,6 +607,7 @@ export default function UsersPage() {
             full_name: inviteForm.full_name.trim() || undefined,
             role: inviteForm.role,
             branch_id: inviteForm.branch_id,
+            department_id: inviteForm.department_id || null,
           }),
         }
       );
@@ -577,7 +615,13 @@ export default function UsersPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
-        toast.error(result.error ?? `Request failed (${response.status})`);
+        if (result.code === 'user_limit_reached') {
+          toast.error(result.error, {
+            action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
+          });
+        } else {
+          toast.error(result.error ?? `Request failed (${response.status})`);
+        }
         return;
       }
 
@@ -587,9 +631,10 @@ export default function UsersPage() {
           : `Invitation created. Email delivery isn't configured — share this link: ${result.link}`
       );
       setInviteOpen(false);
-      setInviteForm({ email: '', full_name: '', role: 'operations', branch_id: '' });
+      setInviteForm({ email: '', full_name: '', role: 'operations', branch_id: '', department_id: '' });
       setInviteFormErrors({});
       loadInvitations();
+      loadUsageAndDepartments();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to send invitation'));
     } finally {
@@ -935,17 +980,45 @@ export default function UsersPage() {
             size="sm"
             variant="outline"
             onClick={() => setInviteOpen(true)}
+            disabled={atUserLimit}
             className="flex-1 sm:flex-none"
           >
             <UserPlus className="mr-1.5 h-4 w-4" />
             Invite Member
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none">
+          <Button size="sm" onClick={() => setCreateOpen(true)} disabled={atUserLimit} className="flex-1 sm:flex-none">
             <Plus className="mr-1.5 h-4 w-4" />
             Create User
           </Button>
         </div>
       </div>
+
+      {/* Plan seat usage — org_user_count/org_user_limit (migration 064). Null
+          limit means unlimited (Enterprise, or a legacy org with no
+          subscription row), so the banner only ever appears for a real cap. */}
+      {userLimit !== null && (
+        <div
+          className={`flex flex-col gap-2 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+            atUserLimit ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-border bg-muted/30 text-muted-foreground'
+          }`}
+        >
+          <span>
+            {atUserLimit
+              ? "You have reached your plan's user limit."
+              : `Using ${userCount} of ${userLimit} users on your plan.`}
+          </span>
+          {atUserLimit && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" asChild>
+                <a href="/upgrade">Upgrade Plan</a>
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <a href={`mailto:${CONTACT_EMAIL}`}>Contact Sales</a>
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -1517,6 +1590,23 @@ export default function UsersPage() {
                 )}
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-department">Department</Label>
+              <Select
+                value={inviteForm.department_id || undefined}
+                onValueChange={(v) => setInviteForm((f) => ({ ...f, department_id: v }))}
+              >
+                <SelectTrigger id="invite-department">
+                  <SelectValue placeholder="Optional" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1527,7 +1617,7 @@ export default function UsersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleInviteMember} disabled={inviting}>
+            <Button onClick={handleInviteMember} disabled={inviting || atUserLimit}>
               {inviting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Send Invitation
             </Button>

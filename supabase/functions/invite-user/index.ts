@@ -114,6 +114,7 @@ Deno.serve(async (req: Request) => {
       full_name?: string;
       role?: string;
       branch_id?: string | null;
+      department_id?: string | null;
       organization_id?: string;
     };
     try {
@@ -181,10 +182,44 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "branch_id is required for this role" });
     }
 
+    // department_id, when given, must belong to the invited organization —
+    // label-only (never read by RLS), but still shouldn't be able to point
+    // at another tenant's department row.
+    const departmentId = body.department_id ?? null;
+    if (departmentId !== null) {
+      if (!UUID_RE.test(departmentId)) return json(400, { error: "Invalid department_id" });
+      const { data: department } = await supabaseClient
+        .from("departments")
+        .select("id")
+        .eq("id", departmentId)
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (!department) {
+        return json(400, { error: "Department does not belong to that organization" });
+      }
+    }
+
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Plan-based user limit — same rule create-user/accept-invite enforce
+    // (migration 064). A pending invitation doesn't count against the
+    // limit yet (only seats actually taken do); it's re-checked again when
+    // the invite is accepted, since a plan could be downgraded or several
+    // invites accepted in the meantime.
+    const { data: userLimit } = await admin.rpc("org_user_limit", { p_org_id: orgId });
+    if (userLimit !== null && userLimit !== undefined) {
+      const { data: userCount } = await admin.rpc("org_user_count", { p_org_id: orgId });
+      if ((userCount ?? 0) >= userLimit) {
+        return json(403, {
+          error: "You have reached your plan's user limit.",
+          code: "user_limit_reached",
+        });
+      }
+    }
 
     // Refuse if this email already has an account in this organization.
     const { data: existing } = await admin
@@ -219,6 +254,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         organization_id: orgId,
         branch_id: branchId,
+        department_id: departmentId,
         email,
         full_name: body.full_name?.trim() ?? null,
         role: body.role,

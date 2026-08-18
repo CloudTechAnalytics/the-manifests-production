@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
     const { data: invite } = await admin
       .from("invitations")
       .select(
-        "id, organization_id, branch_id, email, full_name, role, expires_at, accepted_at, deleted_at",
+        "id, organization_id, branch_id, department_id, email, full_name, role, expires_at, accepted_at, deleted_at",
       )
       .eq("token_hash", tokenHash)
       .maybeSingle();
@@ -114,6 +114,20 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!org || org.deleted_at !== null || !org.is_active) {
       return json(400, { error: INVALID });
+    }
+
+    // Plan-based user limit, re-checked here (not just at invite time,
+    // since a plan can be downgraded or other invites accepted in the
+    // meantime). NULL limit means unlimited, same rule as create-user.
+    const { data: userLimit } = await admin.rpc("org_user_limit", { p_org_id: invite.organization_id });
+    if (userLimit !== null && userLimit !== undefined) {
+      const { data: userCount } = await admin.rpc("org_user_count", { p_org_id: invite.organization_id });
+      if ((userCount ?? 0) >= userLimit) {
+        return json(403, {
+          error: "This organization has reached its plan's user limit. Please contact the organization admin.",
+          code: "user_limit_reached",
+        });
+      }
     }
 
     const { data: authData, error: authError } = await admin.auth.admin
@@ -140,6 +154,7 @@ Deno.serve(async (req: Request) => {
       role: invite.role,
       organization_id: invite.organization_id,
       branch_id: invite.branch_id,
+      department_id: invite.department_id,
       is_active: true,
       must_change_password: false, // they just chose it themselves
     });

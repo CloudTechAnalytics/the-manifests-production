@@ -221,6 +221,42 @@ export default function SubscriptionsPage() {
     }
   };
 
+  const handleExtendTrial = async (sub: OrgSubscription, days: number) => {
+    if (!profile) return;
+    setUpdating(sub.id);
+    try {
+      // Extend from the later of "now" or the current end date, so
+      // extending an already-expired trial doesn't leave it still expired.
+      const base = sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date()
+        ? new Date(sub.trial_ends_at)
+        : new Date();
+      const newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+
+      const { error } = await supabase
+        .from('org_subscriptions')
+        .update({ trial_ends_at: newEnd, updated_by: profile.id })
+        .eq('id', sub.id);
+      if (error) throw error;
+
+      const org = orgs.find((o) => o.subscription?.id === sub.id);
+      await supabase.from('activities').insert({
+        user_id: profile.id,
+        organization_id: sub.organization_id,
+        action: 'subscription.trial_extended',
+        entity_type: 'org_subscription',
+        entity_id: sub.id,
+        description: `Extended "${org?.name ?? 'organization'}"'s trial by ${days} days`,
+      });
+
+      toast.success(`Trial extended by ${days} days`);
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to extend trial'));
+    } finally {
+      setUpdating(null);
+    }
+  };
+
   const handleChangeStatus = async (sub: OrgSubscription, status: SubscriptionStatus) => {
     if (!profile) return;
     setUpdating(sub.id);
@@ -367,9 +403,19 @@ export default function SubscriptionsPage() {
                               </SelectContent>
                             </Select>
                             {sub.status === 'trial' && sub.trial_ends_at && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {daysLeft(sub.trial_ends_at)}d left
-                              </p>
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <p className="text-xs text-muted-foreground">
+                                  {daysLeft(sub.trial_ends_at)}d left
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtendTrial(sub, 14)}
+                                  disabled={updating === sub.id}
+                                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                                >
+                                  Extend +14d
+                                </button>
+                              </div>
                             )}
                           </TableCell>
                           <TableCell>{sub.seats}</TableCell>

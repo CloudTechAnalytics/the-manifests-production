@@ -34,10 +34,7 @@ import {
 } from '@/components/ui/sheet';
 import { Reveal } from '@/components/marketing/reveal';
 import { cn } from '@/lib/utils';
-
-const CONTACT_EMAIL = 'cloudtechanalytics.consultant@gmail.com';
-const CONTACT_PHONE = '+2348133860243';
-const CONTACT_PHONE_HREF = '+2348133860243';
+import { CONTACT_EMAIL, CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/contact';
 
 const NAV_LINKS = [
   { label: 'Features', href: '#features' },
@@ -309,11 +306,18 @@ export function LandingPage() {
             >
               <Link href="/login">Sign In</Link>
             </Button>
+            <Button
+              variant="outline"
+              asChild
+              className={cn(!scrolled && 'border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white')}
+            >
+              <a href="#contact">Request a Demo</a>
+            </Button>
             <Button asChild>
-              <a href="#contact">
-                Request a Demo
+              <Link href="/register">
+                Start Free Trial
                 <ArrowRight className="ml-1.5 h-4 w-4" />
-              </a>
+              </Link>
             </Button>
           </div>
 
@@ -341,9 +345,12 @@ export function LandingPage() {
                 <Button variant="outline" className="w-full" asChild>
                   <Link href="/login">Sign In</Link>
                 </Button>
+                <Button variant="outline" className="w-full" asChild>
+                  <a href="#contact">Request a Demo</a>
+                </Button>
                 <SheetClose asChild>
                   <Button className="w-full" asChild>
-                    <a href="#contact">Request a Demo</a>
+                    <Link href="/register">Start Free Trial</Link>
                   </Button>
                 </SheetClose>
               </div>
@@ -394,10 +401,10 @@ export function LandingPage() {
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button size="lg" asChild>
-                <a href="#contact">
-                  Request a Demo
+                <Link href="/register">
+                  Start Free Trial
                   <ArrowRight className="ml-1.5 h-4 w-4" />
-                </a>
+                </Link>
               </Button>
               <Button
                 size="lg"
@@ -405,9 +412,15 @@ export function LandingPage() {
                 asChild
                 className="border-brand-dark-border bg-transparent text-white hover:bg-white/10 hover:text-white"
               >
-                <Link href="/login">Sign In</Link>
+                <a href="#contact">Request a Demo</a>
               </Button>
             </div>
+            <p className="mt-4 text-sm text-brand-dark-muted">
+              Already have an account?{' '}
+              <Link href="/login" className="font-medium text-brand-gold-soft hover:underline">
+                Sign in
+              </Link>
+            </p>
           </div>
 
           <div className="relative animate-fade-up" style={{ animationDelay: '150ms' }}>

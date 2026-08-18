@@ -22,6 +22,7 @@ import type {
   ChecklistDocumentStatus,
   PlanAssignmentStatus,
   PlanCostCategory,
+  ContainerDoStatus,
 } from '@/types';
 
 /**
@@ -312,6 +313,13 @@ export const PLAN_ASSIGNMENT_STATUS_META: Record<PlanAssignmentStatus, { label: 
   blocked: { label: 'Blocked', color: 'bg-red-100 text-red-700' },
 };
 
+/** Container "DO Status" — Delivery Order collection state (Container Management enrichment). */
+export const CONTAINER_DO_STATUS_META: Record<ContainerDoStatus, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
+  issued: { label: 'Issued', color: 'bg-blue-100 text-blue-700' },
+  collected: { label: 'Collected', color: 'bg-green-100 text-green-700' },
+};
+
 /** Financial Planning's 10 cost categories (Planning Command Center §11). */
 export const PLAN_COST_CATEGORY_LABELS: Record<PlanCostCategory, string> = {
   ocean_freight: 'Ocean/Air Freight',
@@ -325,6 +333,58 @@ export const PLAN_COST_CATEGORY_LABELS: Record<PlanCostCategory, string> = {
   agency_fees: 'Agency Fees',
   miscellaneous: 'Miscellaneous',
 };
+
+/**
+ * Organization lifecycle (migration 062). `trial_expired` is deliberately
+ * absent from the stored CHECK constraint — see isTrialExpired() below —
+ * but included here so it renders wherever this metadata is looked up.
+ */
+export const ORGANIZATION_STATUS_META: Record<
+  import('@/types').OrganizationStatus,
+  { label: string; color: string }
+> = {
+  pending_verification: { label: 'Pending Verification', color: 'bg-amber-100 text-amber-700' },
+  active_trial: { label: 'Active Trial', color: 'bg-blue-100 text-blue-700' },
+  active_subscription: { label: 'Active', color: 'bg-green-100 text-green-700' },
+  trial_expired: { label: 'Trial Expired', color: 'bg-orange-100 text-orange-700' },
+  suspended: { label: 'Suspended', color: 'bg-red-100 text-red-700' },
+  cancelled: { label: 'Cancelled', color: 'bg-gray-200 text-gray-600' },
+};
+
+export const ORGANIZATION_ORIGIN_META: Record<
+  import('@/types').OrganizationOrigin,
+  { label: string; color: string }
+> = {
+  self_service: { label: 'Self-Service', color: 'bg-emerald-100 text-emerald-700' },
+  platform_admin: { label: 'Assisted Onboarding', color: 'bg-slate-100 text-slate-700' },
+  demo: { label: 'Demo', color: 'bg-purple-100 text-purple-700' },
+  internal: { label: 'Internal', color: 'bg-indigo-100 text-indigo-700' },
+};
+
+/**
+ * Trial expiry is deliberately computed here, not stored — a status column
+ * flipped by a cron job can drift if a run is missed. Nothing auto-blocks
+ * access on this; it only changes what's displayed/counted, so it's always
+ * exactly as current as `trial_ends_at`.
+ */
+export function isTrialExpired(status: string, trialEndsAt: string | null): boolean {
+  return status === 'active_trial' && !!trialEndsAt && new Date(trialEndsAt) < new Date();
+}
+
+/** The status to actually display, folding the lazy trial_expired check in. */
+export function effectiveOrganizationStatus(
+  status: import('@/types').OrganizationStatus,
+  trialEndsAt: string | null
+): import('@/types').OrganizationStatus {
+  return isTrialExpired(status, trialEndsAt) ? 'trial_expired' : status;
+}
+
+/** Whole days remaining until trialEndsAt, floored at 0 — never negative. */
+export function daysRemaining(trialEndsAt: string | null): number {
+  if (!trialEndsAt) return 0;
+  const ms = new Date(trialEndsAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+}
 
 export function formatDate(date: string | null): string {
   if (!date) return '—';

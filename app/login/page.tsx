@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Ship,
@@ -90,13 +90,24 @@ function RouteIllustration() {
   );
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const { user, profile, loading, signIn } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) setEmail(emailParam);
+    if (searchParams.get('verified') === '1') {
+      toast.success('Email verified — sign in to continue.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -107,11 +118,32 @@ export default function LoginPage() {
         // the tenant dashboard (shipments, quotations, warehouse…) isn't
         // their workspace, so send them straight to the console instead.
         router.replace('/platform');
+      } else if (profile?.role === 'admin' && profile.organization && !profile.organization.onboarding_completed_at) {
+        // A freshly self-registered (or freshly platform-admin-created)
+        // organization's owner lands in the setup wizard first — see
+        // app/onboarding. Everyone else, and any owner who has already
+        // finished or skipped it, goes straight to the dashboard.
+        router.replace('/onboarding');
       } else {
         router.replace('/dashboard');
       }
     }
   }, [loading, user, profile, router]);
+
+  const handleResend = async () => {
+    if (!email) return;
+    setResending(true);
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      toast.success('If that email needs verifying, a new link is on its way.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +152,13 @@ export default function LoginPage() {
     const { error } = await signIn(email.trim(), password);
     setSubmitting(false);
     if (error) {
-      toast.error(error);
+      if (/email not confirmed/i.test(error)) {
+        toast.error('Please verify your email before signing in.', {
+          action: { label: resending ? 'Sending…' : 'Resend email', onClick: handleResend },
+        });
+      } else {
+        toast.error(error);
+      }
     } else {
       toast.success('Welcome back!');
     }
@@ -295,11 +333,21 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-xs text-muted-foreground">
-            This is an internal business application. Contact your
-            administrator for account access.
+            New to The Manifest?{' '}
+            <Link href="/register" className="font-medium text-primary hover:underline">
+              Start your free trial
+            </Link>
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

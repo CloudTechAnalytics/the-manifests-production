@@ -197,6 +197,21 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "branch_id is required for this role" });
     }
 
+    // Plan-based user limit (migration 064's org_user_count/org_user_limit —
+    // NULL limit means unlimited, including organizations with no
+    // subscription row at all, so pre-existing orgs are never retroactively
+    // locked out).
+    const { data: userLimit } = await admin.rpc("org_user_limit", { p_org_id: organizationId });
+    if (userLimit !== null && userLimit !== undefined) {
+      const { data: userCount } = await admin.rpc("org_user_count", { p_org_id: organizationId });
+      if ((userCount ?? 0) >= userLimit) {
+        return json(403, {
+          error: "You have reached your plan's user limit.",
+          code: "user_limit_reached",
+        });
+      }
+    }
+
     const { data: authData, error: authError } = await admin.auth.admin
       .createUser({
         email: body.email,
