@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { getErrorMessage, cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/status';
-import { FEATURE_CATALOG, FEATURE_LABELS, SUPPORT_LEVELS } from '@/lib/plans';
+import { FEATURE_CATALOG, FEATURE_LABELS, SUPPORT_LEVELS, diffPlanFeatures } from '@/lib/plans';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -327,7 +327,9 @@ export default function PlansPricingPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {plans.map((plan) => (
+          {plans.map((plan, i) => {
+            const featureDisplay = diffPlanFeatures(plans)[i];
+            return (
             <Card key={plan.id} className={!plan.is_active ? 'opacity-60' : ''}>
               <CardContent className="space-y-4 p-6">
                 <div className="flex items-start justify-between">
@@ -389,15 +391,22 @@ export default function PlansPricingPage() {
                   </div>
                 </div>
 
-                {plan.features.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-sm">
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
+                {featureDisplay.features.length > 0 && (
+                  <div className="space-y-1.5">
+                    {featureDisplay.baseName && (
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Everything in {featureDisplay.baseName}, plus:
+                      </p>
+                    )}
+                    <ul className="space-y-1.5">
+                      {featureDisplay.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2 text-sm">
+                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
 
                 {!plan.is_active && (
@@ -407,7 +416,8 @@ export default function PlansPricingPage() {
                 )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

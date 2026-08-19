@@ -134,7 +134,7 @@ function SettingsPageInner() {
   const searchParams = useSearchParams();
   const { profile, refreshProfile } = useAuth();
 
-  const validTabs = ['company', 'branches', 'profile', 'preferences', 'webhooks'];
+  const validTabs = ['company', 'branches', 'departments', 'billing', 'profile', 'preferences', 'webhooks', 'support'];
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(
     tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'profile'

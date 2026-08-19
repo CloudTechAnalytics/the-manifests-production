@@ -10,9 +10,8 @@
  * The catalog mirrors The Manifest's actual product modules (freight
  * forwarding — shipments, customs, warehouse, transportation — not case
  * management), so a plan's feature list means something concrete rather
- * than marketing copy. None of these are enforced as access gates yet
- * (every org can reach every module regardless of plan today, only
- * max_users is enforced) — this list is what a plan is sold as including.
+ * than marketing copy. Enforced as real access gating in the app shell —
+ * see lib/feature-gating.ts and hooks/use-org-plan.ts.
  */
 
 export interface FeatureDef {
@@ -52,3 +51,44 @@ export const SUPPORT_LEVELS: string[] = [
   'Priority Email',
   'Dedicated',
 ];
+
+export interface PlanFeatureDisplay {
+  /** Null for the lowest-priced tier (nothing to diff against) — render
+   *  its full feature list plainly. Set for every higher tier, whose
+   *  list is usually a superset of the one below it. */
+  baseName: string | null;
+  /** Full list when baseName is null; otherwise only the features not
+   *  already in the base plan — "Everything in Basic, plus:" below it. */
+  features: string[];
+}
+
+/**
+ * Two plans both listing 6-13 mostly-identical features read as "these
+ * are basically the same tier" at a glance — the actual difference is
+ * buried in a full re-read of each bullet list. This turns every plan
+ * after the cheapest into an explicit "Everything in {cheaper plan},
+ * plus:" plus only its own new features, sorted by ascending
+ * monthly_price so "cheaper" always means the tier immediately below.
+ * Falls back to the full list if a plan's features aren't actually a
+ * superset of the one below it (e.g. a custom-edited plan) — never
+ * hides a feature the plan really has.
+ */
+export function diffPlanFeatures(
+  plans: { name: string; monthly_price: number; features: string[] }[]
+): PlanFeatureDisplay[] {
+  const sorted = [...plans].sort((a, b) => a.monthly_price - b.monthly_price);
+  return plans.map((plan) => {
+    const idx = sorted.indexOf(plan);
+    const base = idx > 0 ? sorted[idx - 1] : null;
+    if (!base) return { baseName: null, features: plan.features };
+
+    const newOnes = plan.features.filter((f) => !base.features.includes(f));
+    // Not actually a superset (a custom/edited plan) — the diff would
+    // silently drop features the base plan has that this one doesn't,
+    // which is worse than just showing everything.
+    const isSuperset = base.features.every((f) => plan.features.includes(f));
+    if (!isSuperset || newOnes.length === 0) return { baseName: null, features: plan.features };
+
+    return { baseName: base.name, features: newOnes };
+  });
+}

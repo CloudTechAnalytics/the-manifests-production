@@ -40,6 +40,9 @@ import {
   PackageCheck,
   Send,
   BadgeDollarSign,
+  Sun,
+  Moon,
+  UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -48,6 +51,7 @@ import { useNavBadges, type NavBadgeCounts } from '@/hooks/use-nav-badges';
 import { useOrgPlan } from '@/hooks/use-org-plan';
 import { featureForPath } from '@/lib/feature-gating';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -519,6 +523,19 @@ function UserMenu() {
             )}
           </div>
           <DropdownMenuSeparator />
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <Link href="/settings?tab=profile">
+              <UserRound className="mr-2 h-4 w-4" />
+              My Profile
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <Link href="/settings?tab=preferences">
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => signOut()}
             className="text-destructive focus:text-destructive"
@@ -598,6 +615,19 @@ function HeaderUserMenu() {
             </Badge>
           )}
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/settings?tab=profile">
+            <UserRound className="mr-2 h-4 w-4" />
+            My Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/settings?tab=preferences">
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => signOut()}
@@ -719,6 +749,7 @@ export function TopBar() {
         </kbd>
       </button>
       <div className="ml-auto flex items-center gap-1">
+        <ThemeToggle />
         <NotificationsBell />
         <HeaderUserMenu />
       </div>
@@ -750,6 +781,7 @@ export function MobileTopBar() {
       </Sheet>
       <MobileBrand />
       <div className="flex-1" />
+      <ThemeToggle />
       <Button
         variant="ghost"
         size="icon"

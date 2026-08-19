@@ -22,11 +22,8 @@ import {
   LineChart,
   BarChart3,
   LifeBuoy,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme } from '@/contexts/theme-context';
 import { usePlatformNotifications } from '@/hooks/use-platform-notifications';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -41,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { PlatformSearch } from '@/components/platform/platform-search';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /** Live onboarding signals (orgs with no admin, invites/trials expiring
  *  soon) from usePlatformNotifications — the badge clears when the
@@ -236,42 +234,6 @@ function SidebarContent({
 }
 
 /**
- * Quick light/dark toggle in the header — the full Light/Dark/System
- * picker still lives on Settings (app/platform/settings/page.tsx), this
- * is just a one-click shortcut that flips between the two explicit
- * states. Reads the currently-*applied* appearance (not just the raw
- * `theme` preference) so a "system" user sees the icon that matches what
- * they're actually looking at, and clicking it always switches away from
- * system to whichever explicit theme is opposite the current one.
- */
-function HeaderThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const update = () => setIsDark(root.classList.contains('dark'));
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, [theme]);
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="rounded-full text-muted-foreground"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </Button>
-  );
-}
-
-/**
  * The account control, lifted out of the sidebar and into the top bar's
  * right edge. Shared by the header on every platform page.
  */
@@ -409,7 +371,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <PlatformSearch />
           </div>
           <div className="flex items-center gap-1">
-            <HeaderThemeToggle />
+            <ThemeToggle />
             <PlatformNotificationsBell />
             <UserMenu profile={profile} onSignOut={signOut} />
           </div>

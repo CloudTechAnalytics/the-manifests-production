@@ -12,6 +12,7 @@ import { CONTACT_EMAIL, CONTACT_PHONE_HREF } from '@/lib/contact';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn, getErrorMessage } from '@/lib/utils';
+import { diffPlanFeatures } from '@/lib/plans';
 import type { Plan, BillingCycle } from '@/types';
 
 /**
@@ -121,8 +122,9 @@ function UpgradePageContent() {
         <div className="mt-12 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-3">
-          {plans.map((plan) => {
+          {plans.map((plan, i) => {
             const price = cycle === 'annual' ? plan.annual_price : plan.monthly_price;
+            const featureDisplay = diffPlanFeatures(plans)[i];
             return (
               <Card key={plan.id} className="flex flex-col">
                 <CardContent className="flex flex-1 flex-col gap-4 p-6">
@@ -142,14 +144,21 @@ function UpgradePageContent() {
                     {plan.max_users ? `${plan.max_users} users` : 'Unlimited users'} &middot;{' '}
                     {plan.storage_gb ? `${plan.storage_gb} GB` : 'Unlimited storage'}
                   </p>
-                  <ul className="flex-1 space-y-1.5">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-sm">
-                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex-1 space-y-1.5">
+                    {featureDisplay.baseName && (
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Everything in {featureDisplay.baseName}, plus:
+                      </p>
+                    )}
+                    <ul className="space-y-1.5">
+                      {featureDisplay.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2 text-sm">
+                          <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                   {canPay && price && price > 0 ? (
                     <Button
                       className="w-full"
