@@ -113,17 +113,28 @@ export default function InvoicesPage() {
   // matching the pre-pagination behavior (the old client-side `summary`
   // useMemo ran over the full, not tab-filtered, invoices array).
   const applyInvoiceScope = useCallback(
-    <Q extends { eq: any; or: any }>(query: Q): Q => {
+    <Q extends { eq: any; or: any; in: any }>(query: Q): Q => {
       let q = query;
-      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
+      if (!isAdmin && userBranchId) {
+        q = q.eq('branch_id', userBranchId);
+      } else if (isAdmin && branchIdFilter !== 'all') {
+        q = q.eq('branch_id', branchIdFilter);
+      } else if (isAdmin && branches.length > 0) {
+        // "All branches" selected: RLS's can_access_branch() already
+        // allows exactly this organization's own branches for an admin
+        // — this doesn't change which rows come back, it just gives
+        // Postgres a concrete branch_id list it can push into the
+        // existing branch_id index instead of evaluating the RLS
+        // function unconstrained across every row.
+        q = q.in('branch_id', branches.map((b) => b.id));
+      }
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
         q = q.or(`invoice_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`);
       }
       return q;
     },
-    [isAdmin, userBranchId, branchIdFilter, debouncedSearch]
+    [isAdmin, userBranchId, branchIdFilter, debouncedSearch, branches]
   );
 
   const buildInvoicesListQuery = useCallback(() => {

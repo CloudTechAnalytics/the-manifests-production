@@ -68,6 +68,21 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // This page has no per-branch filter dropdown (an admin always sees
+  // every branch), but RLS's can_access_branch() still has to evaluate
+  // per row when no branch_id predicate is given at all. Just the id
+  // list, fetched once, lets the query below give Postgres a concrete
+  // branch_id list to use — same rows either way, real index usage.
+  const [adminBranchIds, setAdminBranchIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase
+      .from('branches')
+      .select('id')
+      .is('deleted_at', null)
+      .then(({ data }) => setAdminBranchIds((data ?? []).map((b: { id: string }) => b.id)));
+  }, [isAdmin]);
+
   // Shared by both the paginated display query and the (unbounded, only
   // fetched on click) Export query below — same filters either way, only
   // the .range() differs.
@@ -81,6 +96,8 @@ export default function CustomersPage() {
     // Branch scoping: non-admins only see their branch
     if (branchFilter) {
       query = query.eq('branch_id', branchFilter);
+    } else if (isAdmin && adminBranchIds.length > 0) {
+      query = query.in('branch_id', adminBranchIds);
     }
 
     // Status filter
@@ -101,7 +118,7 @@ export default function CustomersPage() {
     }
 
     return query;
-  }, [branchFilter, statusFilter, debouncedSearch]);
+  }, [branchFilter, isAdmin, adminBranchIds, statusFilter, debouncedSearch]);
 
   const fetchCustomersPage = useCallback(
     async (offset: number, limit: number): Promise<Customer[]> => {

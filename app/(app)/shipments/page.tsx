@@ -172,6 +172,16 @@ export default function ShipmentsPage() {
     // Admin branch filter dropdown
     if (isAdmin && branchIdFilter !== 'all') {
       query = query.eq('branch_id', branchIdFilter);
+    } else if (isAdmin && branches.length > 0) {
+      // "All branches" selected: RLS's can_access_branch() already
+      // allows exactly this organization's own branches for an admin —
+      // this doesn't change which rows come back, it just gives
+      // Postgres a concrete branch_id list it can push into the
+      // existing branch_id index instead of evaluating the RLS
+      // function unconstrained across every row. Skipped only during
+      // the brief window before `branches` has loaded, in which case
+      // this falls back to relying on RLS alone, same as before.
+      query = query.in('branch_id', branches.map((b) => b.id));
     }
 
     // Status filter
@@ -193,7 +203,7 @@ export default function ShipmentsPage() {
     }
 
     return query;
-  }, [isAdmin, userBranchId, statusFilter, typeFilter, branchIdFilter, debouncedSearch]);
+  }, [isAdmin, userBranchId, statusFilter, typeFilter, branchIdFilter, debouncedSearch, branches]);
 
   const fetchShipmentsPage = useCallback(
     async (offset: number, limit: number): Promise<ShipmentRow[]> => {

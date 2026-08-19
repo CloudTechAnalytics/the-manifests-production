@@ -87,10 +87,21 @@ export default function ExpensesPage() {
   // Shared branch/category/status/search scoping — reused by the paginated
   // list query, the summary query, and export.
   const applyExpenseScope = useCallback(
-    <Q extends { eq: any; or: any }>(query: Q): Q => {
+    <Q extends { eq: any; or: any; in: any }>(query: Q): Q => {
       let q = query;
-      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
+      if (!isAdmin && userBranchId) {
+        q = q.eq('branch_id', userBranchId);
+      } else if (isAdmin && branchIdFilter !== 'all') {
+        q = q.eq('branch_id', branchIdFilter);
+      } else if (isAdmin && branches.length > 0) {
+        // "All branches" selected: RLS's can_access_branch() already
+        // allows exactly this organization's own branches for an admin
+        // — this doesn't change which rows come back, it just gives
+        // Postgres a concrete branch_id list it can push into the
+        // existing branch_id index instead of evaluating the RLS
+        // function unconstrained across every row.
+        q = q.in('branch_id', branches.map((b) => b.id));
+      }
       if (categoryFilter !== 'all') q = q.eq('category', categoryFilter);
       if (statusFilter !== 'all') q = q.eq('status', statusFilter);
       if (debouncedSearch) {
@@ -99,7 +110,7 @@ export default function ExpensesPage() {
       }
       return q;
     },
-    [isAdmin, userBranchId, branchIdFilter, categoryFilter, statusFilter, debouncedSearch]
+    [isAdmin, userBranchId, branchIdFilter, categoryFilter, statusFilter, debouncedSearch, branches]
   );
 
   const buildExpensesListQuery = useCallback(

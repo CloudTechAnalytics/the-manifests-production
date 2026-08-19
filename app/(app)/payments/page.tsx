@@ -85,10 +85,21 @@ export default function PaymentsPage() {
   // Shared branch/method/search scoping — reused by the paginated list
   // query, the summary query, and export.
   const applyPaymentScope = useCallback(
-    <Q extends { eq: any; or: any }>(query: Q): Q => {
+    <Q extends { eq: any; or: any; in: any }>(query: Q): Q => {
       let q = query;
-      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
+      if (!isAdmin && userBranchId) {
+        q = q.eq('branch_id', userBranchId);
+      } else if (isAdmin && branchIdFilter !== 'all') {
+        q = q.eq('branch_id', branchIdFilter);
+      } else if (isAdmin && branches.length > 0) {
+        // "All branches" selected: RLS's can_access_branch() already
+        // allows exactly this organization's own branches for an admin
+        // — this doesn't change which rows come back, it just gives
+        // Postgres a concrete branch_id list it can push into the
+        // existing branch_id index instead of evaluating the RLS
+        // function unconstrained across every row.
+        q = q.in('branch_id', branches.map((b) => b.id));
+      }
       if (methodFilter !== 'all') q = q.eq('payment_method', methodFilter);
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
@@ -98,7 +109,7 @@ export default function PaymentsPage() {
       }
       return q;
     },
-    [isAdmin, userBranchId, branchIdFilter, methodFilter, debouncedSearch]
+    [isAdmin, userBranchId, branchIdFilter, methodFilter, debouncedSearch, branches]
   );
 
   const buildPaymentsListQuery = useCallback(
