@@ -2,14 +2,31 @@
  * Route -> plan feature map.
  *
  * Maps a module's URL prefix to the FEATURE_CATALOG label (lib/plans.ts)
- * that must be in an organization's plan for it to be reachable. Deliberately
- * excludes Dashboard, Calendar, Work Queue, Approvals, Users, Settings,
- * Platform Console — those are cross-cutting utilities, not a sellable
- * module, so every org keeps them regardless of plan. Reports/Customers/
- * Shipments/Quotations/Tracking/Documents map to Core features that every
- * real plan (Basic and up) already includes, so gating them is a no-op for
- * paying customers — it only bites a plan that's missing a feature by
- * design (e.g. a custom/edited plan with something unchecked).
+ * that must be in an organization's plan for it to be reachable.
+ *
+ * Deliberately NOT gated, on top of the obvious cross-cutting utilities
+ * (Dashboard, Calendar, Work Queue, Approvals, Users, Settings, Platform
+ * Console): Shipments, Quotations, Customers, Tracking, Documents,
+ * Invoices, Payments, Customs, Terminal, Transportation, Examination,
+ * Planning, Sales. migration 035's workflow_stage_catalog is the actual
+ * source of truth for what a shipment goes through — planning,
+ * documentation, regulatory_compliance, customs_clearance, terminal_
+ * operations, and transportation are all is_optional = false, mandatory
+ * for every shipment on every plan; cargo_examination and warehouse are
+ * only optional *per shipment* (this cargo doesn't need physical
+ * inspection or storage), not by subscription tier. An earlier version of
+ * this map gated Planning/Terminal/Transportation/Examination behind
+ * Enterprise and Invoicing/Payments behind Professional+, which meant a
+ * Basic or Professional org could have a shipment stuck at a mandatory
+ * stage with no way to reach the page that manages it, or be unable to
+ * bill its own customers — found live, testing a non-Enterprise account.
+ * Never repeat that mistake here: a module only belongs in this map if a
+ * company could genuinely run its freight-forwarding business without it,
+ * not merely if a given shipment happens not to need it this time.
+ *
+ * What's left as real tier differentiators: Expense Tracking, Rate
+ * Management, and Audit Logs are back-office/governance depth, not
+ * required to move cargo or get paid.
  *
  * This is UI-layer gating only: it hides nav entries and blocks the route
  * from rendering. It does not touch RLS, so a request made directly against
@@ -17,22 +34,8 @@
  * caveat already applies to org_user_count/org_user_limit (migration 064).
  */
 export const ROUTE_FEATURE_MAP: { prefix: string; feature: string }[] = [
-  { prefix: '/shipments', feature: 'Shipment Management' },
-  { prefix: '/quotations', feature: 'Quotations' },
-  { prefix: '/customers', feature: 'Customer Management' },
-  { prefix: '/tracking', feature: 'Shipment Tracking' },
-  { prefix: '/documents', feature: 'Document Management' },
-  { prefix: '/invoices', feature: 'Invoicing' },
-  { prefix: '/payments', feature: 'Payments' },
   { prefix: '/expenses', feature: 'Expense Tracking' },
   { prefix: '/rates', feature: 'Rate Management' },
-  { prefix: '/customs', feature: 'Customs Clearance' },
-  { prefix: '/warehouse', feature: 'Warehouse Management' },
-  { prefix: '/terminal', feature: 'Terminal Operations' },
-  { prefix: '/transportation', feature: 'Transportation Management' },
-  { prefix: '/examination', feature: 'Cargo Examination' },
-  { prefix: '/planning', feature: 'Shipment Planning' },
-  { prefix: '/sales', feature: 'Sales Pipeline' },
   { prefix: '/activity-log', feature: 'Audit Logs' },
 ];
 
