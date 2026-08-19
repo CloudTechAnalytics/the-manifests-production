@@ -45,7 +45,7 @@ export default function RegisterPage() {
     defaultValues: REGISTER_FORM_DEFAULTS,
     mode: 'onBlur',
   });
-  const wizard = useRegisterWizard();
+  const wizard = useRegisterWizard(methods.trigger);
 
   const onSubmit = async (values: RegisterFormValues) => {
     setSubmitting(true);

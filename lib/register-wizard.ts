@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFormContext } from 'react-hook-form';
+import type { UseFormTrigger } from 'react-hook-form';
 import type { RegisterFormValues } from '@/lib/register-schema';
 
 export type RegisterWizardStepId = 'business' | 'account';
@@ -38,9 +38,16 @@ export const WIZARD_STEP_FIELDS: Record<RegisterWizardStepId, (keyof RegisterFor
   ],
 };
 
-export function useRegisterWizard() {
+/**
+ * Takes `trigger` as a parameter rather than reading it via
+ * useFormContext() internally — this hook is called from RegisterPage,
+ * the same component that owns the FormProvider, not one of its
+ * descendants, so context lookup from in here would always resolve to
+ * null (a provider only supplies context to its children, never back to
+ * the component that renders it).
+ */
+export function useRegisterWizard(trigger: UseFormTrigger<RegisterFormValues>) {
   const [stepIndex, setStepIndex] = useState(0);
-  const { trigger } = useFormContext<RegisterFormValues>();
   const currentStep = REGISTER_WIZARD_STEPS[stepIndex];
 
   const goNext = async () => {

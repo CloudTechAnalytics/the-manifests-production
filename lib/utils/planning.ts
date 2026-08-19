@@ -209,6 +209,61 @@ export function computePlanningRisks(
   return risks;
 }
 
+// ============================================================
+// MILESTONES — a short, plain-language progress trail for the
+// Assignments & Milestones tab. Deliberately not the same list as the
+// 8-item weighted PlanningChecklistItem above: this is a simpler,
+// unweighted "what's actually happened so far" view, sits next to
+// InternalAssignmentsCard, and folds in documentsAllSatisfied (a signal
+// the checklist itself doesn't have — that one only checks that
+// required documents were *identified*, not that they're all uploaded).
+// ============================================================
+
+export interface PlanningMilestone {
+  key: string;
+  label: string;
+  done: boolean;
+}
+
+interface PlanningMilestonesInput {
+  shipment: Pick<Shipment, 'booking_status'>;
+  containers: unknown[];
+  customs: Pick<
+    ShipmentCustoms,
+    | 'expected_paar_date'
+    | 'expected_declaration_date'
+    | 'expected_duty_payment_date'
+    | 'expected_examination_date'
+    | 'expected_release_date'
+    | 'expected_exit_date'
+  > | null;
+  terminal: Pick<TerminalOperation, 'booking_slot'> | null;
+  transportation: Pick<ShipmentTransportation, 'truck_number'>[];
+  documentsAllSatisfied: boolean;
+}
+
+export function computePlanningMilestones(input: PlanningMilestonesInput): PlanningMilestone[] {
+  const { shipment, containers, customs, terminal, transportation, documentsAllSatisfied } = input;
+
+  const hasCustomsTimeline =
+    !!customs &&
+    (!!customs.expected_paar_date ||
+      !!customs.expected_declaration_date ||
+      !!customs.expected_duty_payment_date ||
+      !!customs.expected_examination_date ||
+      !!customs.expected_release_date ||
+      !!customs.expected_exit_date);
+
+  return [
+    { key: 'booking_confirmed', label: 'Booking Confirmed', done: shipment.booking_status === 'confirmed' },
+    { key: 'containers_added', label: 'Containers Added', done: containers.length > 0 },
+    { key: 'customs_timeline_set', label: 'Customs Timeline Set', done: hasCustomsTimeline },
+    { key: 'terminal_slot_booked', label: 'Terminal Slot Booked', done: !!terminal?.booking_slot },
+    { key: 'transport_arranged', label: 'Transport Arranged', done: transportation.some((t) => !!t.truck_number) },
+    { key: 'documents_satisfied', label: 'Documents Satisfied', done: documentsAllSatisfied },
+  ];
+}
+
 /**
  * Terminal/Warehouse Storage Days — derived at read time from
  * arrival/received to release (or to today if not yet released), never
