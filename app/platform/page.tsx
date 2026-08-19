@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   Building2,
   CheckCircle2,
@@ -21,10 +22,17 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { KpiCard } from '@/components/dashboard/kpi-card';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
-import { OrganizationGrowthChart } from '@/components/platform/organization-growth-chart';
 import { SystemHealthCard } from '@/components/platform/system-health-card';
 import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/utils/status';
+
+// recharts is a large dependency — code-split so it only loads for
+// visitors who actually reach this page, not bundled into every route
+// that happens to import platform/page.tsx's chunk.
+const OrganizationGrowthChart = dynamic(
+  () => import('@/components/platform/organization-growth-chart').then((m) => m.OrganizationGrowthChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+);
 
 export default function PlatformDashboardPage() {
   const { profile } = useAuth();

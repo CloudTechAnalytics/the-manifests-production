@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   TrendingUp,
   DollarSign,
@@ -10,15 +11,6 @@ import {
   Building2,
   CalendarDays,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -48,6 +40,13 @@ import {
 } from '@/components/ui/table';
 import { QUOTATION_STATUS_META, formatCurrency } from '@/lib/utils/status';
 import type { Branch, Quotation, QuotationStatus } from '@/types';
+
+// recharts is a large dependency — code-split so it only loads once
+// this card actually renders, not bundled into this page's own chunk.
+const MonthlyRevenueChart = dynamic(
+  () => import('@/components/sales/monthly-revenue-chart').then((m) => m.MonthlyRevenueChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+);
 
 type QuotationRow = Quotation & {
   customer?: { id: string; company_name: string } | null;
@@ -456,41 +455,7 @@ export default function SalesPage() {
                 No accepted quotations yet
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={monthlyTrend}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="hsl(var(--border))"
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'hsl(var(--accent))' }}
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: 'var(--radius)',
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number) => [
-                      formatCurrency(value, primaryCurrency ?? 'NGN'),
-                      'Revenue',
-                    ]}
-                  />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <MonthlyRevenueChart data={monthlyTrend} currency={primaryCurrency ?? 'NGN'} />
             )}
           </CardContent>
         </Card>
