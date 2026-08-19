@@ -45,6 +45,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
 import { useNotifications } from '@/hooks/use-notifications';
 import { useNavBadges, type NavBadgeCounts } from '@/hooks/use-nav-badges';
+import { useOrgPlan } from '@/hooks/use-org-plan';
+import { featureForPath } from '@/lib/feature-gating';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -265,6 +267,7 @@ function NavGroup({
   currentHref,
   roles,
   badges,
+  hasFeature,
   onNavigate,
   collapsible = false,
   collapsed = false,
@@ -276,6 +279,10 @@ function NavGroup({
   currentHref: string;
   roles: UserRole[];
   badges: NavBadgeCounts;
+  /** Same source of truth as the route-level gate (app/(app)/layout.tsx) —
+   *  an item whose href maps to a feature the org's plan doesn't include
+   *  is hidden here rather than left to 404/lock on click. */
+  hasFeature: (label: string) => boolean;
   onNavigate?: () => void;
   collapsible?: boolean;
   collapsed?: boolean;
@@ -287,6 +294,8 @@ function NavGroup({
     // A user can hold several departments — a nav item scoped to a set
     // of roles shows as soon as any one of them matches.
     if (item.roles && !item.roles.some((r) => roles.includes(r))) return false;
+    const requiredFeature = featureForPath(item.href.split('?')[0]);
+    if (requiredFeature && !hasFeature(requiredFeature)) return false;
     return true;
   });
 
@@ -400,6 +409,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const searchParams = useSearchParams();
   const { roles } = useAuth();
   const badges = useNavBadges();
+  const { hasFeature } = useOrgPlan();
   const { collapsed, toggle } = useCollapsedGroups();
 
   const search = searchParams.toString();
@@ -435,6 +445,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             currentHref={currentHref}
             roles={roles}
             badges={badges}
+            hasFeature={hasFeature}
             onNavigate={onNavigate}
             collapsible
             collapsed={!!collapsed[group.label]}
@@ -451,6 +462,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         currentHref={currentHref}
         roles={roles}
         badges={badges}
+        hasFeature={hasFeature}
         onNavigate={onNavigate}
       />
     </nav>

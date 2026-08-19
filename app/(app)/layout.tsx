@@ -1,15 +1,20 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { SearchProvider } from '@/contexts/search-context';
 import { Sidebar, MobileTopBar, TopBar } from '@/components/layout/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useOrgPlan } from '@/hooks/use-org-plan';
+import { featureForPath } from '@/lib/feature-gating';
+import { FeatureLocked } from '@/components/upgrade/feature-locked';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const { hasFeature, planName, loading: planLoading } = useOrgPlan();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -51,6 +56,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Every module has a required feature (lib/feature-gating.ts) or none
+  // (cross-cutting utilities like Dashboard/Calendar/Settings, always
+  // open). planLoading holds off rendering the gate for an instant so a
+  // fully-entitled org never flashes a "locked" screen while the plan is
+  // still being fetched.
+  const requiredFeature = featureForPath(pathname);
+  const locked = requiredFeature && !planLoading && !hasFeature(requiredFeature);
+
   return (
     <SearchProvider>
       <div className="flex h-screen overflow-hidden">
@@ -59,7 +72,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <MobileTopBar />
           <TopBar />
           <main className="flex-1 overflow-y-auto scrollbar-thin">
-            {children}
+            {locked && requiredFeature ? (
+              <FeatureLocked feature={requiredFeature} planName={planName} />
+            ) : (
+              children
+            )}
           </main>
         </div>
       </div>

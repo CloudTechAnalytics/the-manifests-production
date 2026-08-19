@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Loader2, Mail } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { ArrowLeft, Check, Loader2, Mail, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency } from '@/lib/utils/status';
 import { CONTACT_EMAIL, CONTACT_PHONE_HREF } from '@/lib/contact';
@@ -12,12 +13,15 @@ import type { Plan } from '@/types';
 
 /**
  * Reached from the Users page's "reached your plan's user limit" banner
- * (spec section 11) and any other Upgrade Plan CTA. There's no billing
+ * (spec section 11), a locked module (components/upgrade/feature-locked.tsx,
+ * carrying ?feature=), and any other Upgrade Plan CTA. There's no billing
  * integration (see migration 018's docstring) — this is a comparison +
  * Contact Sales page, not a checkout; an actual plan change is still a
  * Platform Admin action (app/platform/subscriptions).
  */
-export default function UpgradePage() {
+function UpgradePageContent() {
+  const searchParams = useSearchParams();
+  const requestedFeature = searchParams.get('feature');
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +50,12 @@ export default function UpgradePage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Choose the plan that fits your team, or talk to sales about Enterprise pricing.
         </p>
+        {requestedFeature && (
+          <p className="mx-auto mt-4 flex w-fit items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" />
+            Looking for {requestedFeature}? It&apos;s included in the plans below.
+          </p>
+        )}
       </div>
 
       {loading ? (
@@ -94,5 +104,13 @@ export default function UpgradePage() {
         <a href={`mailto:${CONTACT_EMAIL}`} className="underline">{CONTACT_EMAIL}</a>.
       </p>
     </div>
+  );
+}
+
+export default function UpgradePage() {
+  return (
+    <Suspense fallback={null}>
+      <UpgradePageContent />
+    </Suspense>
   );
 }

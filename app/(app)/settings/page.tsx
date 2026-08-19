@@ -79,6 +79,8 @@ import { useTheme } from '@/contexts/theme-context';
 import { WebhookSettingsPanel } from '@/components/settings/webhook-settings-panel';
 import { SupportTab } from '@/components/settings/support-tab';
 import { DepartmentsManager } from '@/components/organization/departments-manager';
+import { useOrgPlan } from '@/hooks/use-org-plan';
+import { FeatureLocked } from '@/components/upgrade/feature-locked';
 import type { Branch, UserRole, UserPreferences } from '@/types';
 
 // --- Constants -------------------------------------------------------------
@@ -176,6 +178,7 @@ function SettingsPageInner() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const isAdmin = profile?.role === 'admin';
+  const { hasFeature, planName } = useOrgPlan();
 
   // Section 9 (Quotations) — whether Draft quotations must pass through
   // Pending Approval / Approved before they can be marked Sent, plus the
@@ -1491,6 +1494,8 @@ function SettingsPageInner() {
                 Only admins and branch managers can manage webhook subscriptions.
               </CardContent>
             </Card>
+          ) : !hasFeature('Webhooks & API Integrations') ? (
+            <FeatureLocked feature="Webhooks & API Integrations" planName={planName} />
           ) : (
             <WebhookSettingsPanel />
           )}

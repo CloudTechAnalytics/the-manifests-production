@@ -98,6 +98,10 @@ export default function PlatformOrganizationsPage() {
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [trialDays, setTrialDays] = useState(DEFAULT_TRIAL_DAYS);
+  // The internal Trial plan (migration 065) — kept out of `plans` (filtered
+  // by is_public below) but still needed to actually assign a subscription
+  // when "Free trial" is chosen, and to show its real max_users in the caption.
+  const [trialPlan, setTrialPlan] = useState<{ id: string; max_users: number | null } | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
@@ -127,7 +131,7 @@ export default function PlatformOrganizationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [activeRes, trashedRes, plansRes, settingsRes] = await Promise.all([
+      const [activeRes, trashedRes, plansRes, settingsRes, trialPlanRes] = await Promise.all([
         supabase
           .from('organizations')
           .select('*')
@@ -157,6 +161,7 @@ export default function PlatformOrganizationsPage() {
           .select('trial_duration_days')
           .eq('id', true)
           .maybeSingle(),
+        supabase.from('plans').select('id, max_users').eq('slug', 'trial').maybeSingle(),
       ]);
       if (activeRes.error) throw activeRes.error;
       if (plansRes.error) throw plansRes.error;
@@ -165,6 +170,7 @@ export default function PlatformOrganizationsPage() {
       setPlans((plansRes.data as Plan[]) ?? []);
       const settings = settingsRes.data as Pick<PlatformSettings, 'trial_duration_days'> | null;
       if (settings?.trial_duration_days) setTrialDays(settings.trial_duration_days);
+      setTrialPlan((trialPlanRes.data as { id: string; max_users: number | null } | null) ?? null);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load organizations'));
     } finally {
@@ -239,7 +245,28 @@ export default function PlatformOrganizationsPage() {
       });
 
       if (createPlanId === TRIAL_ONLY) {
-        // Free trial with no paid plan chosen yet — nothing to assign.
+        // "Free trial, no paid plan chosen yet" still needs a real
+        // org_subscriptions row — pointing at the internal Trial plan,
+        // same as self-service registration already does (migration 064's
+        // provision_organization) — so feature gating and org_user_limit
+        // have something to resolve against. Previously this skipped
+        // writing a subscription row at all, which left the org with an
+        // unresolvable plan until an admin manually assigned one later.
+        const trialEnds = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+
+        if (trialPlan) {
+          const { error: subError } = await supabase.from('org_subscriptions').insert({
+            organization_id: newOrg.id,
+            plan_id: trialPlan.id,
+            status: 'trial',
+            billing_cycle: 'monthly',
+            seats: 1,
+            trial_ends_at: trialEnds,
+            updated_by: profile.id,
+          });
+          if (subError) console.error('Trial subscription insert error:', subError.message);
+        }
+
         toast.success(`${newOrg.name} created on a ${trialDays}-day free trial`);
       } else {
         // Put the org on its chosen plan as a trial straight away. If this
@@ -708,7 +735,7 @@ export default function PlatformOrganizationsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {createPlanId === TRIAL_ONLY
-                  ? `Starts on a ${trialDays}-day free trial with no plan assigned yet — pick one any time on Subscriptions. Trials are billed after conversion.`
+                  ? `Starts on a ${trialDays}-day free trial${trialPlan?.max_users ? ` (capped at ${trialPlan.max_users} users)` : ''} — pick a paid plan any time on Subscriptions. Trials are billed after conversion.`
                   : `Starts on a ${trialDays}-day trial of this plan. The billing cycle applies once the trial converts.`}
               </p>
               {plans.length === 0 && (
