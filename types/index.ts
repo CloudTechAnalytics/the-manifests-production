@@ -688,6 +688,30 @@ export interface DeliveryOrder {
   deleted_at: string | null;
 }
 
+export type CustomsBondType = 'single_entry' | 'continuous' | 'bonded_warehouse' | 'transit' | 'other';
+export type CustomsBondStatus = 'active' | 'discharged' | 'expired' | 'claimed_against';
+
+export interface CustomsBond {
+  id: string;
+  bond_number: string | null;
+  shipment_id: string;
+  branch_id: string;
+  bond_type: CustomsBondType;
+  surety_name: string | null;
+  bond_amount: number | null;
+  currency: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  status: CustomsBondStatus;
+  discharged_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export type CargoClaimType = 'damage' | 'loss' | 'shortage' | 'other';
 export type CargoClaimAgainst = 'carrier' | 'terminal' | 'insurer' | 'transporter' | 'other';
 export type CargoClaimStatus = 'filed' | 'under_review' | 'approved' | 'rejected' | 'settled';

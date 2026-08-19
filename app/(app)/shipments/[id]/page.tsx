@@ -120,6 +120,7 @@ import { CargoInsurancePanel } from '@/components/shipments/cargo-insurance-pane
 import { CargoClaimsPanel } from '@/components/shipments/cargo-claims-panel';
 import { DeliveryOrdersPanel } from '@/components/shipments/delivery-orders-panel';
 import { GenerateInvoiceFromExpenses } from '@/components/shipments/generate-invoice-from-expenses';
+import { CustomsBondsPanel } from '@/components/customs/customs-bonds-panel';
 import {
   SHIPMENT_STATUS_META,
   SHIPMENT_STATUS_FLOW,
@@ -144,6 +145,7 @@ import type {
   CargoInsurancePolicy,
   CargoClaim,
   DeliveryOrder,
+  CustomsBond,
 } from '@/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -202,6 +204,7 @@ export default function ShipmentDetailPage() {
   const [insurancePolicies, setInsurancePolicies] = useState<CargoInsurancePolicy[]>([]);
   const [claims, setClaims] = useState<CargoClaim[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+  const [customsBonds, setCustomsBonds] = useState<CustomsBond[]>([]);
   const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
   const [dutyAssessmentDialogOpen, setDutyAssessmentDialogOpen] = useState(false);
   const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
@@ -256,6 +259,7 @@ export default function ShipmentDetailPage() {
         { data: insuranceRows },
         { data: claimRows },
         { data: doRows },
+        { data: bondRows },
       ] = await Promise.all([
         supabase
           .from('shipments')
@@ -324,6 +328,12 @@ export default function ShipmentDetailPage() {
           .eq('shipment_id', shipmentId)
           .is('deleted_at', null)
           .order('issued_at', { ascending: false }),
+        supabase
+          .from('customs_bonds')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (shipErr) {
@@ -346,6 +356,7 @@ export default function ShipmentDetailPage() {
       setInsurancePolicies((insuranceRows as CargoInsurancePolicy[]) ?? []);
       setClaims((claimRows as CargoClaim[]) ?? []);
       setDeliveryOrders((doRows as DeliveryOrder[]) ?? []);
+      setCustomsBonds((bondRows as CustomsBond[]) ?? []);
     } finally {
       setLoading(false);
     }
@@ -1454,6 +1465,15 @@ export default function ShipmentDetailPage() {
               />
             </div>
           )}
+
+          <div className="mt-4">
+            <CustomsBondsPanel
+              shipmentId={shipmentId}
+              branchId={shipment.branch_id}
+              bonds={customsBonds}
+              onReload={loadData}
+            />
+          </div>
         </TabsContent>
 
         {/* --- Terminal Tab --- */}
