@@ -7,28 +7,40 @@
  * anything already stored that is not in this list still renders (see
  * PlansPricing), it just can't be re-selected from the chips.
  *
- * The catalog mirrors The Manifest's actual product modules, so a plan's
- * feature list means something concrete rather than marketing copy.
+ * The catalog mirrors The Manifest's actual product modules (freight
+ * forwarding — shipments, customs, warehouse, transportation — not case
+ * management), so a plan's feature list means something concrete rather
+ * than marketing copy. None of these are enforced as access gates yet
+ * (every org can reach every module regardless of plan today, only
+ * max_users is enforced) — this list is what a plan is sold as including.
  */
 
 export interface FeatureDef {
   label: string;
   // Grouping is display-only, to order the chips sensibly.
-  group: 'Core' | 'Finance' | 'Advanced';
+  group: 'Core' | 'Finance' | 'Operations' | 'Advanced';
 }
 
 export const FEATURE_CATALOG: FeatureDef[] = [
-  { label: 'Case Management', group: 'Core' },
-  { label: 'Calendar', group: 'Core' },
-  { label: 'Tasks', group: 'Core' },
+  { label: 'Shipment Management', group: 'Core' },
+  { label: 'Quotations', group: 'Core' },
+  { label: 'Customer Management', group: 'Core' },
+  { label: 'Shipment Tracking', group: 'Core' },
+  { label: 'Document Management', group: 'Core' },
   { label: 'Basic Reports', group: 'Core' },
-  { label: 'Billing', group: 'Finance' },
-  { label: 'Invoices', group: 'Finance' },
+  { label: 'Invoicing', group: 'Finance' },
+  { label: 'Payments', group: 'Finance' },
+  { label: 'Expense Tracking', group: 'Finance' },
+  { label: 'Rate Management', group: 'Finance' },
+  { label: 'Customs Clearance', group: 'Operations' },
+  { label: 'Warehouse Management', group: 'Operations' },
+  { label: 'Terminal Operations', group: 'Operations' },
+  { label: 'Transportation Management', group: 'Operations' },
+  { label: 'Cargo Examination', group: 'Operations' },
+  { label: 'Shipment Planning', group: 'Operations' },
+  { label: 'Sales Pipeline', group: 'Operations' },
   { label: 'Advanced Reports', group: 'Advanced' },
-  { label: 'Document Versioning', group: 'Advanced' },
-  { label: 'AI Features', group: 'Advanced' },
-  { label: 'Custom Branding', group: 'Advanced' },
-  { label: 'SSO', group: 'Advanced' },
+  { label: 'Webhooks & API Integrations', group: 'Advanced' },
   { label: 'Audit Logs', group: 'Advanced' },
 ];
 
