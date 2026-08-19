@@ -191,6 +191,25 @@ export type OrganizationStatus =
 
 export type OrganizationOrigin = 'self_service' | 'platform_admin' | 'demo' | 'internal';
 
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface SupportTicket {
+  id: string;
+  ticket_number: string | null;
+  organization_id: string;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  assigned_to: string | null;
+  created_by: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export interface Organization {
   id: string;
   name: string;

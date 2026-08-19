@@ -11,7 +11,12 @@ subquery in the same SQL aggregate, still SECURITY INVOKER so it stays
 correctly scoped by the caller's own RLS.
 */
 
-CREATE OR REPLACE FUNCTION platform_dashboard_stats()
+-- Postgres refuses CREATE OR REPLACE when the OUT-parameter (return
+-- column) signature changes — adding active_today needs the function
+-- dropped first, then recreated, not replaced in place.
+DROP FUNCTION IF EXISTS platform_dashboard_stats();
+
+CREATE FUNCTION platform_dashboard_stats()
 RETURNS TABLE (
   total_organizations bigint,
   active_organizations bigint,

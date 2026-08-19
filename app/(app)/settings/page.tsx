@@ -27,6 +27,7 @@ import {
   Trash2,
   Webhook,
   FileText,
+  LifeBuoy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -76,6 +77,7 @@ import { cn, getErrorMessage } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/status';
 import { useTheme } from '@/contexts/theme-context';
 import { WebhookSettingsPanel } from '@/components/settings/webhook-settings-panel';
+import { SupportTab } from '@/components/settings/support-tab';
 import { DepartmentsManager } from '@/components/organization/departments-manager';
 import type { Branch, UserRole, UserPreferences } from '@/types';
 
@@ -770,7 +772,7 @@ function SettingsPageInner() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-7">
           <TabsTrigger value="company" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Company</span>
@@ -794,6 +796,10 @@ function SettingsPageInner() {
           <TabsTrigger value="webhooks" className="gap-1.5">
             <Webhook className="h-4 w-4" />
             <span className="hidden sm:inline">Webhooks</span>
+          </TabsTrigger>
+          <TabsTrigger value="support" className="gap-1.5">
+            <LifeBuoy className="h-4 w-4" />
+            <span className="hidden sm:inline">Support</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1488,6 +1494,10 @@ function SettingsPageInner() {
           ) : (
             <WebhookSettingsPanel />
           )}
+        </TabsContent>
+
+        <TabsContent value="support" className="space-y-6">
+          <SupportTab />
         </TabsContent>
       </Tabs>
 
