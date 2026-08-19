@@ -142,6 +142,15 @@ export default function PlatformOrganizationsPage() {
           .select('*')
           .is('deleted_at', null)
           .eq('is_active', true)
+          // is_public excludes the internal "Trial" plan (migration 065) —
+          // it's auto-assigned by self-service registration via
+          // platform_settings.default_trial_plan_id, not something to pick
+          // from this list. Without this filter it showed up as a real,
+          // separately-selectable "Trial — ₦0.00/mo" tier right next to
+          // the "Free trial — N days" sentinel above, which is a different,
+          // no-plan-assigned option — two confusingly similar "trial"
+          // choices that did different things.
+          .eq('is_public', true)
           .order('sort_order', { ascending: true }),
         supabase
           .from('platform_settings')

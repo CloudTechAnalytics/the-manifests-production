@@ -99,6 +99,10 @@ export default function SubscriptionsPage() {
           .select('*')
           .is('deleted_at', null)
           .eq('is_active', true)
+          // Excludes the internal "Trial" plan (migration 065) — it's
+          // auto-assigned only by self-service registration, not something
+          // to hand-pick when changing an org's plan here.
+          .eq('is_public', true)
           .order('sort_order', { ascending: true }),
       ]);
 
