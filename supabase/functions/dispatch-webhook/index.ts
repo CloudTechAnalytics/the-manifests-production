@@ -129,7 +129,13 @@ async function sendStatusEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: Deno.env.get("RESEND_FROM_EMAIL") ?? "The Manifest <onboarding@resend.dev>",
+      // EMAIL_FROM, not RESEND_FROM_EMAIL — every other function that
+      // sends mail (register-organization, invite-user,
+      // resend-verification, send-quotation-status-email) reads this
+      // same name; a differently-named variable here meant setting
+      // EMAIL_FROM alone silently left this one function still sending
+      // from the generic onboarding@resend.dev address.
+      from: Deno.env.get("EMAIL_FROM") ?? "The Manifest <onboarding@resend.dev>",
       to: customer.email,
       subject: `Shipment ${reference} — ${statusLabel}`,
       html: `

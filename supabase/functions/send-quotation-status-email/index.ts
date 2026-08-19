@@ -135,7 +135,16 @@ Deno.serve(async (req: Request) => {
     };
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) return json(500, { error: "Email service is not configured" });
+    if (!resendApiKey) {
+      // Same "degrade, don't fail" convention as register-organization/
+      // invite-user/resend-verification: an unconfigured email service
+      // shouldn't block the status change that triggered this, just
+      // mean the customer doesn't get notified. The caller already
+      // treats a non-2xx here as non-fatal (console.warn only), but a
+      // 500 misrepresents this as a server error rather than the
+      // expected, handled "not configured" state.
+      return json(200, { success: true, emailed: false });
+    }
 
     const html = `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1a1a1a;">
