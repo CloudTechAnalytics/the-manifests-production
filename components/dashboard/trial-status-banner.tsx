@@ -38,7 +38,11 @@ export function TrialStatusBanner({ organizationId }: { organizationId: string |
     const urgent = remaining <= 3;
     return (
       <Banner urgent={urgent} icon={Hourglass}>
-        <span className="font-medium">{subscription.plan?.name ?? 'Trial'} Trial</span>
+        <span className="font-medium">
+          {subscription.plan?.name && subscription.plan.name !== 'Trial'
+            ? `${subscription.plan.name} Trial`
+            : 'Free Trial'}
+        </span>
         <span>&middot; {remaining} day{remaining === 1 ? '' : 's'} remaining</span>
       </Banner>
     );
