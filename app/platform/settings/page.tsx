@@ -40,7 +40,7 @@ function PlatformConfigurationCard() {
   const { profile } = useAuth();
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [trialDays, setTrialDays] = useState('14');
+  const [trialDays, setTrialDays] = useState('30');
   const [defaultPlanId, setDefaultPlanId] = useState('');
   const [selfRegEnabled, setSelfRegEnabled] = useState(true);
   const [termsVersion, setTermsVersion] = useState('v1');

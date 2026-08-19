@@ -55,13 +55,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Organization, OrganizationOrigin, Plan, BillingCycle } from '@/types';
+import type { Organization, OrganizationOrigin, Plan, BillingCycle, PlatformSettings } from '@/types';
 
-// A new org starts on a 14-day trial, matching how the Subscriptions page
-// treats a fresh assignment.
-const TRIAL_DAYS = 14;
+// Fallback only, used for the instant before platform_settings loads (or if
+// it somehow fails to) — the real value always comes from
+// platform_settings.trial_duration_days below, the same source Settings and
+// self-service registration already read, so changing it in one place
+// (Platform Console → Settings) takes effect everywhere instead of needing
+// a code change.
+const DEFAULT_TRIAL_DAYS = 30;
 
-// Sentinel for the "Free trial — 14 days" choice: the org is created with
+// Sentinel for the "Free trial — N days" choice: the org is created with
 // no paid plan assigned (plan_id is NOT NULL, so no subscription row is
 // written at all — a plan gets assigned later on Subscriptions).
 const TRIAL_ONLY = 'trial';
@@ -93,6 +97,7 @@ export default function PlatformOrganizationsPage() {
   const [loading, setLoading] = useState(true);
 
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [trialDays, setTrialDays] = useState(DEFAULT_TRIAL_DAYS);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
@@ -122,7 +127,7 @@ export default function PlatformOrganizationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [activeRes, trashedRes, plansRes] = await Promise.all([
+      const [activeRes, trashedRes, plansRes, settingsRes] = await Promise.all([
         supabase
           .from('organizations')
           .select('*')
@@ -138,12 +143,19 @@ export default function PlatformOrganizationsPage() {
           .is('deleted_at', null)
           .eq('is_active', true)
           .order('sort_order', { ascending: true }),
+        supabase
+          .from('platform_settings')
+          .select('trial_duration_days')
+          .eq('id', true)
+          .maybeSingle(),
       ]);
       if (activeRes.error) throw activeRes.error;
       if (plansRes.error) throw plansRes.error;
       setOrgs((activeRes.data as Organization[]) ?? []);
       setTrashedCount(trashedRes.count ?? 0);
       setPlans((plansRes.data as Plan[]) ?? []);
+      const settings = settingsRes.data as Pick<PlatformSettings, 'trial_duration_days'> | null;
+      if (settings?.trial_duration_days) setTrialDays(settings.trial_duration_days);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load organizations'));
     } finally {
@@ -219,13 +231,13 @@ export default function PlatformOrganizationsPage() {
 
       if (createPlanId === TRIAL_ONLY) {
         // Free trial with no paid plan chosen yet — nothing to assign.
-        toast.success(`${newOrg.name} created on a ${TRIAL_DAYS}-day free trial`);
+        toast.success(`${newOrg.name} created on a ${trialDays}-day free trial`);
       } else {
         // Put the org on its chosen plan as a trial straight away. If this
         // fails the org still exists, so report it as a partial result and
         // point at where to finish — don't pretend the whole thing failed.
         const trialEnds = new Date(
-          Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+          Date.now() + trialDays * 24 * 60 * 60 * 1000
         ).toISOString();
         const { error: subError } = await supabase.from('org_subscriptions').insert({
           organization_id: newOrg.id,
@@ -546,7 +558,7 @@ export default function PlatformOrganizationsPage() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>New Organization</DialogTitle>
             <DialogDescription>
@@ -556,39 +568,40 @@ export default function PlatformOrganizationsPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-name">Organization name</Label>
-              <Input
-                id="org-name"
-                value={form.name}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  setForm((f) => ({
-                    ...f,
-                    name,
-                    slug: slugTouched ? f.slug : slugify(name),
-                  }));
-                }}
-                placeholder="Acme Logistics Ltd"
-              />
-              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="org-slug">Slug</Label>
-              <Input
-                id="org-slug"
-                value={form.slug}
-                onChange={(e) => {
-                  setSlugTouched(true);
-                  setForm((f) => ({ ...f, slug: slugify(e.target.value) }));
-                }}
-                placeholder="acme-logistics"
-              />
-              {errors.slug && <p className="text-xs text-destructive">{errors.slug}</p>}
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="org-name">Organization name</Label>
+                <Input
+                  id="org-name"
+                  value={form.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      name,
+                      slug: slugTouched ? f.slug : slugify(name),
+                    }));
+                  }}
+                  placeholder="Acme Logistics Ltd"
+                />
+                {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="org-slug">Slug</Label>
+                <Input
+                  id="org-slug"
+                  value={form.slug}
+                  onChange={(e) => {
+                    setSlugTouched(true);
+                    setForm((f) => ({ ...f, slug: slugify(e.target.value) }));
+                  }}
+                  placeholder="acme-logistics"
+                />
+                {errors.slug && <p className="text-xs text-destructive">{errors.slug}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="org-city">City</Label>
                 <Input
@@ -605,9 +618,6 @@ export default function PlatformOrganizationsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="org-phone">Phone</Label>
                 <Input
@@ -627,22 +637,26 @@ export default function PlatformOrganizationsPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="org-origin">Organization Type</Label>
-              <Select value={createOrigin} onValueChange={(v) => setCreateOrigin(v as typeof createOrigin)}>
-                <SelectTrigger id="org-origin">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="platform_admin">Assisted Onboarding (real customer)</SelectItem>
-                  <SelectItem value="demo">Demo</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Normal customers should use self-service registration at /register. Use this for enterprise,
-                assisted, demo, or internal workspaces.
-              </p>
+            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="org-origin">Organization Type</Label>
+                <Select value={createOrigin} onValueChange={(v) => setCreateOrigin(v as typeof createOrigin)}>
+                  <SelectTrigger id="org-origin">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="platform_admin">Assisted Onboarding (real customer)</SelectItem>
+                    <SelectItem value="demo">Demo</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <p className="text-xs text-muted-foreground">
+                  Normal customers should use self-service registration at /register. Use this for enterprise,
+                  assisted, demo, or internal workspaces.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">
@@ -656,7 +670,7 @@ export default function PlatformOrganizationsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={TRIAL_ONLY}>
-                        Free trial — {TRIAL_DAYS} days
+                        Free trial — {trialDays} days
                       </SelectItem>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
@@ -685,8 +699,8 @@ export default function PlatformOrganizationsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {createPlanId === TRIAL_ONLY
-                  ? `Starts on a ${TRIAL_DAYS}-day free trial with no plan assigned yet — pick one any time on Subscriptions. Trials are billed after conversion.`
-                  : `Starts on a ${TRIAL_DAYS}-day trial of this plan. The billing cycle applies once the trial converts.`}
+                  ? `Starts on a ${trialDays}-day free trial with no plan assigned yet — pick one any time on Subscriptions. Trials are billed after conversion.`
+                  : `Starts on a ${trialDays}-day trial of this plan. The billing cycle applies once the trial converts.`}
               </p>
               {plans.length === 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -714,34 +728,35 @@ export default function PlatformOrganizationsPage() {
 
       {/* Edit Organization Dialog */}
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Organization</DialogTitle>
             <DialogDescription>Update {editTarget?.name}&apos;s details.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-org-name">Organization name</Label>
-              <Input
-                id="edit-org-name"
-                value={editForm.name}
-                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-              />
-              {editErrors.name && <p className="text-xs text-destructive">{editErrors.name}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-org-slug">Slug</Label>
-              <Input
-                id="edit-org-slug"
-                value={editForm.slug}
-                onChange={(e) => setEditForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
-              />
-              {editErrors.slug && <p className="text-xs text-destructive">{editErrors.slug}</p>}
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-org-name">Organization name</Label>
+                <Input
+                  id="edit-org-name"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                />
+                {editErrors.name && <p className="text-xs text-destructive">{editErrors.name}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-org-slug">Slug</Label>
+                <Input
+                  id="edit-org-slug"
+                  value={editForm.slug}
+                  onChange={(e) => setEditForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
+                />
+                {editErrors.slug && <p className="text-xs text-destructive">{editErrors.slug}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="edit-org-city">City</Label>
                 <Input
@@ -758,9 +773,6 @@ export default function PlatformOrganizationsPage() {
                   onChange={(e) => setEditForm((f) => ({ ...f, country: e.target.value }))}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="edit-org-phone">Phone</Label>
                 <Input
