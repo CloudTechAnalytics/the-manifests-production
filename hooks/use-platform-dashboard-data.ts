@@ -10,10 +10,14 @@ export interface PlatformStats {
   totalOrganizations: number;
   activeOrganizations: number;
   suspendedOrganizations: number;
+  /** Organizations with an active (paid, non-trial) subscription. */
+  paidOrganizations: number;
   totalUsers: number;
   activeUsers: number;
   platformTeamCount: number;
   newUsersThisMonth: number;
+  /** Distinct staff (any organization) who logged an action today. */
+  activeToday: number;
   mrr: number;
   arr: number;
   trialCount: number;
@@ -50,10 +54,12 @@ const EMPTY_RESULT: PlatformFetchResult = {
     totalOrganizations: 0,
     activeOrganizations: 0,
     suspendedOrganizations: 0,
+    paidOrganizations: 0,
     totalUsers: 0,
     activeUsers: 0,
     platformTeamCount: 0,
     newUsersThisMonth: 0,
+    activeToday: 0,
     mrr: 0,
     arr: 0,
     trialCount: 0,
@@ -129,6 +135,7 @@ async function fetchPlatformDashboardData(): Promise<PlatformFetchResult> {
     active_users: number;
     platform_team_count: number;
     new_users_this_month: number;
+    active_today: number;
   } | null;
   const recentSignups = (recentSignupsRes.data as { id: string; created_at: string }[]) ?? [];
   const topOrgs = (topOrgsRes.data as Pick<Organization, 'id' | 'name' | 'slug' | 'is_active'>[]) ?? [];
@@ -208,10 +215,12 @@ async function fetchPlatformDashboardData(): Promise<PlatformFetchResult> {
       totalOrganizations: statsRow?.total_organizations ?? 0,
       activeOrganizations: statsRow?.active_organizations ?? 0,
       suspendedOrganizations: (statsRow?.total_organizations ?? 0) - (statsRow?.active_organizations ?? 0),
+      paidOrganizations: activeSubs.length,
       totalUsers: statsRow?.total_users ?? 0,
       activeUsers: statsRow?.active_users ?? 0,
       platformTeamCount: statsRow?.platform_team_count ?? 0,
       newUsersThisMonth: statsRow?.new_users_this_month ?? 0,
+      activeToday: statsRow?.active_today ?? 0,
       mrr,
       arr: mrr * 12,
       trialCount,

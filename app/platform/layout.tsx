@@ -19,6 +19,9 @@ import {
   Bell,
   Settings,
   CheckCircle2,
+  LineChart,
+  BarChart3,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { usePlatformNotifications } from '@/hooks/use-platform-notifications';
@@ -110,8 +113,17 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'Growth',
+    items: [
+      { href: '/platform/billing', label: 'Billing', icon: CreditCard },
+      { href: '/platform/revenue-analytics', label: 'Revenue Analytics', icon: LineChart },
+      { href: '/platform/platform-analytics', label: 'Platform Analytics', icon: BarChart3 },
+    ],
+  },
+  {
     label: 'Operations',
     items: [
+      { href: '/platform/support-tickets', label: 'Support Tickets', icon: LifeBuoy },
       { href: '/platform/audit-logs', label: 'Audit Logs', icon: ScrollText },
       { href: '/platform/system-health', label: 'System Health', icon: Activity },
     ],
@@ -121,7 +133,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/platform/plans-pricing', label: 'Plans & Pricing', icon: Tag },
       { href: '/platform/platform-users', label: 'Platform Users', icon: ShieldCheck },
-      { href: '/platform/settings', label: 'Settings', icon: Settings },
+      { href: '/platform/settings', label: 'Platform Settings', icon: Settings },
     ],
   },
 ];
@@ -257,6 +269,13 @@ function UserMenu({
           <p className="text-sm font-medium">{profile.full_name}</p>
           <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/platform/settings">
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={onSignOut}

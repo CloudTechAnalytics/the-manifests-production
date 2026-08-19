@@ -13,6 +13,10 @@ import {
   Hourglass,
   AlertTriangle,
   UserCheck,
+  ShieldCheck,
+  Activity,
+  UserPlus,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { usePlatformDashboardData } from '@/hooks/use-platform-dashboard-data';
@@ -39,7 +43,8 @@ export default function PlatformDashboardPage() {
   const { stats, growth, recentOrganizations, recentActivity, loading } =
     usePlatformDashboardData();
 
-  const kpis = [
+  // Row 1: tenancy + revenue — every organization's standing at a glance.
+  const tenancyKpis = [
     {
       label: 'Organizations',
       value: stats.totalOrganizations,
@@ -48,11 +53,18 @@ export default function PlatformDashboardPage() {
       color: 'bg-primary/10 text-primary',
     },
     {
-      label: 'Active',
-      value: stats.activeOrganizations,
+      label: 'Paid Orgs',
+      value: stats.paidOrganizations,
       icon: CheckCircle2,
-      href: '/platform/organizations',
+      href: '/platform/subscriptions',
       color: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      label: 'Trial Orgs',
+      value: stats.trialCount,
+      icon: Hourglass,
+      href: '/platform/subscriptions',
+      color: 'bg-amber-50 text-amber-600',
     },
     {
       label: 'Suspended',
@@ -78,23 +90,41 @@ export default function PlatformDashboardPage() {
       color: 'bg-primary/10 text-primary',
     },
     {
-      label: 'Trials',
-      value: stats.trialCount,
-      icon: Hourglass,
-      href: '/platform/subscriptions',
-      color: 'bg-amber-50 text-amber-600',
-    },
-    {
       label: 'Expired Trials',
       value: stats.expiredTrialCount,
       icon: AlertTriangle,
       href: '/platform/subscriptions',
       color: 'bg-orange-50 text-orange-600',
     },
+  ];
+
+  // Row 2: people + platform activity.
+  const activityKpis = [
     {
       label: 'Total Users',
       value: stats.totalUsers,
       icon: Users,
+      href: '/platform/organization-users',
+      color: 'bg-primary/10 text-primary',
+    },
+    {
+      label: 'Platform Team',
+      value: stats.platformTeamCount,
+      icon: ShieldCheck,
+      href: '/platform/platform-users',
+      color: 'bg-primary/10 text-primary',
+    },
+    {
+      label: 'Active Today',
+      value: stats.activeToday,
+      icon: Activity,
+      href: '/platform/audit-logs',
+      color: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      label: 'New This Month',
+      value: stats.newUsersThisMonth,
+      icon: UserPlus,
       href: '/platform/organization-users',
       color: 'bg-primary/10 text-primary',
     },
@@ -105,6 +135,15 @@ export default function PlatformDashboardPage() {
       href: '/platform/organization-users',
       color: 'bg-emerald-50 text-emerald-600',
     },
+    {
+      // No ticketing system exists yet (Support Tickets is a coming-soon
+      // page) — shown as a dash, not a fabricated 0-that-looks-like-data.
+      label: 'Support Tickets',
+      value: '—',
+      icon: LifeBuoy,
+      href: '/platform/support-tickets',
+      color: 'bg-muted text-muted-foreground',
+    },
   ];
 
   return (
@@ -114,7 +153,7 @@ export default function PlatformDashboardPage() {
           <h1 className="page-title">Platform Console</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Welcome back, {profile?.full_name?.split(' ')[0] ?? 'there'}. Manage
-            organizations and onboard new customers.
+            organizations, users, and platform services.
           </p>
         </div>
         <Button asChild>
@@ -126,7 +165,13 @@ export default function PlatformDashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
-        {kpis.map((kpi) => (
+        {tenancyKpis.map((kpi) => (
+          <KpiCard key={kpi.label} {...kpi} loading={loading} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        {activityKpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading} />
         ))}
       </div>
