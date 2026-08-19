@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { getStockStatus } from '@/lib/utils/status';
@@ -37,72 +37,77 @@ export interface WarehouseData {
   refetch: () => void;
 }
 
+interface WarehouseFetchResult {
+  warehouses: Warehouse[];
+  stockRows: WarehouseStock[];
+  movements: StockMovement[];
+}
+
+const EMPTY_RESULT: WarehouseFetchResult = { warehouses: [], stockRows: [], movements: [] };
+
+async function fetchWarehouseData(branchFilter: string | null): Promise<WarehouseFetchResult> {
+  let warehousesQuery = supabase
+    .from('warehouses')
+    .select('*')
+    .is('deleted_at', null)
+    .order('name', { ascending: true });
+  if (branchFilter) warehousesQuery = warehousesQuery.eq('branch_id', branchFilter);
+
+  let stockQuery = supabase
+    .from('warehouse_stock')
+    .select('*, item:stock_items(*), warehouse:warehouses(*)')
+    .order('created_at', { ascending: false })
+    .limit(2000);
+  if (branchFilter) stockQuery = stockQuery.eq('branch_id', branchFilter);
+
+  let movementsQuery = supabase
+    .from('stock_movements')
+    .select(
+      '*, item:stock_items(*), warehouse:warehouses!stock_movements_warehouse_id_fkey(*), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(*), created_by_user:profiles!stock_movements_created_by_fkey(id, full_name)'
+    )
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (branchFilter) movementsQuery = movementsQuery.eq('branch_id', branchFilter);
+
+  // These three don't depend on each other — issue them as one
+  // concurrent batch instead of three sequential round trips.
+  const [{ data: warehouseRows }, { data: stock }, { data: movementRows }] = await Promise.all([
+    warehousesQuery,
+    stockQuery,
+    movementsQuery,
+  ]);
+
+  return {
+    warehouses: (warehouseRows as Warehouse[]) ?? [],
+    stockRows: (stock as unknown as WarehouseStock[]) ?? [],
+    movements: (movementRows as unknown as StockMovement[]) ?? [],
+  };
+}
+
 /**
  * Single consolidated fetch for the Warehouse module, same shape as
  * use-dashboard-data.ts: broad rows fetched once, every derived
- * stat/table computed client-side to avoid a query per widget.
+ * stat/table computed client-side to avoid a query per widget. Backed by
+ * SWR — navigating away and back (or the Dashboard, which also calls
+ * this hook) repaints instantly from cache instead of re-running all
+ * three queries from empty every time.
  */
 export function useWarehouseData(): WarehouseData {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const branchFilter = isAdmin ? null : profile?.branch_id ?? null;
 
-  const [loading, setLoading] = useState(true);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [stockRows, setStockRows] = useState<WarehouseStock[]>([]);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [reloadKey, setReloadKey] = useState(0);
+  const { data, isLoading, mutate } = useSWR(
+    profile?.id ? ['warehouse-data', profile.id, branchFilter] : null,
+    () => fetchWarehouseData(branchFilter),
+    { dedupingInterval: 5000 }
+  );
 
-  const refetch = useCallback(() => setReloadKey((k) => k + 1), []);
-
-  useEffect(() => {
-    async function load() {
-      if (!profile) return;
-      setLoading(true);
-      try {
-        let warehousesQuery = supabase
-          .from('warehouses')
-          .select('*')
-          .is('deleted_at', null)
-          .order('name', { ascending: true });
-        if (branchFilter) warehousesQuery = warehousesQuery.eq('branch_id', branchFilter);
-
-        let stockQuery = supabase
-          .from('warehouse_stock')
-          .select('*, item:stock_items(*), warehouse:warehouses(*)')
-          .order('created_at', { ascending: false })
-          .limit(2000);
-        if (branchFilter) stockQuery = stockQuery.eq('branch_id', branchFilter);
-
-        let movementsQuery = supabase
-          .from('stock_movements')
-          .select(
-            '*, item:stock_items(*), warehouse:warehouses!stock_movements_warehouse_id_fkey(*), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(*), created_by_user:profiles!stock_movements_created_by_fkey(id, full_name)'
-          )
-          .order('created_at', { ascending: false })
-          .limit(1000);
-        if (branchFilter) movementsQuery = movementsQuery.eq('branch_id', branchFilter);
-
-        // These three don't depend on each other — issue them as one
-        // concurrent batch instead of three sequential round trips.
-        const [{ data: warehouseRows }, { data: stock }, { data: movementRows }] = await Promise.all([
-          warehousesQuery,
-          stockQuery,
-          movementsQuery,
-        ]);
-
-        setWarehouses((warehouseRows as Warehouse[]) ?? []);
-        setStockRows((stock as unknown as WarehouseStock[]) ?? []);
-        setMovements((movementRows as unknown as StockMovement[]) ?? []);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  // Keyed on profile?.id, not the whole profile object — see
-  // use-dashboard-data.ts for why.
-  }, [profile?.id, branchFilter, reloadKey]);
+  const { warehouses, stockRows, movements } = data ?? EMPTY_RESULT;
+  const loading = isLoading;
+  const refetch = () => {
+    mutate();
+  };
 
   // --- Stats + donut, derived from stockRows -----------------------------
   let totalValue = 0;
