@@ -164,6 +164,8 @@ export default function OnboardingPage() {
                 <h2 className="font-serif text-xl font-bold tracking-tight">Departments</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   We created sensible defaults. Rename, disable, or add your own — no organization has to use all of them.
+                  These are just labels for your org chart — they don&apos;t grant access to anything. What a team member
+                  can see and do comes entirely from the Role you give them when you invite them, next.
                 </p>
               </div>
               <DepartmentsManager organizationId={organization.id} />

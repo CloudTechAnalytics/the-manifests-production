@@ -1606,6 +1606,9 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Just a label for your org chart — Role above is what actually controls what they can see and do.
+              </p>
             </div>
           </div>
 

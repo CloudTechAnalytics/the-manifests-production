@@ -1266,6 +1266,14 @@ function SettingsPageInner() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-semibold">Departments</CardTitle>
+                <CardDescription>
+                  Departments are just labels for your org chart — think of them as how your
+                  business is organized on paper. They don&apos;t grant or restrict access to
+                  anything. What a team member can actually see and do is controlled entirely
+                  by their <strong>Role</strong>, set when they&apos;re invited or edited on the{' '}
+                  Users page. Adding a new department here doesn&apos;t create any new
+                  permissions — it&apos;s purely for grouping and reporting.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <DepartmentsManager organizationId={profile.organization_id} />
