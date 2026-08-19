@@ -308,8 +308,32 @@ export interface OrgSubscription {
   billing_cycle: BillingCycle;
   seats: number;
   trial_ends_at: string | null;
+  /** When the current paid period ends (set on successful payment).
+   *  NULL for a trial that's never been paid for. */
+  current_period_end: string | null;
   started_at: string;
   updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  plan?: Plan;
+}
+
+export type PaymentTransactionStatus = 'pending' | 'success' | 'failed' | 'abandoned';
+
+export interface PaymentTransaction {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  billing_cycle: BillingCycle;
+  amount: number;
+  currency: string;
+  provider: string;
+  reference: string;
+  status: PaymentTransactionStatus;
+  paystack_transaction_id: number | null;
+  paid_at: string | null;
+  initiated_by: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   plan?: Plan;

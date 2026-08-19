@@ -28,6 +28,7 @@ import {
   Webhook,
   FileText,
   LifeBuoy,
+  CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -78,6 +79,7 @@ import { formatDate } from '@/lib/utils/status';
 import { useTheme } from '@/contexts/theme-context';
 import { WebhookSettingsPanel } from '@/components/settings/webhook-settings-panel';
 import { SupportTab } from '@/components/settings/support-tab';
+import { BillingTab } from '@/components/settings/billing-tab';
 import { DepartmentsManager } from '@/components/organization/departments-manager';
 import { useOrgPlan } from '@/hooks/use-org-plan';
 import { FeatureLocked } from '@/components/upgrade/feature-locked';
@@ -775,7 +777,7 @@ function SettingsPageInner() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-7">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-8">
           <TabsTrigger value="company" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Company</span>
@@ -787,6 +789,10 @@ function SettingsPageInner() {
           <TabsTrigger value="departments" className="gap-1.5">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Departments</span>
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-1.5">
+            <CreditCard className="h-4 w-4" />
+            <span className="hidden sm:inline">Billing</span>
           </TabsTrigger>
           <TabsTrigger value="profile" className="gap-1.5">
             <UserIcon className="h-4 w-4" />
@@ -1266,6 +1272,13 @@ function SettingsPageInner() {
               </CardContent>
             </Card>
           ) : null}
+        </TabsContent>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* Tab: Billing                                                  */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        <TabsContent value="billing" className="space-y-6">
+          <BillingTab />
         </TabsContent>
 
         {/* ──────────────────────────────────────────────────────────── */}
