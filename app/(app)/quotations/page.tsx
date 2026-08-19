@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileText, Plus, Search, Filter, Plane, Ship, Truck, Train, Waypoints } from 'lucide-react';
+import { FileText, Plus, Search, Filter, Plane, Ship, Truck, Train, Waypoints, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import {
   Card,
   CardContent,
@@ -90,9 +91,7 @@ export default function QuotationsPage() {
   const searchParams = useSearchParams();
   const { profile } = useAuth();
 
-  const [quotations, setQuotations] = useState<QuotationRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     const fromUrl = searchParams.get('status');
@@ -124,61 +123,74 @@ export default function QuotationsPage() {
       .then(({ data }) => setBranches((data as Branch[]) ?? []));
   }, [isAdmin]);
 
-  const loadQuotations = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('quotations')
-        .select(
-          '*, customer:customers(id, company_name), branch:branches(id, name)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+  // Shared by both the paginated display query and the (unbounded, only
+  // fetched on click) Export query below — same filters either way, only
+  // the .range() differs.
+  const buildQuotationsQuery = useCallback(() => {
+    let query = supabase
+      .from('quotations')
+      .select(
+        '*, customer:customers(id, company_name), branch:branches(id, name)'
+      )
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-      // Branch scoping: non-admins only see their branch
-      if (!isAdmin && userBranchId) {
-        query = query.eq('branch_id', userBranchId);
-      }
+    // Branch scoping: non-admins only see their branch
+    if (!isAdmin && userBranchId) {
+      query = query.eq('branch_id', userBranchId);
+    }
 
-      // Admin branch filter dropdown
-      if (isAdmin && branchIdFilter !== 'all') {
-        query = query.eq('branch_id', branchIdFilter);
-      }
+    // Admin branch filter dropdown
+    if (isAdmin && branchIdFilter !== 'all') {
+      query = query.eq('branch_id', branchIdFilter);
+    }
 
-      // Status filter
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+    // Status filter
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
 
-      // Shipment type filter
-      if (shipmentFilter !== 'all') {
-        query = query.eq('shipment_type', shipmentFilter);
-      }
+    // Shipment type filter
+    if (shipmentFilter !== 'all') {
+      query = query.eq('shipment_type', shipmentFilter);
+    }
 
-      // Search by quotation_number or customer company_name
-      if (debouncedSearch) {
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `quotation_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
-        );
-      }
+    // Search by quotation_number or customer company_name
+    if (debouncedSearch) {
+      const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
+      query = query.or(
+        `quotation_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
+      );
+    }
 
-      const { data, error } = await query;
+    return query;
+  }, [isAdmin, userBranchId, statusFilter, shipmentFilter, branchIdFilter, debouncedSearch]);
+
+  const fetchQuotationsPage = useCallback(
+    async (offset: number, limit: number): Promise<QuotationRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildQuotationsQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading quotations:', error);
-        setQuotations([]);
-        return;
+        return [];
       }
-      setQuotations((data as QuotationRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, statusFilter, shipmentFilter, branchIdFilter, debouncedSearch]);
+      return (data as QuotationRow[]) ?? [];
+    },
+    [profile, buildQuotationsQuery]
+  );
 
-  useEffect(() => {
-    loadQuotations();
-  }, [loadQuotations]);
+  const { rows: quotations, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<QuotationRow>(fetchQuotationsPage);
+
+  // Export intentionally does NOT reuse `quotations` (the current page) —
+  // it fetches every row matching the active filters, unbounded, only
+  // when actually clicked, so pagination on the table never silently
+  // shrinks what "Export" means.
+  const fetchAllQuotationsForExport = useCallback(async (): Promise<QuotationRow[]> => {
+    const { data, error } = await buildQuotationsQuery();
+    if (error) throw error;
+    return (data as QuotationRow[]) ?? [];
+  }, [buildQuotationsQuery]);
 
   const statusOptions = useMemo(
     () => [
@@ -219,7 +231,7 @@ export default function QuotationsPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={quotations}
+            fetchData={fetchAllQuotationsForExport}
             columns={QUOTATION_EXPORT_COLUMNS}
             filename="quotations"
           />
@@ -305,7 +317,8 @@ export default function QuotationsPage() {
             All Quotations
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({quotations.length})
+                ({quotations.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -417,6 +430,14 @@ export default function QuotationsPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

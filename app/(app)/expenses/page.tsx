@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CreditCard, Plus, Search, Filter } from 'lucide-react';
+import { CreditCard, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,9 +62,7 @@ export default function ExpensesPage() {
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
 
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ExpenseStatus>('all');
@@ -85,69 +84,110 @@ export default function ExpensesPage() {
       .then(({ data }) => setBranches((data as Branch[]) ?? []));
   }, [isAdmin]);
 
-  const loadExpenses = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('expenses')
-        .select('*, branch:branches(id, name), paid_by_user:profiles!expenses_paid_by_fkey(id, full_name)')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
-      if (categoryFilter !== 'all') query = query.eq('category', categoryFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+  // Shared branch/category/status/search scoping — reused by the paginated
+  // list query, the summary query, and export.
+  const applyExpenseScope = useCallback(
+    <Q extends { eq: any; or: any }>(query: Q): Q => {
+      let q = query;
+      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
+      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
+      if (categoryFilter !== 'all') q = q.eq('category', categoryFilter);
+      if (statusFilter !== 'all') q = q.eq('status', statusFilter);
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `expense_number.ilike.%${sanitized}%,description.ilike.%${sanitized}%`
-        );
+        q = q.or(`expense_number.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
       }
+      return q;
+    },
+    [isAdmin, userBranchId, branchIdFilter, categoryFilter, statusFilter, debouncedSearch]
+  );
 
-      const { data, error } = await query;
+  const buildExpensesListQuery = useCallback(
+    () =>
+      applyExpenseScope(
+        supabase
+          .from('expenses')
+          .select('*, branch:branches(id, name), paid_by_user:profiles!expenses_paid_by_fkey(id, full_name)')
+          .is('deleted_at', null)
+      ).order('created_at', { ascending: false }),
+    [applyExpenseScope]
+  );
+
+  const fetchExpensesPage = useCallback(
+    async (offset: number, limit: number): Promise<ExpenseRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildExpensesListQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading expenses:', error);
-        setExpenses([]);
-        return;
+        return [];
       }
-      setExpenses((data as ExpenseRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, branchIdFilter, categoryFilter, statusFilter, debouncedSearch]);
+      return (data as ExpenseRow[]) ?? [];
+    },
+    [profile, buildExpensesListQuery]
+  );
+
+  const { rows: expenses, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<ExpenseRow>(fetchExpensesPage);
+
+  // Export intentionally does NOT reuse `expenses` (the current page) — it
+  // fetches every row matching the active filters, unbounded, only when
+  // actually clicked, so pagination on the table never silently shrinks
+  // what "Export" means.
+  const fetchAllExpensesForExport = useCallback(async (): Promise<ExpenseRow[]> => {
+    const { data, error } = await buildExpensesListQuery();
+    if (error) throw error;
+    return (data as ExpenseRow[]) ?? [];
+  }, [buildExpensesListQuery]);
+
+  // Summary tiles: their own lightweight (no embeds), unpaginated query,
+  // decoupled from the paginated display rows above — pagination must
+  // never silently make a financial total wrong by only summing whatever
+  // page happens to be loaded.
+  const [summary, setSummary] = useState({
+    count: 0,
+    total: 0,
+    thisMonth: 0,
+    pending: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   useEffect(() => {
-    loadExpenses();
-  }, [loadExpenses]);
-
-  const summary = useMemo(() => {
-    let total = 0;
-    let thisMonth = 0;
-    let approved = 0;
-    let pending = 0;
-    const categories = new Set<string>();
-    const now = new Date();
-    expenses.forEach((e) => {
-      total += Number(e.amount);
-      categories.add(e.category);
-      const d = new Date(e.expense_date);
-      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
-        thisMonth += Number(e.amount);
+    if (!profile) return;
+    let cancelled = false;
+    setSummaryLoading(true);
+    (async () => {
+      const { data, error } = await applyExpenseScope(
+        supabase
+          .from('expenses')
+          .select('amount, status, expense_date')
+          .is('deleted_at', null)
+      );
+      if (cancelled) return;
+      if (error) {
+        console.error('Error loading expense summary:', error);
+        setSummaryLoading(false);
+        return;
       }
-      if (e.status === 'approved') approved += Number(e.amount);
-      if (e.status === 'pending') pending += Number(e.amount);
-    });
-    return {
-      count: expenses.length,
-      total,
-      thisMonth,
-      approved,
-      pending,
-      categoryCount: categories.size,
+      const rows = (data ?? []) as Pick<Expense, 'amount' | 'status' | 'expense_date'>[];
+      let total = 0;
+      let thisMonth = 0;
+      let pending = 0;
+      const now = new Date();
+      rows.forEach((e) => {
+        total += Number(e.amount);
+        const d = new Date(e.expense_date);
+        if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+          thisMonth += Number(e.amount);
+        }
+        if (e.status === 'pending') pending += Number(e.amount);
+      });
+      setSummary({ count: rows.length, total, thisMonth, pending });
+      setSummaryLoading(false);
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [expenses]);
+  }, [profile, applyExpenseScope]);
 
   return (
     <div className="space-y-4 p-6 lg:p-8">
@@ -163,7 +203,7 @@ export default function ExpensesPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={expenses}
+            fetchData={fetchAllExpensesForExport}
             columns={EXPENSE_EXPORT_COLUMNS}
             filename="expenses"
           />
@@ -177,7 +217,7 @@ export default function ExpensesPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {loading ? (
+        {summaryLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardContent className="p-4">
@@ -263,7 +303,8 @@ export default function ExpensesPage() {
             All Expenses
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({expenses.length})
+                ({expenses.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -341,6 +382,14 @@ export default function ExpensesPage() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
             </div>
           )}
         </CardContent>

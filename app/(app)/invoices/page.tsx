@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Receipt, Plus, Search, Filter } from 'lucide-react';
+import { Receipt, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,9 +82,7 @@ export default function InvoicesPage() {
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
 
-  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>(() => {
     const fromUrl = searchParams.get('status');
@@ -107,76 +106,130 @@ export default function InvoicesPage() {
       .then(({ data }) => setBranches((data as Branch[]) ?? []));
   }, [isAdmin]);
 
-  const loadInvoices = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('invoices')
-        .select(
-          '*, customer:customers(id, company_name), shipment:shipments(id, reference_number)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
+  // Shared branch/search scoping — reused by the list query (below, with
+  // statusTab + ordering layered on), the summary query, and export.
+  // statusTab is deliberately NOT part of this base: the summary tiles
+  // report every non-cancelled invoice regardless of which tab is open,
+  // matching the pre-pagination behavior (the old client-side `summary`
+  // useMemo ran over the full, not tab-filtered, invoices array).
+  const applyInvoiceScope = useCallback(
+    <Q extends { eq: any; or: any }>(query: Q): Q => {
+      let q = query;
+      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
+      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `invoice_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
-        );
+        q = q.or(`invoice_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`);
       }
+      return q;
+    },
+    [isAdmin, userBranchId, branchIdFilter, debouncedSearch]
+  );
 
-      const { data, error } = await query;
+  const buildInvoicesListQuery = useCallback(() => {
+    let query = applyInvoiceScope(
+      supabase
+        .from('invoices')
+        .select('*, customer:customers(id, company_name), shipment:shipments(id, reference_number)')
+        .is('deleted_at', null)
+    ).order('created_at', { ascending: false });
+
+    const today = new Date().toISOString().split('T')[0];
+    if (statusTab === 'overdue') {
+      // Mirrors isInvoiceOverdue()'s exact definition, server-side.
+      query = query.in('status', ['sent', 'partial']).lt('due_date', today);
+    } else if (statusTab !== 'all') {
+      query = query.eq('status', statusTab);
+    }
+    return query;
+  }, [applyInvoiceScope, statusTab]);
+
+  const fetchInvoicesPage = useCallback(
+    async (offset: number, limit: number): Promise<InvoiceRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildInvoicesListQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading invoices:', error);
-        setInvoices([]);
-        return;
+        return [];
       }
-      setInvoices((data as InvoiceRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, branchIdFilter, debouncedSearch]);
+      return (data as InvoiceRow[]) ?? [];
+    },
+    [profile, buildInvoicesListQuery]
+  );
+
+  const { rows: invoices, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<InvoiceRow>(fetchInvoicesPage);
+
+  const fetchAllInvoicesForExport = useCallback(async (): Promise<InvoiceRow[]> => {
+    const { data, error } = await buildInvoicesListQuery();
+    if (error) throw error;
+    return (data as InvoiceRow[]) ?? [];
+  }, [buildInvoicesListQuery]);
+
+  // Summary tiles: their own lightweight (no embeds beyond what search
+  // needs, no pagination) query, decoupled from the paginated display
+  // rows above — pagination must never silently make a financial total
+  // wrong by only summing whatever page happens to be loaded.
+  const [summary, setSummary] = useState({
+    count: 0,
+    currency: 'NGN',
+    total: 0,
+    paid: 0,
+    outstanding: 0,
+    overdueCount: 0,
+    overdueTotal: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   useEffect(() => {
-    loadInvoices();
-  }, [loadInvoices]);
-
-  const visibleInvoices = useMemo(() => {
-    if (statusTab === 'all') return invoices;
-    if (statusTab === 'overdue') return invoices.filter((i) => isInvoiceOverdue(i));
-    return invoices.filter((i) => i.status === statusTab);
-  }, [invoices, statusTab]);
-
-  const summary = useMemo(() => {
-    const totalsByCurrency: Record<string, number> = {};
-    const paidByCurrency: Record<string, number> = {};
-    let overdueCount = 0;
-    let overdueTotal = 0;
-    invoices.forEach((inv) => {
-      if (inv.status === 'cancelled') return;
-      totalsByCurrency[inv.currency] = (totalsByCurrency[inv.currency] ?? 0) + Number(inv.total);
-      paidByCurrency[inv.currency] = (paidByCurrency[inv.currency] ?? 0) + Number(inv.amount_paid);
-      if (isInvoiceOverdue(inv)) {
-        overdueCount++;
-        overdueTotal += Number(inv.total) - Number(inv.amount_paid);
+    if (!profile) return;
+    let cancelled = false;
+    setSummaryLoading(true);
+    (async () => {
+      const { data, error } = await applyInvoiceScope(
+        supabase
+          .from('invoices')
+          .select('status, total, amount_paid, currency, due_date, customer:customers(company_name)')
+          .is('deleted_at', null)
+      );
+      if (cancelled) return;
+      if (error) {
+        console.error('Error loading invoice summary:', error);
+        setSummaryLoading(false);
+        return;
       }
-    });
-    const currency = pickPrimaryCurrency(totalsByCurrency) ?? 'NGN';
-    const total = totalsByCurrency[currency] ?? 0;
-    const paid = paidByCurrency[currency] ?? 0;
-    return {
-      count: invoices.filter((i) => i.status !== 'cancelled').length,
-      currency,
-      total,
-      paid,
-      outstanding: total - paid,
-      overdueCount,
-      overdueTotal,
+      const rows = (data ?? []) as Pick<Invoice, 'status' | 'total' | 'amount_paid' | 'currency' | 'due_date'>[];
+      const totalsByCurrency: Record<string, number> = {};
+      const paidByCurrency: Record<string, number> = {};
+      let overdueCount = 0;
+      let overdueTotal = 0;
+      rows.forEach((inv) => {
+        if (inv.status === 'cancelled') return;
+        totalsByCurrency[inv.currency] = (totalsByCurrency[inv.currency] ?? 0) + Number(inv.total);
+        paidByCurrency[inv.currency] = (paidByCurrency[inv.currency] ?? 0) + Number(inv.amount_paid);
+        if (isInvoiceOverdue(inv)) {
+          overdueCount++;
+          overdueTotal += Number(inv.total) - Number(inv.amount_paid);
+        }
+      });
+      const currency = pickPrimaryCurrency(totalsByCurrency) ?? 'NGN';
+      const total = totalsByCurrency[currency] ?? 0;
+      const paid = paidByCurrency[currency] ?? 0;
+      setSummary({
+        count: rows.filter((i) => i.status !== 'cancelled').length,
+        currency,
+        total,
+        paid,
+        outstanding: total - paid,
+        overdueCount,
+        overdueTotal,
+      });
+      setSummaryLoading(false);
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [invoices]);
+  }, [profile, applyInvoiceScope]);
 
   return (
     <div className="space-y-4 p-6 lg:p-8">
@@ -193,7 +246,7 @@ export default function InvoicesPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={invoices}
+            fetchData={fetchAllInvoicesForExport}
             columns={INVOICE_EXPORT_COLUMNS}
             filename="invoices"
           />
@@ -208,7 +261,7 @@ export default function InvoicesPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {loading ? (
+        {summaryLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardContent className="p-4">
@@ -288,7 +341,8 @@ export default function InvoicesPage() {
             All Invoices
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({visibleInvoices.length})
+                ({invoices.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -300,7 +354,7 @@ export default function InvoicesPage() {
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
-          ) : visibleInvoices.length === 0 ? (
+          ) : invoices.length === 0 ? (
             <EmptyState
               icon={Receipt}
               title="No invoices found"
@@ -326,7 +380,7 @@ export default function InvoicesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleInvoices.map((inv) => {
+                  {invoices.map((inv) => {
                     const overdue = isInvoiceOverdue(inv);
                     const meta = INVOICE_STATUS_META[inv.status] ?? {
                       label: inv.status ?? 'Unknown',
@@ -372,6 +426,14 @@ export default function InvoicesPage() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
             </div>
           )}
         </CardContent>

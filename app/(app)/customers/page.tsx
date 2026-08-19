@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, Plus, Search, Filter, Building2 } from 'lucide-react';
+import { Users, Plus, Search, Filter, Building2, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import {
   Card,
   CardContent,
@@ -54,8 +55,6 @@ export default function CustomersPage() {
   const router = useRouter();
   const { profile } = useAuth();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
@@ -69,53 +68,66 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const loadCustomers = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('customers')
-        .select('*, branch:branches(*)')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+  // Shared by both the paginated display query and the (unbounded, only
+  // fetched on click) Export query below — same filters either way, only
+  // the .range() differs.
+  const buildCustomersQuery = useCallback(() => {
+    let query = supabase
+      .from('customers')
+      .select('*, branch:branches(*)')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-      // Branch scoping: non-admins only see their branch
-      if (branchFilter) {
-        query = query.eq('branch_id', branchFilter);
-      }
+    // Branch scoping: non-admins only see their branch
+    if (branchFilter) {
+      query = query.eq('branch_id', branchFilter);
+    }
 
-      // Status filter
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+    // Status filter
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
 
-      // Search by company name, email, or phone
-      if (debouncedSearch) {
-        // PostgREST's or() filter grammar treats %_(),. as syntactically
-        // significant — a search term containing any of them (e.g. a
-        // company name like "Doe, John Ltd") would otherwise produce a
-        // malformed filter and a 400 that gets swallowed as "no results".
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `company_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%,phone.ilike.%${sanitized}%`
-        );
-      }
+    // Search by company name, email, or phone
+    if (debouncedSearch) {
+      // PostgREST's or() filter grammar treats %_(),. as syntactically
+      // significant — a search term containing any of them (e.g. a
+      // company name like "Doe, John Ltd") would otherwise produce a
+      // malformed filter and a 400 that gets swallowed as "no results".
+      const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
+      query = query.or(
+        `company_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%,phone.ilike.%${sanitized}%`
+      );
+    }
 
-      const { data, error } = await query;
+    return query;
+  }, [branchFilter, statusFilter, debouncedSearch]);
+
+  const fetchCustomersPage = useCallback(
+    async (offset: number, limit: number): Promise<Customer[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildCustomersQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading customers:', error);
-        setCustomers([]);
-        return;
+        return [];
       }
-      setCustomers((data as Customer[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, branchFilter, statusFilter, debouncedSearch]);
+      return (data as Customer[]) ?? [];
+    },
+    [profile, buildCustomersQuery]
+  );
 
-  useEffect(() => {
-    loadCustomers();
-  }, [loadCustomers]);
+  const { rows: customers, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<Customer>(fetchCustomersPage);
+
+  // Export intentionally does NOT reuse `customers` (the current page) —
+  // it fetches every row matching the active filters, unbounded, only
+  // when actually clicked, so pagination on the table never silently
+  // shrinks what "Export" means.
+  const fetchAllCustomersForExport = useCallback(async (): Promise<Customer[]> => {
+    const { data, error } = await buildCustomersQuery();
+    if (error) throw error;
+    return (data as Customer[]) ?? [];
+  }, [buildCustomersQuery]);
 
   const statusOptions = useMemo(
     () => [
@@ -142,7 +154,7 @@ export default function CustomersPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={customers}
+            fetchData={fetchAllCustomersForExport}
             columns={CUSTOMER_EXPORT_COLUMNS}
             filename="customers"
           />
@@ -195,7 +207,8 @@ export default function CustomersPage() {
             All Customers
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({customers.length})
+                ({customers.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -292,6 +305,14 @@ export default function CustomersPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

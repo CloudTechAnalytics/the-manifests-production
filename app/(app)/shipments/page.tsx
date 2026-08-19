@@ -13,9 +13,11 @@ import {
   Truck,
   Train,
   Waypoints,
+  Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import {
   Card,
   CardContent,
@@ -118,9 +120,7 @@ export default function ShipmentsPage() {
   const searchParams = useSearchParams();
   const { profile } = useAuth();
 
-  const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     const fromUrl = searchParams.get('status');
@@ -152,69 +152,74 @@ export default function ShipmentsPage() {
       .then(({ data }) => setBranches((data as Branch[]) ?? []));
   }, [isAdmin]);
 
-  const loadShipments = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select(
-          '*, customer:customers(id, company_name), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name), branch:branches(id, name)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+  // Shared by both the paginated display query and the (unbounded, only
+  // fetched on click) Export query below — same filters either way, only
+  // the .range() differs.
+  const buildShipmentsQuery = useCallback(() => {
+    let query = supabase
+      .from('shipments')
+      .select(
+        '*, customer:customers(id, company_name), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name), branch:branches(id, name)'
+      )
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-      // Branch scoping: non-admins only see their branch
-      if (!isAdmin && userBranchId) {
-        query = query.eq('branch_id', userBranchId);
-      }
+    // Branch scoping: non-admins only see their branch
+    if (!isAdmin && userBranchId) {
+      query = query.eq('branch_id', userBranchId);
+    }
 
-      // Admin branch filter dropdown
-      if (isAdmin && branchIdFilter !== 'all') {
-        query = query.eq('branch_id', branchIdFilter);
-      }
+    // Admin branch filter dropdown
+    if (isAdmin && branchIdFilter !== 'all') {
+      query = query.eq('branch_id', branchIdFilter);
+    }
 
-      // Status filter
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+    // Status filter
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
 
-      // Shipment type filter
-      if (typeFilter !== 'all') {
-        query = query.eq('shipment_type', typeFilter);
-      }
+    // Shipment type filter
+    if (typeFilter !== 'all') {
+      query = query.eq('shipment_type', typeFilter);
+    }
 
-      // Search by reference_number, customer name, or tracking_number
-      if (debouncedSearch) {
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `reference_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%,tracking_number.ilike.%${sanitized}%`
-        );
-      }
+    // Search by reference_number, customer name, or tracking_number
+    if (debouncedSearch) {
+      const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
+      query = query.or(
+        `reference_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%,tracking_number.ilike.%${sanitized}%`
+      );
+    }
 
-      const { data, error } = await query;
+    return query;
+  }, [isAdmin, userBranchId, statusFilter, typeFilter, branchIdFilter, debouncedSearch]);
+
+  const fetchShipmentsPage = useCallback(
+    async (offset: number, limit: number): Promise<ShipmentRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildShipmentsQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading shipments:', error);
-        setShipments([]);
-        return;
+        return [];
       }
-      setShipments((data as ShipmentRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    profile,
-    isAdmin,
-    userBranchId,
-    statusFilter,
-    typeFilter,
-    branchIdFilter,
-    debouncedSearch,
-  ]);
+      return (data as ShipmentRow[]) ?? [];
+    },
+    [profile, buildShipmentsQuery]
+  );
 
-  useEffect(() => {
-    loadShipments();
-  }, [loadShipments]);
+  const { rows: shipments, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<ShipmentRow>(fetchShipmentsPage);
+
+  // Export intentionally does NOT reuse `shipments` (the current page) —
+  // it fetches every row matching the active filters, unbounded, only
+  // when actually clicked, so pagination on the table never silently
+  // shrinks what "Export" means.
+  const fetchAllShipmentsForExport = useCallback(async (): Promise<ShipmentRow[]> => {
+    const { data, error } = await buildShipmentsQuery();
+    if (error) throw error;
+    return (data as ShipmentRow[]) ?? [];
+  }, [buildShipmentsQuery]);
 
   const statusOptions = useMemo(
     () => [
@@ -255,7 +260,7 @@ export default function ShipmentsPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={shipments}
+            fetchData={fetchAllShipmentsForExport}
             columns={SHIPMENT_EXPORT_COLUMNS}
             filename="shipments"
           />
@@ -341,7 +346,8 @@ export default function ShipmentsPage() {
             All Shipments
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({shipments.length})
+                ({shipments.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -450,6 +456,14 @@ export default function ShipmentsPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

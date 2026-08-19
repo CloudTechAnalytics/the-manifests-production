@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Wallet, Plus, Search, Filter } from 'lucide-react';
+import { Wallet, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,9 +61,7 @@ export default function PaymentsPage() {
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
 
-  const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState<'all' | PaymentMethod>('all');
   const [branchIdFilter, setBranchIdFilter] = useState('all');
@@ -83,70 +82,122 @@ export default function PaymentsPage() {
       .then(({ data }) => setBranches((data as Branch[]) ?? []));
   }, [isAdmin]);
 
-  const loadPayments = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('payments')
-        .select(
-          '*, customer:customers(id, company_name), allocations:payment_allocations(amount, invoice:invoices(invoice_number))'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
-      if (isAdmin && branchIdFilter !== 'all') query = query.eq('branch_id', branchIdFilter);
-      if (methodFilter !== 'all') query = query.eq('payment_method', methodFilter);
+  // Shared branch/method/search scoping — reused by the paginated list
+  // query, the summary query, and export.
+  const applyPaymentScope = useCallback(
+    <Q extends { eq: any; or: any }>(query: Q): Q => {
+      let q = query;
+      if (!isAdmin && userBranchId) q = q.eq('branch_id', userBranchId);
+      if (isAdmin && branchIdFilter !== 'all') q = q.eq('branch_id', branchIdFilter);
+      if (methodFilter !== 'all') q = q.eq('payment_method', methodFilter);
       if (debouncedSearch) {
         const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
+        q = q.or(
           `payment_number.ilike.%${sanitized}%,reference.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
         );
       }
+      return q;
+    },
+    [isAdmin, userBranchId, branchIdFilter, methodFilter, debouncedSearch]
+  );
 
-      const { data, error } = await query;
+  const buildPaymentsListQuery = useCallback(
+    () =>
+      applyPaymentScope(
+        supabase
+          .from('payments')
+          .select(
+            '*, customer:customers(id, company_name), allocations:payment_allocations(amount, invoice:invoices(invoice_number))'
+          )
+          .is('deleted_at', null)
+      ).order('created_at', { ascending: false }),
+    [applyPaymentScope]
+  );
+
+  const fetchPaymentsPage = useCallback(
+    async (offset: number, limit: number): Promise<PaymentRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildPaymentsListQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading payments:', error);
-        setPayments([]);
-        return;
+        return [];
       }
-      setPayments((data as PaymentRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, branchIdFilter, methodFilter, debouncedSearch]);
+      return (data as PaymentRow[]) ?? [];
+    },
+    [profile, buildPaymentsListQuery]
+  );
+
+  const { rows: payments, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<PaymentRow>(fetchPaymentsPage);
+
+  const fetchAllPaymentsForExport = useCallback(async (): Promise<PaymentRow[]> => {
+    const { data, error } = await buildPaymentsListQuery();
+    if (error) throw error;
+    return (data as PaymentRow[]) ?? [];
+  }, [buildPaymentsListQuery]);
+
+  // Summary tiles: their own lightweight, unpaginated query (no
+  // allocations/invoice embed needed for the sums) — decoupled from the
+  // paginated display rows so a financial total is never silently wrong
+  // by only summing whatever page happens to be loaded.
+  const [summary, setSummary] = useState({
+    count: 0,
+    currency: 'NGN',
+    total: 0,
+    thisMonth: 0,
+    pendingAllocations: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   useEffect(() => {
-    loadPayments();
-  }, [loadPayments]);
-
-  const summary = useMemo(() => {
-    const totalsByCurrency: Record<string, number> = {};
-    let thisMonth = 0;
-    let pendingAllocations = 0;
-    const now = new Date();
-    payments.forEach((p) => {
-      // Payments don't carry currency directly in this schema iteration —
-      // customers/invoices are branch-currency-agnostic, so we treat NGN
-      // as the working currency unless multi-currency payments are added.
-      totalsByCurrency.NGN = (totalsByCurrency.NGN ?? 0) + Number(p.amount);
-      const paymentDate = new Date(p.payment_date);
-      if (paymentDate.getFullYear() === now.getFullYear() && paymentDate.getMonth() === now.getMonth()) {
-        thisMonth += Number(p.amount);
+    if (!profile) return;
+    let cancelled = false;
+    setSummaryLoading(true);
+    (async () => {
+      const { data, error } = await applyPaymentScope(
+        supabase
+          .from('payments')
+          .select('amount, allocated_amount, payment_date, customer:customers(company_name)')
+          .is('deleted_at', null)
+      );
+      if (cancelled) return;
+      if (error) {
+        console.error('Error loading payment summary:', error);
+        setSummaryLoading(false);
+        return;
       }
-      const unallocated = Number(p.amount) - Number(p.allocated_amount);
-      if (unallocated > 0.01) pendingAllocations += unallocated;
-    });
-    const currency = pickPrimaryCurrency(totalsByCurrency) ?? 'NGN';
-    return {
-      count: payments.length,
-      currency,
-      total: totalsByCurrency[currency] ?? 0,
-      thisMonth,
-      pendingAllocations,
+      const rows = (data ?? []) as Pick<Payment, 'amount' | 'allocated_amount' | 'payment_date'>[];
+      const totalsByCurrency: Record<string, number> = {};
+      let thisMonth = 0;
+      let pendingAllocations = 0;
+      const now = new Date();
+      rows.forEach((p) => {
+        // Payments don't carry currency directly in this schema iteration
+        // — customers/invoices are branch-currency-agnostic, so we treat
+        // NGN as the working currency unless multi-currency payments are
+        // added.
+        totalsByCurrency.NGN = (totalsByCurrency.NGN ?? 0) + Number(p.amount);
+        const paymentDate = new Date(p.payment_date);
+        if (paymentDate.getFullYear() === now.getFullYear() && paymentDate.getMonth() === now.getMonth()) {
+          thisMonth += Number(p.amount);
+        }
+        const unallocated = Number(p.amount) - Number(p.allocated_amount);
+        if (unallocated > 0.01) pendingAllocations += unallocated;
+      });
+      const currency = pickPrimaryCurrency(totalsByCurrency) ?? 'NGN';
+      setSummary({
+        count: rows.length,
+        currency,
+        total: totalsByCurrency[currency] ?? 0,
+        thisMonth,
+        pendingAllocations,
+      });
+      setSummaryLoading(false);
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [payments]);
+  }, [profile, applyPaymentScope]);
 
   return (
     <div className="space-y-4 p-6 lg:p-8">
@@ -162,7 +213,7 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <ExportButton
-            data={payments}
+            fetchData={fetchAllPaymentsForExport}
             columns={PAYMENT_EXPORT_COLUMNS}
             filename="payments"
           />
@@ -176,7 +227,7 @@ export default function PaymentsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {loading ? (
+        {summaryLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardContent className="p-4">
@@ -249,7 +300,8 @@ export default function PaymentsPage() {
             All Payments
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({payments.length})
+                ({payments.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -336,6 +388,14 @@ export default function PaymentsPage() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
             </div>
           )}
         </CardContent>

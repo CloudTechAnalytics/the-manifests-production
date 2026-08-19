@@ -20,6 +20,7 @@ import {
 import { DocumentViewerDialog } from '@/components/documents/document-viewer-dialog';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { usePaginatedList } from '@/hooks/use-paginated-list';
 import { toast } from 'sonner';
 import {
   Card,
@@ -142,11 +143,9 @@ export default function DocumentsPage() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
 
-  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shipments, setShipments] = useState<{ id: string; reference_number: string | null }[]>([]);
   const [customers, setCustomers] = useState<{ id: string; company_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [branchIdFilter, setBranchIdFilter] = useState<string>('all');
@@ -177,6 +176,11 @@ export default function DocumentsPage() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Bumped after upload/delete to force the paginated list back to page 1
+  // with fresh data — a new fetchDocumentsPage reference is exactly the
+  // trigger usePaginatedList resets on, same as changing a filter.
+  const [reloadToken, setReloadToken] = useState(0);
 
   // ─── Data loading ────────────────────────────────────────────────────────
 
@@ -214,60 +218,70 @@ export default function DocumentsPage() {
     setCustomers((custRes.data as { id: string; company_name: string }[]) ?? []);
   }, [profile, isAdmin, userBranchId]);
 
-  const loadDocuments = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('documents')
-        .select(
-          '*, shipment:shipments(id, reference_number), customer:customers(id, company_name), created_by_user:profiles!documents_created_by_fkey(id, full_name), branch:branches(id, name)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+  // Shared by both the paginated display query and the (unbounded, only
+  // fetched on click) Export query below — same filters either way, only
+  // the .range() differs.
+  const buildDocumentsQuery = useCallback(() => {
+    let query = supabase
+      .from('documents')
+      .select(
+        '*, shipment:shipments(id, reference_number), customer:customers(id, company_name), created_by_user:profiles!documents_created_by_fkey(id, full_name), branch:branches(id, name)'
+      )
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-      // Branch scoping: non-admins only see their branch
-      if (!isAdmin && userBranchId) {
-        query = query.eq('branch_id', userBranchId);
-      }
+    // Branch scoping: non-admins only see their branch
+    if (!isAdmin && userBranchId) {
+      query = query.eq('branch_id', userBranchId);
+    }
 
-      // Admin branch filter dropdown
-      if (isAdmin && branchIdFilter !== 'all') {
-        query = query.eq('branch_id', branchIdFilter);
-      }
+    // Admin branch filter dropdown
+    if (isAdmin && branchIdFilter !== 'all') {
+      query = query.eq('branch_id', branchIdFilter);
+    }
 
-      // Category filter
-      if (categoryFilter !== 'all') {
-        query = query.eq('category', categoryFilter);
-      }
+    // Category filter
+    if (categoryFilter !== 'all') {
+      query = query.eq('category', categoryFilter);
+    }
 
-      // Search by document name
-      if (debouncedSearch) {
-        query = query.ilike('name', `%${debouncedSearch}%`);
-      }
+    // Search by document name
+    if (debouncedSearch) {
+      query = query.ilike('name', `%${debouncedSearch}%`);
+    }
 
-      const { data, error } = await query;
+    return query;
+  }, [isAdmin, userBranchId, categoryFilter, branchIdFilter, debouncedSearch]);
+
+  const fetchDocumentsPage = useCallback(
+    async (offset: number, limit: number): Promise<DocumentRow[]> => {
+      if (!profile) return [];
+      const { data, error } = await buildDocumentsQuery().range(offset, offset + limit - 1);
       if (error) {
         console.error('Error loading documents:', error);
-        setDocuments([]);
-        return;
+        return [];
       }
-      setDocuments((data as DocumentRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    profile,
-    isAdmin,
-    userBranchId,
-    categoryFilter,
-    branchIdFilter,
-    debouncedSearch,
-  ]);
+      return (data as DocumentRow[]) ?? [];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadToken is a
+    // deliberate cache-buster: bumping it forces a new fetchDocumentsPage
+    // reference so usePaginatedList resets to a fresh page 1 after an
+    // upload or delete, without duplicating its internal fetch logic here.
+    [profile, buildDocumentsQuery, reloadToken]
+  );
 
-  useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+  const { rows: documents, loading, loadingMore, hasMore, loadMore } =
+    usePaginatedList<DocumentRow>(fetchDocumentsPage);
+
+  // Export intentionally does NOT reuse `documents` (the current page) —
+  // it fetches every row matching the active filters, unbounded, only
+  // when actually clicked, so pagination on the table never silently
+  // shrinks what "Export" means.
+  const fetchAllDocumentsForExport = useCallback(async (): Promise<DocumentRow[]> => {
+    const { data, error } = await buildDocumentsQuery();
+    if (error) throw error;
+    return (data as DocumentRow[]) ?? [];
+  }, [buildDocumentsQuery]);
 
   useEffect(() => {
     loadBranches();
@@ -452,18 +466,18 @@ export default function DocumentsPage() {
       );
       setPendingFiles([]);
       setUploadOpen(false);
-      loadDocuments();
+      setReloadToken((t) => t + 1);
     } else if (successCount > 0 && failCount > 0) {
       toast.warning(`${successCount} uploaded, ${failCount} failed`);
       // Keep failed files in the list for retry; remove successful ones
       // Since we don't track per-file success here, just reload and clear
       setPendingFiles([]);
       setUploadOpen(false);
-      loadDocuments();
+      setReloadToken((t) => t + 1);
     } else if (failCount > 0) {
       toast.error(`Upload failed for ${failCount} file${failCount > 1 ? 's' : ''}`);
     }
-  }, [profile, userBranchId, pendingFiles, loadDocuments]);
+  }, [profile, userBranchId, pendingFiles]);
 
   // ─── Download logic ───────────────────────────────────────────────────────
 
@@ -536,14 +550,14 @@ export default function DocumentsPage() {
 
       toast.success('Document deleted successfully');
       setDeleteTarget(null);
-      loadDocuments();
+      setReloadToken((t) => t + 1);
     } catch (err) {
       console.error('Unexpected delete error:', err);
       toast.error('An unexpected error occurred during deletion');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, profile, loadDocuments]);
+  }, [deleteTarget, profile]);
 
   // ─── Derived values ───────────────────────────────────────────────────────
 
@@ -571,7 +585,11 @@ export default function DocumentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
-          <ExportButton data={documents} columns={DOCUMENT_EXPORT_COLUMNS} filename="documents" />
+          <ExportButton
+            fetchData={fetchAllDocumentsForExport}
+            columns={DOCUMENT_EXPORT_COLUMNS}
+            filename="documents"
+          />
           <Button size="sm" onClick={() => setUploadOpen(true)} className="w-full sm:w-auto">
             <Upload className="mr-1.5 h-4 w-4" />
             Upload Documents
@@ -637,7 +655,8 @@ export default function DocumentsPage() {
             All Documents
             {!loading && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({documents.length})
+                ({documents.length}
+                {hasMore ? '+' : ''})
               </span>
             )}
           </CardTitle>
@@ -773,6 +792,14 @@ export default function DocumentsPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!loading && hasMore && (
+            <div className="flex justify-center border-t border-border p-4">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Load more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

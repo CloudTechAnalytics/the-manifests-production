@@ -341,36 +341,29 @@ export default function ReportsPage() {
     }
     const customerRows = (data as CustomerReportRow[]) ?? [];
 
-    // Fetch shipment and quotation counts per customer
+    // Per-customer shipment/quotation counts via one grouped SQL query
+    // (migration 070) instead of fetching every matching shipment/
+    // quotation row unbounded just to .length them in JS.
     if (customerRows.length > 0) {
       const customerIds = customerRows.map((c) => c.id);
-
-      // Count shipments per customer
-      const { data: shipCounts } = await supabase
-        .from('shipments')
-        .select('customer_id')
-        .in('customer_id', customerIds)
-        .is('deleted_at', null);
-      const shipCountMap: Record<string, number> = {};
-      (shipCounts ?? []).forEach((s: { customer_id: string }) => {
-        shipCountMap[s.customer_id] = (shipCountMap[s.customer_id] ?? 0) + 1;
-      });
-
-      // Count quotations per customer
-      const { data: quotCounts } = await supabase
-        .from('quotations')
-        .select('customer_id')
-        .in('customer_id', customerIds)
-        .is('deleted_at', null);
-      const quotCountMap: Record<string, number> = {};
-      (quotCounts ?? []).forEach((q: { customer_id: string }) => {
-        quotCountMap[q.customer_id] = (quotCountMap[q.customer_id] ?? 0) + 1;
-      });
-
-      customerRows.forEach((c) => {
-        c.shipment_count = shipCountMap[c.id] ?? 0;
-        c.quotation_count = quotCountMap[c.id] ?? 0;
-      });
+      const { data: counts, error: countsError } = await supabase.rpc(
+        'customer_shipment_quotation_counts',
+        { p_customer_ids: customerIds }
+      );
+      if (countsError) {
+        console.error('Error loading customer report counts:', countsError);
+      } else {
+        const countMap = new Map(
+          (counts as { customer_id: string; shipment_count: number; quotation_count: number }[]).map(
+            (row) => [row.customer_id, row]
+          )
+        );
+        customerRows.forEach((c) => {
+          const row = countMap.get(c.id);
+          c.shipment_count = row?.shipment_count ?? 0;
+          c.quotation_count = row?.quotation_count ?? 0;
+        });
+      }
     }
 
     return customerRows;
@@ -515,28 +508,37 @@ export default function ReportsPage() {
     []
   );
 
-  // Load all report data when filters change
-  const loadAllReports = useCallback(async () => {
+  // Loads only the ACTIVE tab's report, not all five — the previous
+  // version loaded customers + shipments + quotations + activities +
+  // profitability unconditionally on every mount and every filter
+  // change, regardless of which single tab was actually visible. Each
+  // loadXReport callback already depends on effectiveBranchId/
+  // applyDateRange, so a filter change while sitting on one tab still
+  // correctly refetches; switching tabs fetches that tab fresh with
+  // whatever filters are current, rather than trusting a possibly-stale
+  // earlier load.
+  const loadActiveTabData = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
     try {
-      const [custData, shipData, quotData, actData] = await Promise.all([
-        loadCustomersReport(),
-        loadShipmentsReport(),
-        loadQuotationsReport(),
-        loadActivitiesReport(),
-      ]);
-      setCustomers(custData);
-      setShipments(shipData);
-      setQuotations(quotData);
-      setActivities(actData);
-      setProfitability(await computeProfitability(shipData));
+      if (activeTab === 'customers') {
+        setCustomers(await loadCustomersReport());
+      } else if (activeTab === 'shipments') {
+        setShipments(await loadShipmentsReport());
+      } else if (activeTab === 'quotations') {
+        setQuotations(await loadQuotationsReport());
+      } else if (activeTab === 'operations') {
+        setActivities(await loadActivitiesReport());
+      } else if (activeTab === 'profitability') {
+        const shipData = await loadShipmentsReport();
+        setProfitability(await computeProfitability(shipData));
+      }
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     profile,
+    activeTab,
     loadCustomersReport,
     loadShipmentsReport,
     loadQuotationsReport,
@@ -545,8 +547,8 @@ export default function ReportsPage() {
   ]);
 
   useEffect(() => {
-    loadAllReports();
-  }, [loadAllReports]);
+    loadActiveTabData();
+  }, [loadActiveTabData]);
 
   // -------------------------------------------------------------------------
   // Derived / computed values for summaries

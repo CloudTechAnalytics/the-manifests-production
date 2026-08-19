@@ -84,32 +84,59 @@ export function usePlatformDashboardData(): PlatformDashboardData {
     (async () => {
       setLoading(true);
       try {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+        const months = lastSixMonths();
+        const [earliestYear, earliestMonth] = months[0].key.split('-').map(Number);
+        const earliestDate = new Date(earliestYear, earliestMonth, 1);
 
-        const [orgsRes, profilesRes, activitiesRes, subsRes] = await Promise.all([
-          supabase
-            .from('organizations')
-            .select('id, name, slug, is_active, created_at')
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('profiles')
-            .select('id, role, organization_id, created_at, is_active')
-            .is('deleted_at', null),
-          supabase
-            .from('activities')
-            .select('id, user_id, action, description, created_at')
-            .order('created_at', { ascending: false })
-            .limit(8),
-          supabase.from('org_subscriptions').select('*, plan:plans(*)'),
-        ]);
+        // Stats, growth-window count, growth-window rows, top-5 recent
+        // orgs, and activities are all independent — one batch instead of
+        // a chain. Deliberately NOT a plain "fetch every organization and
+        // every profile" like before: those numbers are presented as true
+        // platform-wide totals, and capping them with .limit() would make
+        // them silently wrong once the platform grew past that cap, so
+        // the totals come from platform_dashboard_stats() (migration
+        // 071 — one SQL aggregate, correct at any scale) instead. Only the
+        // genuinely bounded-by-nature pieces (this org's last 6 months of
+        // signups; the 5 most recent orgs) still fetch real rows.
+        const [statsRes, cumulativeBeforeRes, recentSignupsRes, topOrgsRes, activitiesRes, subsRes] =
+          await Promise.all([
+            supabase.rpc('platform_dashboard_stats'),
+            supabase
+              .from('organizations')
+              .select('id', { count: 'exact', head: true })
+              .is('deleted_at', null)
+              .lt('created_at', earliestDate.toISOString()),
+            supabase
+              .from('organizations')
+              .select('id, created_at')
+              .is('deleted_at', null)
+              .gte('created_at', earliestDate.toISOString()),
+            supabase
+              .from('organizations')
+              .select('id, name, slug, is_active')
+              .is('deleted_at', null)
+              .order('created_at', { ascending: false })
+              .limit(5),
+            supabase
+              .from('activities')
+              .select('id, user_id, action, description, created_at')
+              .order('created_at', { ascending: false })
+              .limit(8),
+            supabase.from('org_subscriptions').select('*, plan:plans(*)'),
+          ]);
 
         if (!isMounted) return;
 
-        const orgs = (orgsRes.data as (Organization & { created_at: string })[]) ?? [];
-        const profiles = profilesRes.data ?? [];
+        const statsRow = (statsRes.data?.[0] ?? null) as {
+          total_organizations: number;
+          active_organizations: number;
+          total_users: number;
+          active_users: number;
+          platform_team_count: number;
+          new_users_this_month: number;
+        } | null;
+        const recentSignups = (recentSignupsRes.data as { id: string; created_at: string }[]) ?? [];
+        const topOrgs = (topOrgsRes.data as Pick<Organization, 'id' | 'name' | 'slug' | 'is_active'>[]) ?? [];
         const actRows = activitiesRes.data ?? [];
         const subs = (subsRes.data as unknown as (OrgSubscription & { plan: Plan })[]) ?? [];
 
@@ -131,36 +158,14 @@ export function usePlatformDashboardData(): PlatformDashboardData {
         const expiredTrialCount = trialSubs.filter((s) => isTrialExpired('active_trial', s.trial_ends_at)).length;
 
         // --- Stats ------------------------------------------------------------
-        const totalOrganizations = orgs.length;
-        const activeOrganizations = orgs.filter((o) => o.is_active).length;
-        const suspendedOrganizations = totalOrganizations - activeOrganizations;
-
-        // profiles is fetched with is_platform_admin()'s full cross-org
-        // visibility and isn't itself scoped to non-deleted orgs — a
-        // member whose organization was moved to Trash still has a row
-        // here. Counting them under "Total Users" would make the two
-        // numbers contradict each other (0 organizations, 1 user), so
-        // tenant counts are restricted to members of orgs that still
-        // exist in the active list above.
-        const activeOrgIds = new Set(orgs.map((o) => o.id));
-        const tenantProfiles = profiles.filter(
-          (p) => p.role !== 'platform_admin' && p.organization_id && activeOrgIds.has(p.organization_id)
-        );
-        const totalUsers = tenantProfiles.length;
-        const activeUsers = tenantProfiles.filter((p) => p.is_active).length;
-        const platformTeamCount = profiles.filter((p) => p.role === 'platform_admin').length;
-        const newUsersThisMonth = tenantProfiles.filter(
-          (p) => new Date(p.created_at) >= startOfMonth
-        ).length;
-
         setStats({
-          totalOrganizations,
-          activeOrganizations,
-          suspendedOrganizations,
-          totalUsers,
-          activeUsers,
-          platformTeamCount,
-          newUsersThisMonth,
+          totalOrganizations: statsRow?.total_organizations ?? 0,
+          activeOrganizations: statsRow?.active_organizations ?? 0,
+          suspendedOrganizations: (statsRow?.total_organizations ?? 0) - (statsRow?.active_organizations ?? 0),
+          totalUsers: statsRow?.total_users ?? 0,
+          activeUsers: statsRow?.active_users ?? 0,
+          platformTeamCount: statsRow?.platform_team_count ?? 0,
+          newUsersThisMonth: statsRow?.new_users_this_month ?? 0,
           mrr,
           arr: mrr * 12,
           trialCount,
@@ -168,19 +173,16 @@ export function usePlatformDashboardData(): PlatformDashboardData {
         });
 
         // --- Organization growth (last 6 months, cumulative) -------------------
-        const months = lastSixMonths();
         const countsByMonth = new Map<string, number>();
-        orgs.forEach((o) => {
+        recentSignups.forEach((o) => {
           const d = new Date(o.created_at);
           const key = `${d.getFullYear()}-${d.getMonth()}`;
           countsByMonth.set(key, (countsByMonth.get(key) ?? 0) + 1);
         });
         // Orgs created before the 6-month window still count toward the
-        // starting cumulative total, so the chart doesn't understate history.
-        const earliestKey = months[0].key;
-        const [earliestYear, earliestMonth] = earliestKey.split('-').map(Number);
-        const earliestDate = new Date(earliestYear, earliestMonth, 1);
-        let cumulative = orgs.filter((o) => new Date(o.created_at) < earliestDate).length;
+        // starting cumulative total, so the chart doesn't understate
+        // history — from the exact-count query above, not a full fetch.
+        let cumulative = cumulativeBeforeRes.count ?? 0;
 
         const growthPoints: OrgGrowthPoint[] = months.map(({ key, label }) => {
           const count = countsByMonth.get(key) ?? 0;
@@ -190,12 +192,21 @@ export function usePlatformDashboardData(): PlatformDashboardData {
         setGrowth(growthPoints);
 
         // --- Recent organizations (with member counts) --------------------------
-        const topOrgs = orgs.slice(0, 5);
+        // Member counts scoped to just these 5 org ids — cheap and exact
+        // regardless of total platform size, unlike counting from every
+        // profile on the platform.
         const memberCounts = new Map<string, number>();
-        profiles.forEach((p) => {
-          if (!p.organization_id) return;
-          memberCounts.set(p.organization_id, (memberCounts.get(p.organization_id) ?? 0) + 1);
-        });
+        if (topOrgs.length > 0) {
+          const { data: memberRows } = await supabase
+            .from('profiles')
+            .select('organization_id')
+            .in('organization_id', topOrgs.map((o) => o.id))
+            .is('deleted_at', null);
+          (memberRows ?? []).forEach((p: { organization_id: string | null }) => {
+            if (!p.organization_id) return;
+            memberCounts.set(p.organization_id, (memberCounts.get(p.organization_id) ?? 0) + 1);
+          });
+        }
         setRecentOrganizations(
           topOrgs.map((o) => ({
             id: o.id,
