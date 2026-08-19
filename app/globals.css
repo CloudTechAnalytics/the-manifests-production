@@ -6,27 +6,27 @@
   :root {
     /* Palette anchors (hex -> hsl):
        background #FAF7F1 warm ivory · foreground #211D19 charcoal
-       primary    #C79A3E amber-gold · brand-dark #1B1712 charcoal */
+       primary    #C97F2E amber-orange · brand-dark #1B1712 charcoal */
     --background: 38 28% 96%;
     --foreground: 25 15% 12%;
     --card: 0 0% 100%;
     --card-foreground: 25 15% 12%;
     --popover: 0 0% 100%;
     --popover-foreground: 25 15% 12%;
-    --primary: 38 55% 51%;
+    --primary: 28 65% 50%;
     --primary-foreground: 25 25% 12%;
     --secondary: 38 22% 94%;
     --secondary-foreground: 25 15% 12%;
     --muted: 38 18% 95%;
     --muted-foreground: 25 8% 42%;
     --accent: 38 45% 92%;
-    --accent-foreground: 38 60% 30%;
+    --accent-foreground: 28 65% 32%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 34 18% 88%;
     --input: 34 18% 88%;
-    --ring: 38 55% 51%;
-    --chart-1: 38 55% 51%;
+    --ring: 28 65% 50%;
+    --chart-1: 28 65% 50%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
@@ -45,8 +45,8 @@
     --brand-dark-border: 25 13% 20%;
     --brand-dark-foreground: 38 20% 96%;
     --brand-dark-muted: 30 8% 65%;
-    --brand-gold: 38 55% 51%;
-    --brand-gold-soft: 38 45% 70%;
+    --brand-gold: 28 65% 50%;
+    --brand-gold-soft: 28 55% 68%;
   }
   .dark {
     --background: 25 15% 7%;
@@ -55,20 +55,20 @@
     --card-foreground: 38 20% 96%;
     --popover: 25 13% 11%;
     --popover-foreground: 38 20% 96%;
-    --primary: 38 60% 58%;
+    --primary: 28 68% 56%;
     --primary-foreground: 25 25% 10%;
     --secondary: 25 10% 16%;
     --secondary-foreground: 38 20% 96%;
     --muted: 25 10% 16%;
     --muted-foreground: 30 8% 65%;
     --accent: 25 10% 18%;
-    --accent-foreground: 38 60% 70%;
+    --accent-foreground: 28 65% 68%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 38 20% 96%;
     --border: 25 10% 20%;
     --input: 25 10% 20%;
-    --ring: 38 60% 58%;
-    --chart-1: 38 60% 58%;
+    --ring: 28 68% 56%;
+    --chart-1: 28 68% 56%;
     --chart-2: 173 58% 45%;
     --chart-3: 197 37% 40%;
     --chart-4: 43 74% 66%;
@@ -83,8 +83,8 @@
     --brand-dark-border: 25 13% 20%;
     --brand-dark-foreground: 38 20% 96%;
     --brand-dark-muted: 30 8% 65%;
-    --brand-gold: 38 60% 58%;
-    --brand-gold-soft: 38 45% 70%;
+    --brand-gold: 28 68% 56%;
+    --brand-gold-soft: 28 55% 68%;
   }
 }
 
