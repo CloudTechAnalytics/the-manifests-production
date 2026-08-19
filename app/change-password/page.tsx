@@ -60,7 +60,7 @@ export default function ChangePasswordPage() {
 
     await refreshProfile();
     toast.success('Password changed successfully!');
-    router.replace('/dashboard');
+    router.replace(profile?.role === 'platform_admin' ? '/platform' : '/dashboard');
     setSubmitting(false);
   };
 

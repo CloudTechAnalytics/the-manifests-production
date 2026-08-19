@@ -310,10 +310,25 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
     }
     if (profile && profile.role !== 'platform_admin') {
       router.replace('/dashboard');
+      return;
+    }
+    // A platform user created via "Add platform user" signs in with an
+    // admin-set temporary password — same forced-change gate the tenant
+    // shell (app/(app)/layout.tsx) already applies, just missing here
+    // until now. /change-password is a separate top-level route, so
+    // this layout unmounts once redirected — no loop to guard against.
+    if (profile?.must_change_password) {
+      router.replace('/change-password');
     }
   }, [loading, user, profile, router]);
 
-  if (loading || !user || !profile || profile.role !== 'platform_admin') {
+  if (
+    loading ||
+    !user ||
+    !profile ||
+    profile.role !== 'platform_admin' ||
+    profile.must_change_password
+  ) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="space-y-4">
