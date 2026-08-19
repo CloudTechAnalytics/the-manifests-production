@@ -39,11 +39,21 @@ export interface RecentOrganization {
   memberCount: number;
 }
 
+export interface PlanDistributionPoint {
+  planName: string;
+  count: number;
+}
+
 export interface PlatformDashboardData {
   stats: PlatformStats;
   growth: OrgGrowthPoint[];
   recentOrganizations: RecentOrganization[];
   recentActivity: ActivityItem[];
+  /** Active (non-cancelled) subscriptions grouped by plan name — for
+   *  Platform Analytics' "Plan distribution" chart. Derived from the
+   *  same org_subscriptions fetch the MRR/ARR/trial stats already use,
+   *  no extra query. */
+  planDistribution: PlanDistributionPoint[];
   loading: boolean;
 }
 
@@ -68,6 +78,7 @@ const EMPTY_RESULT: PlatformFetchResult = {
   growth: [],
   recentOrganizations: [],
   recentActivity: [],
+  planDistribution: [],
 };
 
 const MONTH_LABELS = [
@@ -159,6 +170,15 @@ async function fetchPlatformDashboardData(): Promise<PlatformFetchResult> {
   // exactly as current as each subscription's trial_ends_at.
   const expiredTrialCount = trialSubs.filter((s) => isTrialExpired('active_trial', s.trial_ends_at)).length;
 
+  // --- Plan distribution, from the same subs already fetched above -------
+  const planCounts = new Map<string, number>();
+  activeSubs.forEach((s) => {
+    planCounts.set(s.plan.name, (planCounts.get(s.plan.name) ?? 0) + 1);
+  });
+  const planDistribution: PlanDistributionPoint[] = Array.from(planCounts.entries())
+    .map(([planName, count]) => ({ planName, count }))
+    .sort((a, b) => b.count - a.count);
+
   // --- Organization growth (last 6 months, cumulative) -------------------
   const countsByMonth = new Map<string, number>();
   recentSignups.forEach((o) => {
@@ -241,6 +261,7 @@ async function fetchPlatformDashboardData(): Promise<PlatformFetchResult> {
       created_at: a.created_at,
       userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
     })),
+    planDistribution,
   };
 }
 
@@ -265,6 +286,7 @@ export function usePlatformDashboardData(): PlatformDashboardData {
     growth: result.growth,
     recentOrganizations: result.recentOrganizations,
     recentActivity: result.recentActivity,
+    planDistribution: result.planDistribution,
     loading: isLoading,
   };
 }
