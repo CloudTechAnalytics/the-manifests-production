@@ -127,6 +127,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         (async () => {
           if (!isMounted) return;
+
+          // INITIAL_SESSION fires immediately on subscribing, carrying the
+          // exact same session the getSession() call above already
+          // resolved — the profile/roles fetch above already covers it, so
+          // running it a second time here would just duplicate 3 queries
+          // on every single app load for no reason. TOKEN_REFRESHED fires
+          // roughly hourly and changes only the JWT, never who the user
+          // is — re-fetching profile/roles for it would silently re-run
+          // every hook keyed on `profile` app-wide (dashboard, warehouse,
+          // sidebar badges, notifications) while the user is just sitting
+          // on a page. Both still update session/user, which IS what
+          // changed, so components reading the fresh token stay correct.
+          if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+            setSession(session);
+            setUser(session?.user ?? null);
+            return;
+          }
+
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {

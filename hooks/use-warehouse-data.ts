@@ -66,7 +66,6 @@ export function useWarehouseData(): WarehouseData {
           .is('deleted_at', null)
           .order('name', { ascending: true });
         if (branchFilter) warehousesQuery = warehousesQuery.eq('branch_id', branchFilter);
-        const { data: warehouseRows } = await warehousesQuery;
 
         let stockQuery = supabase
           .from('warehouse_stock')
@@ -74,7 +73,6 @@ export function useWarehouseData(): WarehouseData {
           .order('created_at', { ascending: false })
           .limit(2000);
         if (branchFilter) stockQuery = stockQuery.eq('branch_id', branchFilter);
-        const { data: stock } = await stockQuery;
 
         let movementsQuery = supabase
           .from('stock_movements')
@@ -84,7 +82,14 @@ export function useWarehouseData(): WarehouseData {
           .order('created_at', { ascending: false })
           .limit(1000);
         if (branchFilter) movementsQuery = movementsQuery.eq('branch_id', branchFilter);
-        const { data: movementRows } = await movementsQuery;
+
+        // These three don't depend on each other — issue them as one
+        // concurrent batch instead of three sequential round trips.
+        const [{ data: warehouseRows }, { data: stock }, { data: movementRows }] = await Promise.all([
+          warehousesQuery,
+          stockQuery,
+          movementsQuery,
+        ]);
 
         setWarehouses((warehouseRows as Warehouse[]) ?? []);
         setStockRows((stock as unknown as WarehouseStock[]) ?? []);
@@ -95,7 +100,9 @@ export function useWarehouseData(): WarehouseData {
     }
 
     load();
-  }, [profile, branchFilter, reloadKey]);
+  // Keyed on profile?.id, not the whole profile object — see
+  // use-dashboard-data.ts for why.
+  }, [profile?.id, branchFilter, reloadKey]);
 
   // --- Stats + donut, derived from stockRows -----------------------------
   let totalValue = 0;

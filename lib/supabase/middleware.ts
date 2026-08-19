@@ -12,6 +12,24 @@ const PUBLIC_PATHS = ['/', '/login', '/accept-invite', '/track', '/register', '/
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const path = request.nextUrl.pathname;
+  const isPublicPath = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+
+  // Every public path except /login never branches on auth status below —
+  // an anonymous or signed-in visitor sees the same response either way.
+  // Skip the Supabase Auth server round trip entirely for them: getUser()
+  // validates the token against the Auth server over the network (unlike
+  // decoding the JWT locally), so this was a full extra network hop on
+  // every visit to the landing page, the public tracker, registration,
+  // etc. for a result nothing here reads. Protected paths and /login
+  // (which DOES branch on auth status — signed-in users get bounced to
+  // /dashboard) still call it, unchanged, since that's the one place the
+  // real security guarantee — the token must be revalidated, not merely
+  // decoded — actually matters.
+  if (isPublicPath && path !== '/login') {
+    return response;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,9 +52,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isPublicPath = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
   if (!user && !isPublicPath) {
     const redirectUrl = new URL('/login', request.url);

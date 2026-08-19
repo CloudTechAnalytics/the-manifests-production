@@ -710,7 +710,12 @@ export function useDashboardData(): DashboardData {
     }
 
     load();
-  }, [profile, isAdmin, branchFilter]);
+  // Keyed on profile?.id (not the whole profile object) deliberately —
+  // auth-context can hand back a new profile object reference (e.g. after
+  // refreshProfile() elsewhere in the app) without the identity, role, or
+  // branch actually changing, and isAdmin/branchFilter already capture
+  // every field this effect cares about.
+  }, [profile?.id, isAdmin, branchFilter]);
 
   return {
     loading,

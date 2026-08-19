@@ -108,7 +108,8 @@ export function useNavBadges(): NavBadgeCounts & { loading: boolean } {
       // branch) stock list once and compares client-side instead.
       let warehouseQuery = supabase
         .from('warehouse_stock')
-        .select('quantity, item:stock_items(reorder_point, branch_id)');
+        .select('quantity, item:stock_items(reorder_point, branch_id)')
+        .limit(2000);
       if (branchFilter) warehouseQuery = warehouseQuery.eq('branch_id', branchFilter);
 
       const [
@@ -151,7 +152,9 @@ export function useNavBadges(): NavBadgeCounts & { loading: boolean } {
     } finally {
       setLoading(false);
     }
-  }, [profile, branchFilter]);
+  // Keyed on profile?.id, not the whole profile object — see
+  // use-dashboard-data.ts for why.
+  }, [profile?.id, branchFilter]);
 
   useEffect(() => {
     load();

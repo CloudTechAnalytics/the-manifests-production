@@ -56,7 +56,9 @@ export function useNotifications(): NotificationsState {
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  // Keyed on profile?.id, not the whole profile object — see
+  // use-dashboard-data.ts for why.
+  }, [profile?.id]);
 
   useEffect(() => {
     load();
@@ -82,7 +84,9 @@ export function useNotifications(): NotificationsState {
       .eq('recipient_id', profile.id)
       .is('read_at', null);
     if (error) console.error('Error marking all notifications read:', error);
-  }, [profile]);
+  // Keyed on profile?.id, not the whole profile object — see
+  // use-dashboard-data.ts for why.
+  }, [profile?.id]);
 
   const unreadCount = items.filter((n) => !n.read_at).length;
   return { items, unreadCount, loading, refresh: load, markRead, markAllRead };
