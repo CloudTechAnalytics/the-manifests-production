@@ -50,28 +50,28 @@ export default function PlatformDashboardPage() {
       value: stats.totalOrganizations,
       icon: Building2,
       href: '/platform/organizations',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Customer firms',
     },
     {
       label: 'Paid Orgs',
       value: stats.paidOrganizations,
       icon: CheckCircle2,
       href: '/platform/subscriptions',
-      color: 'bg-emerald-50 text-emerald-600',
+      caption: 'Active plans',
     },
     {
       label: 'Trial Orgs',
       value: stats.trialCount,
       icon: Hourglass,
       href: '/platform/subscriptions',
-      color: 'bg-amber-50 text-amber-600',
+      caption: 'On trial',
     },
     {
       label: 'Suspended',
       value: stats.suspendedOrganizations,
       icon: XCircle,
       href: '/platform/organizations',
-      color: 'bg-red-50 text-red-600',
+      caption: 'Paused firms',
     },
     {
       // Compact notation (₦50K, ₦2.5M) so the figure always fits the
@@ -80,21 +80,21 @@ export default function PlatformDashboardPage() {
       value: formatCompactCurrency(stats.mrr),
       icon: TrendingUp,
       href: '/platform/subscriptions',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Monthly recurring',
     },
     {
       label: 'ARR',
       value: formatCompactCurrency(stats.arr),
       icon: DollarSign,
       href: '/platform/subscriptions',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Annual recurring',
     },
     {
       label: 'Expired Trials',
       value: stats.expiredTrialCount,
       icon: AlertTriangle,
       href: '/platform/subscriptions',
-      color: 'bg-orange-50 text-orange-600',
+      caption: 'Needs follow-up',
     },
   ];
 
@@ -105,35 +105,35 @@ export default function PlatformDashboardPage() {
       value: stats.totalUsers,
       icon: Users,
       href: '/platform/organization-users',
-      color: 'bg-primary/10 text-primary',
+      caption: 'All tenant staff',
     },
     {
       label: 'Platform Team',
       value: stats.platformTeamCount,
       icon: ShieldCheck,
       href: '/platform/platform-users',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Internal admins',
     },
     {
       label: 'Active Today',
       value: stats.activeToday,
       icon: Activity,
       href: '/platform/audit-logs',
-      color: 'bg-emerald-50 text-emerald-600',
+      caption: 'Logged an action',
     },
     {
       label: 'New This Month',
       value: stats.newUsersThisMonth,
       icon: UserPlus,
       href: '/platform/organization-users',
-      color: 'bg-primary/10 text-primary',
+      caption: 'New signups',
     },
     {
       label: 'Active Users',
       value: stats.activeUsers,
       icon: UserCheck,
       href: '/platform/organization-users',
-      color: 'bg-emerald-50 text-emerald-600',
+      caption: 'Enabled accounts',
     },
     {
       // No ticketing system exists yet (Support Tickets is a coming-soon
@@ -142,7 +142,7 @@ export default function PlatformDashboardPage() {
       value: '—',
       icon: LifeBuoy,
       href: '/platform/support-tickets',
-      color: 'bg-muted text-muted-foreground',
+      caption: 'Coming soon',
     },
   ];
 

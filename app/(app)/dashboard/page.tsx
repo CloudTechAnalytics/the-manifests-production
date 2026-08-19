@@ -71,35 +71,35 @@ export default function DashboardPage() {
       value: data.stats.activeShipments,
       icon: Package,
       href: '/shipments',
-      color: 'bg-primary/10 text-primary',
+      caption: 'In progress',
     },
     {
       label: 'Awaiting Documentation',
       value: stageCount('documentation'),
       icon: FileClock,
       href: '/shipments?status=documentation',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Needs paperwork',
     },
     {
       label: 'Awaiting Customs',
       value: stageCount('customs'),
       icon: Landmark,
       href: '/shipments?status=awaiting_customs',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Clearance pending',
     },
     {
       label: 'In Transit',
       value: stageCount('in_transit'),
       icon: Truck,
       href: '/shipments?status=transport',
-      color: 'bg-primary/10 text-primary',
+      caption: 'On the move',
     },
     {
       label: 'Pending Quotations',
       value: data.stats.pendingQuotations,
       icon: FileText,
       href: '/quotations',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Awaiting response',
     },
     ...(canSeeFinance
       ? [
@@ -108,7 +108,7 @@ export default function DashboardPage() {
             value: data.finance.outstandingCount,
             icon: Receipt,
             href: '/invoices',
-            color: 'bg-primary/10 text-primary',
+            caption: 'Unpaid balance',
           },
         ]
       : []),
@@ -117,14 +117,14 @@ export default function DashboardPage() {
       value: warehouse.stats.totalItems,
       icon: Boxes,
       href: '/warehouse',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Stock lines',
     },
     {
       label: 'Delayed Shipments',
       value: data.stats.delayedShipments,
       icon: Clock,
       href: '/shipments',
-      color: 'bg-primary/10 text-primary',
+      caption: 'Past ETA',
     },
   ];
 
