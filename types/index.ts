@@ -158,6 +158,10 @@ export interface Profile {
   email: string;
   full_name: string;
   phone: string | null;
+  /** Free-text job title (e.g. "Founder & CEO") — display only, never
+   *  read by RLS/RBAC. */
+  title: string | null;
+  avatar_url: string | null;
   role: UserRole;
   branch_id: string | null;
   organization_id: string | null;
