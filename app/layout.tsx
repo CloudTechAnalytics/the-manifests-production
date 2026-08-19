@@ -31,8 +31,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} ${playfairDisplay.variable}`}>
-        <AuthProvider><ThemeProvider>{children}</ThemeProvider></AuthProvider>
-        <Toaster />
+        <AuthProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
