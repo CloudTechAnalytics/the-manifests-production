@@ -1331,7 +1331,7 @@ export default function UsersPage() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-blue-600" />
@@ -1489,7 +1489,7 @@ export default function UsersPage() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-blue-600" />
@@ -1674,7 +1674,7 @@ export default function UsersPage() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-blue-600" />
@@ -1811,7 +1811,7 @@ export default function UsersPage() {
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-blue-600" />

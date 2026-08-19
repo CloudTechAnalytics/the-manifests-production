@@ -359,7 +359,7 @@ export default function PaymentDetailPage() {
                   Allocate to Invoice
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Allocate Payment</DialogTitle>
                   <DialogDescription>

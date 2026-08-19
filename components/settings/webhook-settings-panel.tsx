@@ -263,7 +263,7 @@ function WebhookFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{existing ? 'Edit Webhook' : 'Add Webhook Endpoint'}</DialogTitle>
           <DialogDescription>Your system&apos;s endpoint will receive a signed POST per event.</DialogDescription>

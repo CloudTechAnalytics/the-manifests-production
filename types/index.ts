@@ -618,6 +618,7 @@ export interface ShipmentContainer {
   id: string;
   shipment_id: string;
   branch_id: string;
+  bl_number: string | null;
   container_number: string | null;
   seal_number: string | null;
   container_type: string | null;

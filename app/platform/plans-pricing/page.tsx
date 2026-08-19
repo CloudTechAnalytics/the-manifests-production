@@ -422,7 +422,7 @@ export default function PlansPricingPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editTarget ? `Edit ${editTarget.name}` : 'New Plan'}</DialogTitle>
             <DialogDescription>Define pricing, limits and included features.</DialogDescription>

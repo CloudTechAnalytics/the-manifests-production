@@ -90,6 +90,7 @@ export function ShipmentContainersPanel({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>BL No.</TableHead>
                   <TableHead>Container No.</TableHead>
                   <TableHead>Seal No.</TableHead>
                   <TableHead>Type</TableHead>
@@ -102,6 +103,7 @@ export function ShipmentContainersPanel({
               <TableBody>
                 {containers.map((c) => (
                   <TableRow key={c.id}>
+                    <TableCell>{c.bl_number || '—'}</TableCell>
                     <TableCell className="font-medium">{c.container_number || '—'}</TableCell>
                     <TableCell>{c.seal_number || '—'}</TableCell>
                     <TableCell>{c.container_type || '—'}</TableCell>
@@ -182,6 +184,7 @@ function ContainerFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const [blNumber, setBlNumber] = useState('');
   const [containerNumber, setContainerNumber] = useState('');
   const [sealNumber, setSealNumber] = useState('');
   const [containerType, setContainerType] = useState('');
@@ -200,6 +203,7 @@ function ContainerFormDialog({
 
   useEffect(() => {
     if (!open) return;
+    setBlNumber(existing?.bl_number ?? '');
     setContainerNumber(existing?.container_number ?? '');
     setSealNumber(existing?.seal_number ?? '');
     setContainerType(existing?.container_type ?? '');
@@ -221,6 +225,7 @@ function ContainerFormDialog({
     setSubmitting(true);
     try {
       const payload = {
+        bl_number: blNumber.trim() || null,
         container_number: containerNumber.trim() || null,
         seal_number: sealNumber.trim() || null,
         container_type: containerType.trim() || null,
@@ -264,13 +269,17 @@ function ContainerFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{existing ? 'Edit Container' : 'Add Container'}</DialogTitle>
           <DialogDescription>A shipment can carry more than one container.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="cn-bl">BL Number</Label>
+              <Input id="cn-bl" value={blNumber} onChange={(e) => setBlNumber(e.target.value)} />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="cn-number">Container Number</Label>
               <Input id="cn-number" value={containerNumber} onChange={(e) => setContainerNumber(e.target.value)} />
@@ -280,7 +289,7 @@ function ContainerFormDialog({
               <Input id="cn-seal" value={sealNumber} onChange={(e) => setSealNumber(e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="cn-type">Container Type</Label>
               <Input
@@ -299,8 +308,6 @@ function ContainerFormDialog({
                 placeholder="Loaded, In transit, Discharged…"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="cn-tare">Tare Weight (kg)</Label>
               <Input
@@ -369,7 +376,7 @@ function ContainerFormDialog({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Planning Targets (Expected Dates)
             </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div className="space-y-1.5">
                 <Label htmlFor="cn-exp-pickup">Expected Empty Pickup Date</Label>
                 <Input

@@ -1537,7 +1537,7 @@ function SettingsPageInner() {
           if (!open) setCreateFormErrors({});
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-blue-600" />
@@ -1705,7 +1705,7 @@ function SettingsPageInner() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-blue-600" />
