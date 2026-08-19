@@ -125,6 +125,9 @@ export default function RegisterPage() {
                 We sent a verification link to <span className="font-medium text-foreground">{result.ownerEmail}</span>.
                 Click it to activate your trial and sign in.
               </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Already know you want a paid plan? You can subscribe and skip the trial as soon as you sign in.
+              </p>
             </div>
             {result.similarNameWarning && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">

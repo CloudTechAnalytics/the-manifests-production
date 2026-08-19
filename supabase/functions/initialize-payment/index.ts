@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
       return json(403, { error: "Only admins and branch managers can manage billing" });
     }
 
-    let body: { plan_id?: string; billing_cycle?: string };
+    let body: { plan_id?: string; billing_cycle?: string; return_to?: string };
     try {
       body = await req.json();
     } catch {
@@ -74,6 +74,16 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "billing_cycle must be 'monthly' or 'annual'" });
     }
     const billingCycle = body.billing_cycle;
+
+    // Where /billing/callback sends the user after a successful payment —
+    // e.g. back to /onboarding when checkout started there instead of the
+    // default /dashboard. Must be a same-app relative path: rejects
+    // anything that could redirect off this domain (a leading "//" is
+    // parsed by browsers as a protocol-relative absolute URL).
+    const returnTo =
+      body.return_to && body.return_to.startsWith("/") && !body.return_to.startsWith("//")
+        ? body.return_to
+        : "/dashboard";
 
     const admin = createServiceRoleClient();
 
@@ -133,7 +143,7 @@ Deno.serve(async (req: Request) => {
         amount: Math.round(amount * 100), // kobo
         currency: plan.currency,
         reference,
-        callback_url: `${appOrigin()}/billing/callback`,
+        callback_url: `${appOrigin()}/billing/callback?return_to=${encodeURIComponent(returnTo)}`,
         metadata: {
           organization_id: org.id,
           plan_id: plan.id,

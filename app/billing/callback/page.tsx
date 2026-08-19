@@ -24,6 +24,12 @@ type Status = 'checking' | 'success' | 'failed' | 'missing_reference';
 function BillingCallbackContent() {
   const searchParams = useSearchParams();
   const reference = searchParams.get('reference') ?? searchParams.get('trxref');
+  // Where initialize-payment was told to send the user back to (e.g.
+  // /onboarding, when checkout started there instead of /upgrade) — only
+  // trusts a same-app relative path, same guard the edge function itself
+  // already applies before it ever reaches this URL.
+  const rawReturnTo = searchParams.get('return_to');
+  const returnTo = rawReturnTo && rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/dashboard';
   const [status, setStatus] = useState<Status>('checking');
   const [message, setMessage] = useState<string | null>(null);
 
@@ -87,7 +93,7 @@ function BillingCallbackContent() {
               <h1 className="font-serif text-lg font-bold">Payment confirmed</h1>
               <p className="text-sm text-muted-foreground">Your plan is now active. A receipt has been emailed to you.</p>
               <Button asChild className="mt-2 w-full">
-                <Link href="/dashboard">Go to Dashboard</Link>
+                <Link href={returnTo}>{returnTo === '/onboarding' ? 'Continue setup' : 'Go to Dashboard'}</Link>
               </Button>
             </>
           )}
