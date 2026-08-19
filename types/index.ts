@@ -666,6 +666,55 @@ export interface CargoInsurancePolicy {
   deleted_at: string | null;
 }
 
+export interface DeliveryOrder {
+  id: string;
+  shipment_id: string;
+  branch_id: string;
+  do_number: string | null;
+  issued_at: string;
+  validity_hours: number;
+  expires_at: string;
+  exited_at: string | null;
+  superseded_by: string | null;
+  regeneration_fee: number | null;
+  regeneration_fee_currency: string;
+  expense_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type CargoClaimType = 'damage' | 'loss' | 'shortage' | 'other';
+export type CargoClaimAgainst = 'carrier' | 'terminal' | 'insurer' | 'transporter' | 'other';
+export type CargoClaimStatus = 'filed' | 'under_review' | 'approved' | 'rejected' | 'settled';
+
+export interface CargoClaim {
+  id: string;
+  claim_number: string | null;
+  shipment_id: string;
+  branch_id: string;
+  insurance_policy_id: string | null;
+  claim_type: CargoClaimType;
+  claimed_against: CargoClaimAgainst;
+  claimed_against_name: string | null;
+  status: CargoClaimStatus;
+  amount_claimed: number | null;
+  amount_settled: number | null;
+  currency: string;
+  filed_date: string;
+  resolved_date: string | null;
+  description: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export interface FreightRateCard {
   id: string;
   branch_id: string;
@@ -1039,6 +1088,7 @@ export type ExpenseCategory =
   | 'demurrage'
   | 'storage'
   | 're_examination_penalty'
+  | 'delivery_order_regeneration'
   | 'other';
 
 export type ExpenseStatus = 'pending' | 'approved' | 'rejected';

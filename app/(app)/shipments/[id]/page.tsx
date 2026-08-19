@@ -117,6 +117,9 @@ import { ShipmentDocumentationDialog } from '@/components/shipments/shipment-doc
 import { ShipmentPartiesDialog } from '@/components/shipments/shipment-parties-dialog';
 import { ShipmentContainersPanel } from '@/components/shipments/shipment-containers-panel';
 import { CargoInsurancePanel } from '@/components/shipments/cargo-insurance-panel';
+import { CargoClaimsPanel } from '@/components/shipments/cargo-claims-panel';
+import { DeliveryOrdersPanel } from '@/components/shipments/delivery-orders-panel';
+import { GenerateInvoiceFromExpenses } from '@/components/shipments/generate-invoice-from-expenses';
 import {
   SHIPMENT_STATUS_META,
   SHIPMENT_STATUS_FLOW,
@@ -139,6 +142,8 @@ import type {
   ShipmentTransportation,
   ShipmentContainer,
   CargoInsurancePolicy,
+  CargoClaim,
+  DeliveryOrder,
 } from '@/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -195,6 +200,8 @@ export default function ShipmentDetailPage() {
   const [transportLegs, setTransportLegs] = useState<ShipmentTransportation[]>([]);
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [insurancePolicies, setInsurancePolicies] = useState<CargoInsurancePolicy[]>([]);
+  const [claims, setClaims] = useState<CargoClaim[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
   const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
   const [dutyAssessmentDialogOpen, setDutyAssessmentDialogOpen] = useState(false);
   const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
@@ -247,6 +254,8 @@ export default function ShipmentDetailPage() {
         { data: legs },
         { data: containerRows },
         { data: insuranceRows },
+        { data: claimRows },
+        { data: doRows },
       ] = await Promise.all([
         supabase
           .from('shipments')
@@ -303,6 +312,18 @@ export default function ShipmentDetailPage() {
           .eq('shipment_id', shipmentId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('cargo_claims')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('delivery_orders')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('issued_at', { ascending: false }),
       ]);
 
       if (shipErr) {
@@ -323,6 +344,8 @@ export default function ShipmentDetailPage() {
       setTransportLegs((legs as ShipmentTransportation[]) ?? []);
       setContainers((containerRows as ShipmentContainer[]) ?? []);
       setInsurancePolicies((insuranceRows as CargoInsurancePolicy[]) ?? []);
+      setClaims((claimRows as CargoClaim[]) ?? []);
+      setDeliveryOrders((doRows as DeliveryOrder[]) ?? []);
     } finally {
       setLoading(false);
     }
@@ -1348,6 +1371,14 @@ export default function ShipmentDetailPage() {
             policies={insurancePolicies}
             onReload={loadData}
           />
+
+          <CargoClaimsPanel
+            shipmentId={shipmentId}
+            branchId={shipment.branch_id}
+            claims={claims}
+            insurancePolicies={insurancePolicies}
+            onReload={loadData}
+          />
         </TabsContent>
 
         {/* --- Customs Tab --- */}
@@ -1491,6 +1522,13 @@ export default function ShipmentDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <DeliveryOrdersPanel
+            shipmentId={shipmentId}
+            branchId={shipment.branch_id}
+            orders={deliveryOrders}
+            onReload={loadData}
+          />
         </TabsContent>
 
         {/* --- Examination Tab (only rendered when Customs selected Red channel) --- */}
@@ -1584,13 +1622,19 @@ export default function ShipmentDetailPage() {
         </TabsContent>
 
         {/* --- Financial Exposure Tab --- */}
-        <TabsContent value="financial_exposure">
+        <TabsContent value="financial_exposure" className="space-y-6">
           <FinancialExposurePanel
             shipmentId={shipment.id}
             branchId={shipment.branch_id}
             shipmentStatus={shipment.status}
             defaultCurrency={shipment.goods_value_currency || 'NGN'}
             onChanged={loadData}
+          />
+
+          <GenerateInvoiceFromExpenses
+            shipmentId={shipment.id}
+            branchId={shipment.branch_id}
+            customerId={shipment.customer_id}
           />
         </TabsContent>
       </Tabs>

@@ -53,6 +53,7 @@ const expenseSchema = z.object({
     'demurrage',
     'storage',
     're_examination_penalty',
+    'delivery_order_regeneration',
     'other',
   ]),
   shipment_id: z.string().optional().or(z.literal('')),

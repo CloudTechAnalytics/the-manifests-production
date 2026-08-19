@@ -161,6 +161,7 @@ export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, { label: string }> =
   demurrage: { label: 'Demurrage' },
   storage: { label: 'Storage' },
   re_examination_penalty: { label: 'Re-examination Penalty' },
+  delivery_order_regeneration: { label: 'Delivery Order Regeneration' },
   other: { label: 'Other' },
 };
 
