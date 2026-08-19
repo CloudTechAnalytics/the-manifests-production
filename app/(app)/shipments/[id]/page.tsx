@@ -231,46 +231,16 @@ export default function ShipmentDetailPage() {
     if (!shipmentId) return;
     setLoading(true);
     try {
-      // Shipment with joins
-      const { data: ship, error: shipErr } = await supabase
-        .from('shipments')
-        .select(
-          '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(*)'
-        )
-        .eq('id', shipmentId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (shipErr) {
-        console.error('Error loading shipment:', shipErr);
-        setShipment(null);
-        return;
-      }
-      if (!ship) {
-        setShipment(null);
-        return;
-      }
-      setShipment(ship as ShipmentDetail);
-
-      // Timeline
-      const { data: tl } = await supabase
-        .from('shipment_timeline')
-        .select('*, user:profiles!shipment_timeline_created_by_fkey(id, full_name)')
-        .eq('shipment_id', shipmentId)
-        .order('created_at', { ascending: false });
-      setTimeline((tl as TimelineEntry[]) ?? []);
-
-      // Documents
-      const { data: docs } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('shipment_id', shipmentId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      setDocuments((docs as DocumentRecord[]) ?? []);
-
-      // Customs, Terminal, Examinations, Transportation, Containers, Insurance
+      // All nine of these only depend on shipmentId, not on each other —
+      // one concurrent batch instead of shipment, then timeline, then
+      // documents, then the rest. The (rare) case where shipmentId turns
+      // out not to exist just means the other eight resolve to empty/null
+      // results that are never rendered — a discarded response, not a
+      // wrong one.
       const [
+        { data: ship, error: shipErr },
+        { data: tl },
+        { data: docs },
         { data: customs },
         { data: terminal },
         { data: exams },
@@ -278,6 +248,25 @@ export default function ShipmentDetailPage() {
         { data: containerRows },
         { data: insuranceRows },
       ] = await Promise.all([
+        supabase
+          .from('shipments')
+          .select(
+            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(*)'
+          )
+          .eq('id', shipmentId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        supabase
+          .from('shipment_timeline')
+          .select('*, user:profiles!shipment_timeline_created_by_fkey(id, full_name)')
+          .eq('shipment_id', shipmentId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
         supabase
           .from('shipment_customs')
           .select('*')
@@ -315,6 +304,19 @@ export default function ShipmentDetailPage() {
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
       ]);
+
+      if (shipErr) {
+        console.error('Error loading shipment:', shipErr);
+        setShipment(null);
+        return;
+      }
+      if (!ship) {
+        setShipment(null);
+        return;
+      }
+      setShipment(ship as ShipmentDetail);
+      setTimeline((tl as TimelineEntry[]) ?? []);
+      setDocuments((docs as DocumentRecord[]) ?? []);
       setCustomsRecord((customs as ShipmentCustoms) ?? null);
       setTerminalRecord((terminal as TerminalOperation) ?? null);
       setExaminations((exams as ShipmentExamination[]) ?? []);

@@ -50,9 +50,13 @@ export function PlanningCommandCenterCard() {
         .from('shipment_plans')
         .select('id, status, created_at, updated_at')
         .is('deleted_at', null);
+      // estimated_departure is included even though only the second
+      // (risk-computing) pass reads it — so this one fetch can serve
+      // both passes and the card never needs a second, wider fetch of
+      // the same shipment rows just to add that column.
       let shipmentsQuery = supabase
         .from('shipments')
-        .select('id, branch_id, estimated_arrival, booking_status')
+        .select('id, branch_id, estimated_arrival, estimated_departure, booking_status')
         .eq('status', 'planning');
       if (!isAdmin && branchId) {
         plansQuery = plansQuery.eq('branch_id', branchId);
@@ -62,7 +66,11 @@ export function PlanningCommandCenterCard() {
       const [{ data: plans }, { data: planningShipments }] = await Promise.all([plansQuery, shipmentsQuery]);
 
       const planRows = plans ?? [];
-      const shipmentRows = (planningShipments as Pick<Shipment, 'id' | 'branch_id' | 'estimated_arrival' | 'booking_status'>[]) ?? [];
+      const shipmentRows =
+        (planningShipments as Pick<
+          Shipment,
+          'id' | 'branch_id' | 'estimated_arrival' | 'estimated_departure' | 'booking_status'
+        >[]) ?? [];
       const shipmentIds = shipmentRows.map((s) => s.id);
 
       const plansWaiting = planRows.filter((p) => p.status === 'planned').length;
@@ -92,10 +100,9 @@ export function PlanningCommandCenterCard() {
       let officerWorkloadPeak = 0;
 
       if (shipmentIds.length > 0) {
-        const [{ data: fullShipments }, { data: containers }, { data: customsRows }, { data: terminalRows }, {
+        const [{ data: containers }, { data: customsRows }, { data: terminalRows }, {
           data: transportRows,
         }, { data: checklistRows }, { data: assignmentRows }] = await Promise.all([
-          supabase.from('shipments').select('*').in('id', shipmentIds),
           supabase.from('shipment_containers').select('shipment_id').in('shipment_id', shipmentIds).is('deleted_at', null),
           supabase.from('shipment_customs').select('*').in('shipment_id', shipmentIds),
           supabase.from('terminal_operations').select('*').in('shipment_id', shipmentIds),
@@ -132,7 +139,7 @@ export function PlanningCommandCenterCard() {
           containersByShipment.set(c.shipment_id, (containersByShipment.get(c.shipment_id) ?? 0) + 1);
         });
 
-        ((fullShipments as Shipment[] | null) ?? []).forEach((shipment) => {
+        shipmentRows.forEach((shipment) => {
           const risks = computePlanningRisks({
             shipment,
             containers: [],

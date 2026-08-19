@@ -107,60 +107,60 @@ export default function CustomerDetailPage() {
     if (!customerId) return;
     setLoading(true);
     try {
-      // Customer
-      const { data: cust, error: custErr } = await supabase
-        .from('customers')
-        .select('*, branch:branches(*)')
-        .eq('id', customerId)
-        .is('deleted_at', null)
-        .maybeSingle();
+      // Contacts/shipments/quotations/documents only depend on
+      // customerId, not on the customer row itself resolving first, so
+      // all five queries go out as one concurrent batch instead of five
+      // sequential round trips. The (rare) case where customerId turns
+      // out not to exist just means the other four resolve to empty
+      // arrays that are never rendered — a discarded response, not a
+      // wrong one.
+      const [custRes, ctctsRes, shipsRes, quotsRes, docsRes] = await Promise.all([
+        supabase
+          .from('customers')
+          .select('*, branch:branches(*)')
+          .eq('id', customerId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        supabase
+          .from('customer_contacts')
+          .select('*')
+          .eq('customer_id', customerId)
+          .is('deleted_at', null)
+          .order('is_primary', { ascending: false }),
+        supabase
+          .from('shipments')
+          .select('*')
+          .eq('customer_id', customerId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('quotations')
+          .select('*')
+          .eq('customer_id', customerId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('customer_id', customerId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+      ]);
 
-      if (custErr) {
-        console.error('Error loading customer:', custErr);
+      if (custRes.error) {
+        console.error('Error loading customer:', custRes.error);
         setCustomer(null);
         return;
       }
-      if (!cust) {
+      if (!custRes.data) {
         setCustomer(null);
         return;
       }
-      setCustomer(cust as Customer);
-
-      // Contacts
-      const { data: ctcts } = await supabase
-        .from('customer_contacts')
-        .select('*')
-        .eq('customer_id', customerId)
-        .is('deleted_at', null)
-        .order('is_primary', { ascending: false });
-      setContacts((ctcts as CustomerContact[]) ?? []);
-
-      // Shipments
-      const { data: ships } = await supabase
-        .from('shipments')
-        .select('*')
-        .eq('customer_id', customerId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      setShipments((ships as Shipment[]) ?? []);
-
-      // Quotations
-      const { data: quots } = await supabase
-        .from('quotations')
-        .select('*')
-        .eq('customer_id', customerId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      setQuotations((quots as Quotation[]) ?? []);
-
-      // Documents
-      const { data: docs } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('customer_id', customerId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      setDocuments((docs as DocumentRecord[]) ?? []);
+      setCustomer(custRes.data as Customer);
+      setContacts((ctctsRes.data as CustomerContact[]) ?? []);
+      setShipments((shipsRes.data as Shipment[]) ?? []);
+      setQuotations((quotsRes.data as Quotation[]) ?? []);
+      setDocuments((docsRes.data as DocumentRecord[]) ?? []);
     } finally {
       setLoading(false);
     }

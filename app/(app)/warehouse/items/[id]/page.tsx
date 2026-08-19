@@ -92,42 +92,46 @@ export default function StockItemDetailPage() {
     if (!itemId) return;
     setLoading(true);
     try {
-      const { data: itemData, error: itemError } = await supabase
-        .from('stock_items')
-        .select('*')
-        .eq('id', itemId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (itemError || !itemData) {
-        setItem(null);
-        return;
-      }
-      setItem(itemData as StockItem);
-
-      const { data: stock } = await supabase
-        .from('warehouse_stock')
-        .select('*, warehouse:warehouses(*)')
-        .eq('item_id', itemId);
-      setStockRows((stock as unknown as WarehouseStock[]) ?? []);
-
-      const { data: moves } = await supabase
-        .from('stock_movements')
-        .select(
-          '*, warehouse:warehouses!stock_movements_warehouse_id_fkey(*), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(*), created_by_user:profiles!stock_movements_created_by_fkey(id, full_name)'
-        )
-        .eq('item_id', itemId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-      setMovements((moves as unknown as StockMovement[]) ?? []);
-
       let whQuery = supabase
         .from('warehouses')
         .select('*')
         .is('deleted_at', null)
         .order('name', { ascending: true });
       if (!isAdmin && branchId) whQuery = whQuery.eq('branch_id', branchId);
-      const { data: whRows } = await whQuery;
+
+      // stock/movements/warehouses are all independent of the item row
+      // and of each other — one concurrent batch instead of four
+      // sequential round trips.
+      const [{ data: itemData, error: itemError }, { data: stock }, { data: moves }, { data: whRows }] =
+        await Promise.all([
+          supabase
+            .from('stock_items')
+            .select('*')
+            .eq('id', itemId)
+            .is('deleted_at', null)
+            .maybeSingle(),
+          supabase
+            .from('warehouse_stock')
+            .select('*, warehouse:warehouses(*)')
+            .eq('item_id', itemId),
+          supabase
+            .from('stock_movements')
+            .select(
+              '*, warehouse:warehouses!stock_movements_warehouse_id_fkey(*), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(*), created_by_user:profiles!stock_movements_created_by_fkey(id, full_name)'
+            )
+            .eq('item_id', itemId)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          whQuery,
+        ]);
+
+      if (itemError || !itemData) {
+        setItem(null);
+        return;
+      }
+      setItem(itemData as StockItem);
+      setStockRows((stock as unknown as WarehouseStock[]) ?? []);
+      setMovements((moves as unknown as StockMovement[]) ?? []);
       setWarehouses((whRows as Warehouse[]) ?? []);
     } finally {
       setLoading(false);

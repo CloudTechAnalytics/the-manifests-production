@@ -54,7 +54,13 @@ export const STAGE_SLA_HOURS: Record<string, number> = {
 };
 
 interface PlanningDataInput {
-  shipment: Shipment;
+  // Narrowed to only the fields this function actually reads (rather
+  // than the full Shipment row) so a caller that already has just these
+  // columns — e.g. planning-command-center-card.tsx, which fetches a
+  // narrow shipments row up front — doesn't need a second, wider fetch
+  // of the same rows just to satisfy this type. A full Shipment object
+  // still satisfies this narrower shape.
+  shipment: Pick<Shipment, 'booking_status' | 'estimated_departure' | 'estimated_arrival'>;
   containers: ShipmentContainer[];
   customs: ShipmentCustoms | null;
   terminal: TerminalOperation | null;
