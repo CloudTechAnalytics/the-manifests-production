@@ -1,0 +1,51 @@
+name: Supabase keepalive
+
+# Free-tier Supabase projects auto-pause after 7 days with no API activity.
+# This pings both projects (testing + production) every 3 days with a
+# trivial authenticated read, well inside that window, so neither ever
+# pauses. Pausing doesn't delete data and is one click to undo in the
+# dashboard, but a paused *production* project means real signups/logins
+# fail until someone notices and un-pauses it manually - this avoids that
+# ever happening.
+#
+# The two anon keys below are Supabase's publishable/public keys (same
+# design as a Stripe publishable key) - they're already embedded as-is in
+# both apps' deployed client-side JS bundles, so committing them here adds
+# no exposure beyond what's already public. They are read-only/RLS-scoped,
+# never the service_role key.
+on:
+  schedule:
+    - cron: '13 7 */3 * *'
+  workflow_dispatch: {} # allows a manual "Run workflow" click to test on demand
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping testing project (yqztmgmyvwackkcppgip)
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://yqztmgmyvwackkcppgip.supabase.co/rest/v1/plans?select=id&limit=1" \
+            -H "apikey: ${TESTING_ANON_KEY}" \
+            -H "Authorization: Bearer ${TESTING_ANON_KEY}")
+          echo "testing status: $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase testing project did not return 200 (got $status) - it may be paused or the anon key may have been rotated."
+            exit 1
+          fi
+        env:
+          TESTING_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxenRtZ215dndhY2trY3BwZ2lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMjM3MjYsImV4cCI6MjEwMjU5OTcyNn0.My8vj5WRsw3Q482WtNCm8tIDJOjkXAhAQA22Fy9tq14
+
+      - name: Ping production project (ktlmtxnbpdwzxgssdfce)
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://ktlmtxnbpdwzxgssdfce.supabase.co/rest/v1/plans?select=id&limit=1" \
+            -H "apikey: ${PRODUCTION_ANON_KEY}" \
+            -H "Authorization: Bearer ${PRODUCTION_ANON_KEY}")
+          echo "production status: $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase production project did not return 200 (got $status) - it may be paused or the anon key may have been rotated."
+            exit 1
+          fi
+        env:
+          PRODUCTION_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0bG10eG5icGR3enhnc3NkZmNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMzM3MTEsImV4cCI6MjEwMjcwOTcxMX0.tGlcXeY42qhu7TjIqdmoyziWI2FfhHXvhjBDQCd1KJo
