@@ -100,6 +100,8 @@ const ROLE_META: Record<Exclude<UserRole, 'platform_admin'>, { label: string; co
   examination: { label: 'Examination', color: 'bg-fuchsia-100 text-fuchsia-700' },
   warehouse: { label: 'Warehouse', color: 'bg-lime-100 text-lime-700' },
   transport: { label: 'Transport', color: 'bg-sky-100 text-sky-700' },
+  hr_manager: { label: 'HR Manager', color: 'bg-pink-100 text-pink-700' },
+  hr_officer: { label: 'HR Officer', color: 'bg-pink-50 text-pink-600' },
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [

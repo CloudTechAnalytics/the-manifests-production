@@ -26,7 +26,12 @@
  *
  * What's left as real tier differentiators: Expense Tracking, Rate
  * Management, and Audit Logs are back-office/governance depth, not
- * required to move cargo or get paid.
+ * required to move cargo or get paid. HR & People Management (added
+ * migration 088) joins that list for the same reason — no shipment,
+ * invoice, or customs clearance ever depends on the HR module existing,
+ * so gating it behind Professional+ repeats none of the migration-083
+ * mistake. RLS (see can_manage_hr()/can_view_employee(), migration 085)
+ * is the real security boundary regardless of plan, same as always.
  *
  * This is UI-layer gating only: it hides nav entries and blocks the route
  * from rendering. It does not touch RLS, so a request made directly against
@@ -37,6 +42,7 @@ export const ROUTE_FEATURE_MAP: { prefix: string; feature: string }[] = [
   { prefix: '/expenses', feature: 'Expense Tracking' },
   { prefix: '/rates', feature: 'Rate Management' },
   { prefix: '/activity-log', feature: 'Audit Logs' },
+  { prefix: '/hr', feature: 'HR & People Management' },
 ];
 
 /** The feature label required to reach `pathname`, or null if it isn't

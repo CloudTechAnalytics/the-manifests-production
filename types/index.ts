@@ -13,7 +13,9 @@ export type UserRole =
   | 'terminal'
   | 'examination'
   | 'warehouse'
-  | 'transport';
+  | 'transport'
+  | 'hr_manager'
+  | 'hr_officer';
 
 export type CustomerType = 'individual' | 'corporate';
 
@@ -255,6 +257,175 @@ export interface Department {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+// ============================================================
+// HR & People Capacity — Phase 1
+// ============================================================
+
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'intern' | 'temporary';
+
+export type EmploymentStatus = 'active' | 'on_leave' | 'suspended' | 'terminated' | 'resigned';
+
+export interface Employee {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  /** Null for a login-less employee (e.g. a driver or warehouse worker
+   *  who has no Manifest account) — the "Manifest Access" section of
+   *  their profile is simply empty in that case, not broken. */
+  profile_id: string | null;
+  department_id: string | null;
+  /** Self-reference — the employee's direct manager. Drives the
+   *  "Department Manager sees their direct reports" access tier;
+   *  department_id is a label only, never a security boundary. */
+  manager_id: string | null;
+  employee_number: string;
+  first_name: string;
+  last_name: string;
+  personal_email: string | null;
+  personal_phone: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  address: string | null;
+  job_title: string;
+  employment_type: EmploymentType;
+  employment_status: EmploymentStatus;
+  work_location: string | null;
+  hire_date: string;
+  confirmation_date: string | null;
+  contract_end_date: string | null;
+  termination_date: string | null;
+  termination_reason: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  branch?: Branch | null;
+  department?: Department | null;
+  manager?: Employee | null;
+  profile?: Profile | null;
+}
+
+/**
+ * 1:1 with Employee, kept in a separate table (not columns on
+ * `employees`) so RLS can genuinely restrict it — hr_officer can manage
+ * an employee's record but never sees this. Never render these fields
+ * anywhere outside an explicitly-gated Sensitive Info view.
+ */
+export interface EmployeeSensitiveInfo {
+  employee_id: string;
+  salary_amount: number | null;
+  salary_currency: string;
+  pay_frequency: string | null;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  tax_id: string | null;
+  national_id_number: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_relationship: string | null;
+  emergency_contact_phone: string | null;
+  private_notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One person, multiple functions — spec section 13. `linked_role` is
+ *  what the capacity engine joins on to pull workload from every role
+ *  an employee actually covers, primary or secondary. */
+export interface EmployeeResponsibility {
+  id: string;
+  employee_id: string;
+  department_id: string | null;
+  role_title: string;
+  linked_role: UserRole | null;
+  is_primary: boolean;
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  department?: Department | null;
+}
+
+/** A capacity status is only ever shown when there's enough signal to
+ *  mean something — `null` (never a fabricated "healthy") is the
+ *  honest alternative, always paired with `is_thin_data`. */
+export type CapacityStatusLabel = 'underutilized' | 'healthy' | 'high_utilization' | 'overloaded';
+
+/** Row shape of hr_people_capacity() — see migration 087. */
+export interface EmployeeCapacity {
+  employee_id: string;
+  employee_name: string;
+  branch_id: string | null;
+  branch_name: string | null;
+  raw_score: number;
+  sample_size: number;
+  peer_count: number;
+  peer_median: number | null;
+  utilization_index: number | null;
+  status_label: CapacityStatusLabel | null;
+  is_thin_data: boolean;
+  thin_reason: 'no_login' | 'low_sample' | 'few_peers' | null;
+}
+
+/** Row shape of hr_department_capacity(). */
+export interface DepartmentCapacity {
+  branch_id: string | null;
+  branch_name: string | null;
+  linked_role: UserRole;
+  active_employee_count: number;
+  total_score: number;
+  avg_score_per_employee: number | null;
+  org_avg_score_per_employee: number | null;
+  utilization_index: number | null;
+  status_label: CapacityStatusLabel | null;
+  is_thin_data: boolean;
+}
+
+/** Row shape of hr_branch_capacity(). */
+export interface BranchCapacity {
+  branch_id: string | null;
+  branch_name: string | null;
+  active_employee_count: number;
+  total_score: number;
+  avg_score_per_employee: number | null;
+  org_avg_score_per_employee: number | null;
+  utilization_index: number | null;
+  status_label: CapacityStatusLabel | null;
+  is_thin_data: boolean;
+  thin_reason: 'only_branch' | 'no_employees' | null;
+}
+
+/** Row shape of hr_dashboard_stats() — always exactly one row. */
+export interface HrDashboardStats {
+  total_employees: number;
+  active_employees: number;
+  on_leave_employees: number;
+  other_status_employees: number;
+  new_hires_30d: number;
+  contracts_ending_60d: number;
+  confirmation_due_30d: number;
+  employees_without_login: number;
+}
+
+export interface WorkforceByBranch {
+  branch_id: string;
+  branch_name: string;
+  employee_count: number;
+}
+
+export interface WorkforceByDepartment {
+  department_id: string;
+  department_name: string;
+  employee_count: number;
 }
 
 export interface ConsentRecord {

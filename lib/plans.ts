@@ -41,6 +41,7 @@ export const FEATURE_CATALOG: FeatureDef[] = [
   { label: 'Advanced Reports', group: 'Advanced' },
   { label: 'Webhooks & API Integrations', group: 'Advanced' },
   { label: 'Audit Logs', group: 'Advanced' },
+  { label: 'HR & People Management', group: 'Advanced' },
 ];
 
 export const FEATURE_LABELS: string[] = FEATURE_CATALOG.map((f) => f.label);

@@ -43,6 +43,9 @@ import {
   Sun,
   Moon,
   UserRound,
+  Gauge,
+  IdCard,
+  Boxes,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -108,6 +111,7 @@ const WORK_QUEUE_ROLES: UserRole[] = [
   'examination',
   'planning',
 ];
+const HR_ROLES: UserRole[] = ['admin', 'branch_manager', 'hr_manager', 'hr_officer'];
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   {
@@ -162,6 +166,25 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: '/reports', label: 'Reports', icon: BarChart3, roles: [...FINANCE_ROLES] },
       { href: '/activity-log', label: 'Operations Log', icon: History, roles: APPROVAL_ROLES },
       { href: '/activity-log?view=audit', label: 'Audit Trail', icon: ShieldAlert, roles: APPROVAL_ROLES },
+    ],
+  },
+  {
+    // Phase 1 of the HR & People Capacity module — Dashboard, People/
+    // Department/Branch Capacity, Employees. Leave/Attendance/Documents/
+    // Onboarding/Offboarding/Performance/Training/Reports/Settings are
+    // deliberately not listed yet: they ship (and get their own nav
+    // entries) in later phases, not as dead links now. Gated behind the
+    // 'HR & People Management' plan feature (Professional+, see
+    // lib/feature-gating.ts) — genuine back-office tooling, same
+    // category as Expense Tracking/Rate Management, never something a
+    // shipment can get stuck on.
+    label: 'HR & People',
+    items: [
+      { href: '/hr/dashboard', label: 'HR Dashboard', icon: LayoutDashboard, roles: HR_ROLES },
+      { href: '/hr/capacity', label: 'People Capacity', icon: Gauge, roles: HR_ROLES },
+      { href: '/hr/employees', label: 'Employees', icon: IdCard, roles: HR_ROLES },
+      { href: '/hr/capacity/departments', label: 'Department Capacity', icon: Boxes, roles: HR_ROLES },
+      { href: '/hr/capacity/branches', label: 'Branch Capacity', icon: Network, roles: HR_ROLES },
     ],
   },
 ];
