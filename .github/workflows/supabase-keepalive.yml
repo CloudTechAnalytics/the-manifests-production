@@ -1,12 +1,22 @@
 name: Supabase keepalive
 
 # Free-tier Supabase projects auto-pause after 7 days with no API activity.
-# This pings both projects (testing + production) every 3 days with a
-# trivial authenticated read, well inside that window, so neither ever
-# pauses. Pausing doesn't delete data and is one click to undo in the
-# dashboard, but a paused *production* project means real signups/logins
-# fail until someone notices and un-pauses it manually - this avoids that
-# ever happening.
+# This pings both projects (testing + production) with a trivial
+# authenticated read. Pausing doesn't delete data and is one click to
+# undo in the dashboard, but a paused *production* project means real
+# signups/logins fail until someone notices and un-pauses it manually -
+# this avoids that ever happening.
+#
+# Runs DAILY, not every 3 days. GitHub's own docs are explicit that
+# `schedule` triggers are best-effort and can be delayed or silently
+# dropped under load, with no error or notification when it happens -
+# confirmed live here: the every-3-days version fired successfully on
+# day 2 and day 5, then silently missed its day-8 fire entirely (the
+# workflow stayed "active", nothing broke, it just didn't run - caught
+# only because Supabase's own pause-warning email arrived first). A
+# every-3-days cadence gives a single missed fire almost no margin
+# before the real 7-day pause threshold; daily means even two or three
+# consecutive silent misses in a row still leaves days of slack.
 #
 # The two anon keys below are Supabase's publishable/public keys (same
 # design as a Stripe publishable key) - they're already embedded as-is in
@@ -15,7 +25,7 @@ name: Supabase keepalive
 # never the service_role key.
 on:
   schedule:
-    - cron: '13 7 */3 * *'
+    - cron: '17 7 * * *'
   workflow_dispatch: {} # allows a manual "Run workflow" click to test on demand
 
 jobs:
