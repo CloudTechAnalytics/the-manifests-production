@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Briefcase,
   Edit,
+  GraduationCap,
   KeyRound,
   Loader2,
   ShieldAlert,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { TrainingStatusBadge } from '@/components/hr/training/training-status-badge';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -28,9 +30,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import type { Employee, EmployeeResponsibility, EmployeeSensitiveInfo, Profile } from '@/types';
+import type { Employee, EmployeeResponsibility, EmployeeSensitiveInfo, EmployeeTraining, Profile } from '@/types';
 
-const KNOWN_TABS = new Set(['personal', 'employment', 'responsibilities', 'access']);
+const KNOWN_TABS = new Set(['personal', 'employment', 'responsibilities', 'access', 'training']);
 
 export default function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -47,6 +49,7 @@ export default function EmployeeDetailPage() {
   const [sensitive, setSensitive] = useState<EmployeeSensitiveInfo | null>(null);
   const [responsibilities, setResponsibilities] = useState<EmployeeResponsibility[]>([]);
   const [linkedProfile, setLinkedProfile] = useState<Profile | null>(null);
+  const [training, setTraining] = useState<EmployeeTraining[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function EmployeeDetailPage() {
       const emp = employeeData as Employee;
       setEmployee(emp);
 
-      const [sensitiveRes, respRes, profileRes] = await Promise.all([
+      const [sensitiveRes, respRes, profileRes, trainingRes] = await Promise.all([
         supabase.from('employee_sensitive_info').select('*').eq('employee_id', employeeId).maybeSingle(),
         supabase
           .from('employee_responsibilities')
@@ -81,6 +84,11 @@ export default function EmployeeDetailPage() {
         emp.profile_id
           ? supabase.from('profiles').select('*, branch:branches(*)').eq('id', emp.profile_id).maybeSingle()
           : Promise.resolve({ data: null }),
+        supabase
+          .from('employee_training')
+          .select('*, course:courses(*)')
+          .eq('employee_id', employeeId)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (!isMounted) return;
@@ -90,6 +98,18 @@ export default function EmployeeDetailPage() {
       setSensitive((sensitiveRes.data as EmployeeSensitiveInfo | null) ?? null);
       setResponsibilities((respRes.data as EmployeeResponsibility[]) ?? []);
       setLinkedProfile((profileRes.data as Profile | null) ?? null);
+      // Current-per-course: rows are already ordered by created_at
+      // desc, so the first occurrence of each course_id is current —
+      // history (prior recert cycles) stays queryable but isn't shown
+      // here, same convention as the My Learning page.
+      const seenCourses = new Set<string>();
+      const currentTraining: EmployeeTraining[] = [];
+      for (const row of (trainingRes.data as EmployeeTraining[]) ?? []) {
+        if (seenCourses.has(row.course_id)) continue;
+        seenCourses.add(row.course_id);
+        currentTraining.push(row);
+      }
+      setTraining(currentTraining);
       setLoading(false);
     })();
     return () => {
@@ -181,6 +201,9 @@ export default function EmployeeDetailPage() {
           </TabsTrigger>
           <TabsTrigger value="access" className="gap-1.5">
             <KeyRound className="h-3.5 w-3.5" /> Manifest Access
+          </TabsTrigger>
+          <TabsTrigger value="training" className="gap-1.5">
+            <GraduationCap className="h-3.5 w-3.5" /> Training
           </TabsTrigger>
         </TabsList>
 
@@ -302,6 +325,37 @@ export default function EmployeeDetailPage() {
                   <Field label="System Role" value={linkedProfile.role?.replace(/_/g, ' ')} className="capitalize" />
                   <Field label="Branch Access" value={linkedProfile.branch?.name ?? 'Org-wide'} />
                 </dl>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="training">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Training</CardTitle>
+              <CardDescription>
+                Read-only here — this employee marks their own progress from My Learning.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {training.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No training assigned or enrolled yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {training.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div>
+                        <p className="text-sm font-medium">{t.course?.title ?? 'Course'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.assigned_by ? 'HR-assigned' : 'Self-enrolled'}
+                          {t.due_date && ` · Due ${t.due_date}`}
+                        </p>
+                      </div>
+                      <TrainingStatusBadge status={t.status} dueDate={t.due_date} />
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

@@ -428,6 +428,98 @@ export interface WorkforceByDepartment {
   employee_count: number;
 }
 
+// ============================================================
+// Training & Learning
+// ============================================================
+
+export type TrainingMaterialType = 'file' | 'link';
+export type TrainingStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface Course {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  /** Recommendation/badging signal only ("Recommended for your role")
+   *  — never a hard visibility filter. Every employee can browse every
+   *  course regardless of this list. */
+  target_roles: UserRole[];
+  provider: string | null;
+  estimated_duration_minutes: number | null;
+  is_certification: boolean;
+  certification_validity_months: number | null;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface CourseMaterial {
+  id: string;
+  course_id: string;
+  material_type: TrainingMaterialType;
+  title: string;
+  external_url: string | null;
+  file_path: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+/**
+ * assigned_by null = self-enrolled; set = HR-assigned (only ever
+ * created via the assign_training() RPC — RLS blocks a client insert
+ * with assigned_by set). Multiple historical rows per
+ * (employee_id, course_id) are expected — for recertification/retake
+ * tracking — so "current" status anywhere in the UI is whichever row
+ * has the latest created_at, not the only row. `status` never stores
+ * 'overdue' — that's always computed live from due_date wherever shown.
+ */
+export interface EmployeeTraining {
+  id: string;
+  employee_id: string;
+  course_id: string;
+  assigned_by: string | null;
+  assignment_batch_id: string | null;
+  due_date: string | null;
+  status: TrainingStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  certificate_expiry_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  course?: Course | null;
+  employee?: Employee | null;
+}
+
+/** Row shape of hr_training_stats() — migration 091. */
+export interface HrTrainingStats {
+  total_assignments: number;
+  not_started_count: number;
+  in_progress_count: number;
+  completed_count: number;
+  overdue_count: number;
+  due_soon_7d_count: number;
+  certifications_expiring_30d: number;
+  self_enrolled_count: number;
+  hr_assigned_count: number;
+}
+
+/** Return shape of the assign_training() RPC. */
+export interface AssignTrainingResult {
+  assignment_batch_id: string;
+  assigned_count: number;
+  already_assigned_count: number;
+  skipped_no_login_count: number;
+  denied_count: number;
+}
+
 export interface ConsentRecord {
   id: string;
   profile_id: string;

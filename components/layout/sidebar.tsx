@@ -46,6 +46,7 @@ import {
   Gauge,
   IdCard,
   Boxes,
+  GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -183,6 +184,10 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: '/hr/dashboard', label: 'HR Dashboard', icon: LayoutDashboard, roles: HR_ROLES },
       { href: '/hr/capacity', label: 'People Capacity', icon: Gauge, roles: HR_ROLES },
       { href: '/hr/employees', label: 'Employees', icon: IdCard, roles: HR_ROLES },
+      // No `roles` here on purpose — every employee can browse/self-enroll
+      // in the training catalog, not just HR staff. The /hr prefix's
+      // existing plan-feature gate (lib/feature-gating.ts) still applies.
+      { href: '/hr/training', label: 'Training', icon: GraduationCap },
       { href: '/hr/capacity/departments', label: 'Department Capacity', icon: Boxes, roles: HR_ROLES },
       { href: '/hr/capacity/branches', label: 'Branch Capacity', icon: Network, roles: HR_ROLES },
     ],
