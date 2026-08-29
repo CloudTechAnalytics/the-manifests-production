@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Menu,
   Search,
   Radar,
@@ -239,13 +240,18 @@ function MobileBrand() {
 /** Sidebar brand block. Shows the signed-in user's organization once it's
  *  loaded; falls back to the product identity while loading or for a user
  *  with no organization. */
-function Logo() {
+function Logo({ collapsed = false }: { collapsed?: boolean }) {
   const { profile } = useAuth();
   const orgName = profile?.organization?.name;
   const logoUrl = profile?.organization?.logo_url;
 
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-6">
+    <div
+      className={cn(
+        'flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border',
+        collapsed ? 'justify-center px-2' : 'px-6'
+      )}
+    >
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -264,14 +270,16 @@ function Logo() {
           )}
         </div>
       )}
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate font-serif text-base font-bold leading-tight tracking-tight text-sidebar-foreground">
-          {orgName ?? 'The Manifest'}
-        </span>
-        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-muted">
-          Freight Management
-        </span>
-      </div>
+      {!collapsed && (
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-display text-base font-bold leading-tight tracking-tight text-sidebar-foreground">
+            {orgName ?? 'The Manifest'}
+          </span>
+          <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-muted">
+            Freight Management
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -288,6 +296,7 @@ function NavGroup({
   collapsible = false,
   collapsed = false,
   onToggleCollapse,
+  railCollapsed = false,
 }: {
   label: string;
   items: NavItem[];
@@ -301,8 +310,16 @@ function NavGroup({
   hasFeature: (label: string) => boolean;
   onNavigate?: () => void;
   collapsible?: boolean;
+  /** This group's own accordion open/closed state — unrelated to
+   *  `railCollapsed` below (a different axis: one group open while
+   *  others are shut, all still full-width). */
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** The whole sidebar is in icon-only rail mode — overrides this
+   *  group's own accordion state (nothing to click without a label, so
+   *  items always render) and drops labels/headers/badges down to
+   *  icon + tooltip only. */
+  railCollapsed?: boolean;
 }) {
   const visibleItems = items.filter((item) => {
     if (item.adminOnly && !roles.includes('admin')) return false;
@@ -320,27 +337,34 @@ function NavGroup({
   // with nothing underneath it.
   if (visibleItems.length === 0) return null;
 
+  // Rail mode has no room for a label to click, so there's nothing to
+  // toggle — items always render, ignoring this group's own (unrelated)
+  // accordion state.
+  const itemsHidden = !railCollapsed && collapsed;
+
   return (
     <div>
-      <button
-        type="button"
-        onClick={collapsible ? onToggleCollapse : undefined}
-        className={cn(
-          'flex w-full items-center justify-between px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80',
-          collapsible && 'cursor-pointer hover:text-sidebar-muted'
-        )}
-      >
-        {label}
-        {collapsible && (
-          <ChevronRight
-            className={cn('h-3.5 w-3.5 transition-transform duration-200', !collapsed && 'rotate-90')}
-          />
-        )}
-      </button>
+      {!railCollapsed && (
+        <button
+          type="button"
+          onClick={collapsible ? onToggleCollapse : undefined}
+          className={cn(
+            'flex w-full items-center justify-between px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80',
+            collapsible && 'cursor-pointer hover:text-sidebar-muted'
+          )}
+        >
+          {label}
+          {collapsible && (
+            <ChevronRight
+              className={cn('h-3.5 w-3.5 transition-transform duration-200', !collapsed && 'rotate-90')}
+            />
+          )}
+        </button>
+      )}
       <div
         className={cn(
           'space-y-0.5 overflow-hidden transition-all duration-200',
-          collapsed ? 'max-h-0 opacity-0' : 'max-h-[600px] opacity-100'
+          itemsHidden ? 'max-h-0 opacity-0' : 'max-h-[600px] opacity-100'
         )}
       >
         {visibleItems.map((item) => {
@@ -359,8 +383,10 @@ function NavGroup({
               key={`${item.href}-${item.label}`}
               href={item.href}
               onClick={onNavigate}
+              title={railCollapsed ? item.label : undefined}
               className={cn(
                 'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                railCollapsed && 'justify-center px-0',
                 active
                   ? 'bg-sidebar-hover text-sidebar-accent'
                   : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
@@ -370,8 +396,8 @@ function NavGroup({
                 <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-accent" />
               )}
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {!!count && (
+              {!railCollapsed && <span className="flex-1">{item.label}</span>}
+              {!railCollapsed && !!count && (
                 <span
                   className={cn(
                     'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
@@ -420,7 +446,16 @@ function useCollapsedGroups() {
   return { collapsed, toggle };
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({
+  onNavigate,
+  railCollapsed = false,
+}: {
+  onNavigate?: () => void;
+  /** The desktop sidebar's own icon-rail state (Sidebar()) — always
+   *  false for the mobile Sheet, which has room to spare and never
+   *  collapses. */
+  railCollapsed?: boolean;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { roles } = useAuth();
@@ -432,13 +467,15 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const currentHref = search ? `${pathname}?${search}` : pathname;
 
   return (
-    <nav className="flex flex-1 flex-col overflow-y-auto scrollbar-thin px-3 py-4">
+    <nav className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4">
       <div className="space-y-1">
         <Link
           href="/dashboard"
           onClick={onNavigate}
+          title={railCollapsed ? 'Dashboard' : undefined}
           className={cn(
             'relative mb-4 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            railCollapsed && 'justify-center px-0',
             pathname === '/dashboard'
               ? 'bg-sidebar-hover text-sidebar-accent'
               : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
@@ -448,7 +485,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-accent" />
           )}
           <LayoutDashboard className="h-4 w-4 shrink-0" />
-          Dashboard
+          {!railCollapsed && 'Dashboard'}
         </Link>
       </div>
       <div className="space-y-5">
@@ -466,6 +503,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             collapsible
             collapsed={!!collapsed[group.label]}
             onToggleCollapse={() => toggle(group.label)}
+            railCollapsed={railCollapsed}
           />
         ))}
       </div>
@@ -483,6 +521,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         collapsible
         collapsed={!!collapsed['Administration']}
         onToggleCollapse={() => toggle('Administration')}
+        railCollapsed={railCollapsed}
       />
     </nav>
   );
@@ -572,7 +611,8 @@ function UserMenu() {
 }
 
 /** Version footer pinned to the bottom of the sidebar on every page. */
-function SidebarFooter() {
+function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
+  if (collapsed) return null;
   return (
     <div className="shrink-0 border-t border-sidebar-border px-6 py-3">
       <p className="text-[11px] font-medium text-sidebar-muted/70">
@@ -585,12 +625,49 @@ function SidebarFooter() {
 /** Desktop, always-visible sidebar (lg and up). Permanently dark, regardless
  *  of the app's light/dark theme setting — a fixed brand identity element.
  *  The account control lives in the TopBar now, not here. */
+const APP_SIDEBAR_COLLAPSED_KEY = 'app-sidebar-collapsed';
+
 export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(APP_SIDEBAR_COLLAPSED_KEY) === '1');
+    } catch {
+      // Corrupt/inaccessible storage just means the sidebar starts expanded.
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(APP_SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        // Best-effort persistence — a failed write just won't survive a reload.
+      }
+      return next;
+    });
+  };
+
   return (
-    <aside className="no-print hidden h-screen w-64 shrink-0 flex-col bg-sidebar lg:flex">
-      <Logo />
-      <NavLinks />
-      <SidebarFooter />
+    <aside
+      className={cn(
+        'no-print relative hidden h-screen shrink-0 flex-col bg-sidebar transition-[width] duration-200 lg:flex',
+        collapsed ? 'w-[68px]' : 'w-64'
+      )}
+    >
+      <Logo collapsed={collapsed} />
+      <NavLinks railCollapsed={collapsed} />
+      <SidebarFooter collapsed={collapsed} />
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className="absolute -right-3 top-20 z-10 hidden h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex"
+      >
+        {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+      </button>
     </aside>
   );
 }

@@ -8,6 +8,17 @@ const config: Config = {
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
+    // The `.container` utility itself isn't used anywhere in the app yet
+    // (every shell wraps its own content in an explicit max-w-[1800px]
+    // column instead — components/layout/sidebar.tsx's TopBar/main, and
+    // app/platform/layout.tsx) — defined here for parity with the design
+    // system spec and so it's available/correct if anything reaches for
+    // it later, without changing how any existing page is laid out.
+    container: {
+      center: true,
+      padding: '2rem',
+      screens: { '2xl': '1440px' },
+    },
     extend: {
       fontFamily: {
         // Same Noto Sans glyph-gap fallback as globals.css's `body` rule
@@ -16,6 +27,11 @@ const config: Config = {
         // strips this class for the ones that matter) still lands on a
         // weight-matched glyph instead of the browser's own default.
         serif: ['var(--font-serif)', 'var(--font-sans-fallback)', 'Georgia', 'serif'],
+        // `display` is an alias for the same var/usage as `serif` above —
+        // added so `font-display` works too without renaming the ~50
+        // existing `font-serif` call sites across the app.
+        display: ['var(--font-serif)', 'var(--font-sans-fallback)', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', 'var(--font-sans-fallback)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -24,8 +40,8 @@ const config: Config = {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        md: 'calc(var(--radius) - 4px)',
+        sm: 'calc(var(--radius) - 8px)',
       },
       colors: {
         background: 'hsl(var(--background))',

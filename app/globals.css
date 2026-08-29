@@ -143,8 +143,18 @@ body {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
+    @apply bg-background text-foreground antialiased;
+    /* 'rlig'/'calt' were already on for ligatures/contextual alternates;
+       the cv0x set is Inter's own recommended stylistic-set numerals —
+       'cv02' open four, 'cv03' open six, 'cv04' open nine, 'cv11' single-
+       storey a — reads calmer at table/data density than the defaults. */
+    font-feature-settings: 'rlig' 1, 'calt' 1, 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv11' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 
@@ -187,15 +197,61 @@ body {
 
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 3px;
+    width: 10px;
+    height: 10px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 999px;
+    /* A transparent border + content-box clip insets the visible thumb
+       away from the scrollbar's own edges, instead of it touching them
+       flush — the same "breathing room" look as the reference. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+    background-clip: content-box;
+  }
+
+  /* Faint inset hairline for a premium/elevated surface that wants a
+     softer edge than a real 1px border — an alternative to `border
+     border-border`, not a replacement for it (Card's own border stays
+     as-is; this is available for anything that wants the lighter touch). */
+  .ring-hairline {
+    box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.7);
+  }
+}
+
+/* Loading-state shimmer — a soft sweep across a muted block, distinct
+   from shadcn's default Skeleton (a flat opacity pulse). Applied by
+   components/ui/skeleton.tsx; kept as a plain CSS class (not a Tailwind
+   utility) since the ::after sweep needs its own keyframe + gradient
+   that isn't expressible as a one-line utility. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--muted));
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--foreground) / 0.06),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s infinite;
+}
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }
 
