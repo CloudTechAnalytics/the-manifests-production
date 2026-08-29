@@ -36,6 +36,7 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          muted: 'hsl(var(--primary-muted))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -71,15 +72,19 @@ const config: Config = {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
         },
-        brand: {
-          dark: 'hsl(var(--brand-dark))',
-          'dark-elevated': 'hsl(var(--brand-dark-elevated))',
-          'dark-border': 'hsl(var(--brand-dark-border))',
-          'dark-foreground': 'hsl(var(--brand-dark-foreground))',
-          'dark-muted': 'hsl(var(--brand-dark-muted))',
-          gold: 'hsl(var(--brand-gold))',
-          'gold-soft': 'hsl(var(--brand-gold-soft))',
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          muted: 'hsl(var(--sidebar-muted))',
+          accent: 'hsl(var(--sidebar-accent))',
+          border: 'hsl(var(--sidebar-border))',
+          hover: 'hsl(var(--sidebar-hover))',
         },
+      },
+      boxShadow: {
+        card: '0 1px 2px -1px rgb(31 26 17 / 0.05), 0 4px 16px -4px rgb(31 26 17 / 0.08)',
+        elevated: '0 8px 32px -8px rgb(31 26 17 / 0.14), 0 2px 8px -2px rgb(31 26 17 / 0.08)',
+        gold: '0 8px 24px -8px hsl(var(--primary) / 0.45)',
       },
       keyframes: {
         'accordion-down': {

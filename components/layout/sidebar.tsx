@@ -237,11 +237,11 @@ function MobileBrand() {
           className="h-7 w-7 shrink-0 rounded-lg object-cover"
         />
       ) : (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-gold">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
           {orgName ? (
-            <span className="text-xs font-bold text-brand-dark">{orgMonogram(orgName)}</span>
+            <span className="text-xs font-bold text-sidebar">{orgMonogram(orgName)}</span>
           ) : (
-            <Ship className="h-3.5 w-3.5 text-brand-dark" strokeWidth={2.25} />
+            <Ship className="h-3.5 w-3.5 text-sidebar" strokeWidth={2.25} />
           )}
         </div>
       )}
@@ -261,30 +261,30 @@ function Logo() {
   const logoUrl = profile?.organization?.logo_url;
 
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border px-6">
+    <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-6">
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={logoUrl}
           alt={orgName ?? 'Organization logo'}
-          className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-brand-gold/30"
+          className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm shadow-sidebar-accent/30"
         />
       ) : (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sidebar-accent shadow-sm shadow-sidebar-accent/30">
           {orgName ? (
-            <span className="text-sm font-bold text-brand-dark">
+            <span className="text-sm font-bold text-sidebar">
               {orgMonogram(orgName)}
             </span>
           ) : (
-            <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
+            <Ship className="h-[18px] w-[18px] text-sidebar" strokeWidth={2.25} />
           )}
         </div>
       )}
       <div className="flex min-w-0 flex-col">
-        <span className="truncate font-serif text-base font-bold leading-tight tracking-tight text-brand-dark-foreground">
+        <span className="truncate font-serif text-base font-bold leading-tight tracking-tight text-sidebar-foreground">
           {orgName ?? 'The Manifest'}
         </span>
-        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-muted">
           Freight Management
         </span>
       </div>
@@ -342,8 +342,8 @@ function NavGroup({
         type="button"
         onClick={collapsible ? onToggleCollapse : undefined}
         className={cn(
-          'flex w-full items-center justify-between px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80',
-          collapsible && 'cursor-pointer hover:text-brand-dark-muted'
+          'flex w-full items-center justify-between px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80',
+          collapsible && 'cursor-pointer hover:text-sidebar-muted'
         )}
       >
         {label}
@@ -378,12 +378,12 @@ function NavGroup({
               className={cn(
                 'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-brand-dark-elevated text-brand-gold-soft'
-                  : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
+                  ? 'bg-sidebar-hover text-sidebar-accent'
+                  : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
               )}
             >
               {active && (
-                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
+                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-accent" />
               )}
               <Icon className="h-4 w-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
@@ -391,7 +391,7 @@ function NavGroup({
                 <span
                   className={cn(
                     'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
-                    active ? 'bg-brand-gold/20 text-brand-gold-soft' : 'bg-brand-dark-elevated text-brand-dark-muted'
+                    active ? 'bg-sidebar-accent/20 text-sidebar-accent' : 'bg-sidebar-hover text-sidebar-muted'
                   )}
                 >
                   {count > 99 ? '99+' : count}
@@ -456,12 +456,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           className={cn(
             'relative mb-4 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
             pathname === '/dashboard'
-              ? 'bg-brand-dark-elevated text-brand-gold-soft'
-              : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
+              ? 'bg-sidebar-hover text-sidebar-accent'
+              : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
           )}
         >
           {pathname === '/dashboard' && (
-            <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
+            <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-accent" />
           )}
           <LayoutDashboard className="h-4 w-4 shrink-0" />
           Dashboard
@@ -515,15 +515,15 @@ function UserMenu() {
   const roleLabel = profile?.role?.replace('_', ' ') ?? '';
 
   return (
-    <div className="border-t border-brand-dark-border p-3">
+    <div className="border-t border-sidebar-border p-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 px-2 py-2 text-brand-dark-foreground hover:bg-brand-dark-elevated hover:text-brand-dark-foreground"
+            className="w-full justify-start gap-3 px-2 py-2 text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-foreground"
           >
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
+              <AvatarFallback className="bg-sidebar-accent/15 text-xs font-semibold text-sidebar-accent">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -531,11 +531,11 @@ function UserMenu() {
               <span className="w-full truncate text-sm font-medium leading-none text-left">
                 {profile?.full_name}
               </span>
-              <span className="text-xs capitalize text-brand-dark-muted">
+              <span className="text-xs capitalize text-sidebar-muted">
                 {roleLabel}
               </span>
             </div>
-            <ChevronDown className="h-4 w-4 shrink-0 text-brand-dark-muted" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-sidebar-muted" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
@@ -586,8 +586,8 @@ function UserMenu() {
 /** Version footer pinned to the bottom of the sidebar on every page. */
 function SidebarFooter() {
   return (
-    <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
-      <p className="text-[11px] font-medium text-brand-dark-muted/70">
+    <div className="shrink-0 border-t border-sidebar-border px-6 py-3">
+      <p className="text-[11px] font-medium text-sidebar-muted/70">
         The Manifest · v1.0
       </p>
     </div>
@@ -599,7 +599,7 @@ function SidebarFooter() {
  *  The account control lives in the TopBar now, not here. */
 export function Sidebar() {
   return (
-    <aside className="no-print hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
+    <aside className="no-print hidden h-screen w-64 shrink-0 flex-col bg-sidebar lg:flex">
       <Logo />
       <NavLinks />
       <SidebarFooter />
@@ -626,7 +626,7 @@ function HeaderUserMenu() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-auto gap-2.5 px-2 py-1.5 hover:bg-accent">
           <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
+            <AvatarFallback className="bg-sidebar-accent/15 text-xs font-semibold text-sidebar-accent">
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -811,7 +811,7 @@ export function MobileTopBar() {
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex w-72 flex-col bg-brand-dark p-0">
+        <SheetContent side="left" className="flex w-72 flex-col bg-sidebar p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Logo />
           <NavLinks onNavigate={() => setOpen(false)} />

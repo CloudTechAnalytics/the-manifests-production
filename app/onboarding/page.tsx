@@ -88,8 +88,8 @@ export default function OnboardingPage() {
       <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
         <div className="w-full max-w-xl space-y-8 text-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-gold shadow-lg shadow-brand-gold/20">
-              <PartyPopper className="h-7 w-7 text-brand-dark" strokeWidth={2.25} />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-sidebar-accent shadow-lg shadow-sidebar-accent/20">
+              <PartyPopper className="h-7 w-7 text-sidebar" strokeWidth={2.25} />
             </div>
             <h1 className="font-serif text-2xl font-bold tracking-tight">Welcome to The Manifest</h1>
             <p className="max-w-sm text-sm text-muted-foreground">Your organization is ready.</p>

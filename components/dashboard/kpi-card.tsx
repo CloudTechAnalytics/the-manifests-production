@@ -12,9 +12,9 @@ export interface KpiCardProps {
   /** Short context line under the number, e.g. "Customer firms". Omit
    *  for a KPI that's already fully explained by its label. */
   caption?: string;
-  /** No longer rendered — icons are a uniform neutral outline now,
-   *  matching the reference layout, not per-category colored fills.
-   *  Kept optional so existing call sites don't need to drop the prop. */
+  /** Unused — kept optional so existing call sites don't need to drop
+   *  the prop. Icons render in the reference's filled primary-tint
+   *  chip (bg-primary/12), not a per-category color. */
   color?: string;
   /** Optional trend badge, e.g. { direction: 'up', label: '3 this week' } */
   trend?: { direction: 'up' | 'down'; label: string };
@@ -48,12 +48,12 @@ export function KpiCard({
             <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {label}
             </p>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground">
-              <Icon className="h-3.5 w-3.5" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+              <Icon className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3 flex items-end justify-between gap-2">
-            <p className="font-serif text-3xl font-bold leading-none tracking-tight">
+            <p className="font-serif text-3xl font-semibold leading-none tracking-tight">
               {value}
             </p>
             {trend && (

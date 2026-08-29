@@ -25,6 +25,25 @@ import type {
   ContainerDoStatus,
 } from '@/types';
 
+/*
+ * Status colors, app-wide: every `color` string below follows the design
+ * reference's exact formula — a translucent tint background over a
+ * saturated text color (e.g. `bg-success/12 text-success`), never a
+ * solid pastel fill — instead of the old `bg-green-100 text-green-700`
+ * style. Genuinely binary/small-cardinality statuses (active/inactive,
+ * pending/approved/rejected, etc.) map onto the app's real semantic
+ * tokens (success/warning/destructive/muted/primary via Badge's
+ * variants in components/ui/badge.tsx), so they correctly follow the
+ * theme if it's ever retuned. A few fields are genuinely sequential
+ * pipelines with many stages (SHIPMENT_STATUS_META's 11 stages,
+ * EXPOSURE_TYPE_META's 6 categories) where collapsing to 4-5 semantic
+ * colors would make adjacent stages visually indistinguishable — those
+ * keep their existing descriptive color families (indigo/purple/cyan/
+ * etc.) but gain the same translucent-tint formula (`bg-X-500/12
+ * text-X-700`) instead of a solid `bg-X-100` fill, matching the
+ * reference's visual language without losing real usability.
+ */
+
 /**
  * The strict, non-skippable 11-stage lifecycle (migrations 052/053/056).
  * There is deliberately no 'awaiting_operations' value — a shipment's
@@ -40,23 +59,23 @@ export const SHIPMENT_STATUS_META: Record<
   ShipmentStatus,
   { label: string; color: string; step: number }
 > = {
-  planning: { label: 'Planning', color: 'bg-indigo-100 text-indigo-700', step: 0 },
-  documentation: { label: 'Documentation', color: 'bg-amber-100 text-amber-700', step: 1 },
-  awaiting_customs: { label: 'Awaiting Customs Documents', color: 'bg-orange-100 text-orange-700', step: 2 },
-  customs_clearance: { label: 'Customs Clearance', color: 'bg-purple-100 text-purple-700', step: 3 },
-  terminal_processing: { label: 'Terminal Processing', color: 'bg-fuchsia-100 text-fuchsia-700', step: 4 },
-  cargo_examination: { label: 'Cargo Examination', color: 'bg-pink-100 text-pink-700', step: 5 },
-  released: { label: 'Released', color: 'bg-teal-100 text-teal-700', step: 6 },
-  transport: { label: 'Transportation', color: 'bg-cyan-100 text-cyan-700', step: 7 },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', step: 8 },
-  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700', step: 9 },
-  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600', step: 10 },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', step: -1 },
+  planning: { label: 'Planning', color: 'bg-indigo-500/12 text-indigo-700', step: 0 },
+  documentation: { label: 'Documentation', color: 'bg-warning/15 text-warning', step: 1 },
+  awaiting_customs: { label: 'Awaiting Customs Documents', color: 'bg-orange-500/12 text-orange-700', step: 2 },
+  customs_clearance: { label: 'Customs Clearance', color: 'bg-purple-500/12 text-purple-700', step: 3 },
+  terminal_processing: { label: 'Terminal Processing', color: 'bg-fuchsia-500/12 text-fuchsia-700', step: 4 },
+  cargo_examination: { label: 'Cargo Examination', color: 'bg-pink-500/12 text-pink-700', step: 5 },
+  released: { label: 'Released', color: 'bg-teal-500/12 text-teal-700', step: 6 },
+  transport: { label: 'Transportation', color: 'bg-cyan-500/12 text-cyan-700', step: 7 },
+  delivered: { label: 'Delivered', color: 'bg-success/12 text-success', step: 8 },
+  completed: { label: 'Completed', color: 'bg-success/12 text-success', step: 9 },
+  archived: { label: 'Archived', color: 'bg-muted text-muted-foreground', step: 10 },
+  cancelled: { label: 'Cancelled', color: 'bg-destructive/12 text-destructive', step: -1 },
   // Legacy — retired, never produced going forward.
-  booking_received: { label: 'Booking Received', color: 'bg-blue-100 text-blue-700', step: 0 },
-  processing: { label: 'Processing', color: 'bg-purple-100 text-purple-700', step: 3 },
-  in_transit: { label: 'In Transit', color: 'bg-cyan-100 text-cyan-700', step: 7 },
-  arrived: { label: 'Arrived', color: 'bg-teal-100 text-teal-700', step: 6 },
+  booking_received: { label: 'Booking Received', color: 'bg-primary/12 text-primary', step: 0 },
+  processing: { label: 'Processing', color: 'bg-purple-500/12 text-purple-700', step: 3 },
+  in_transit: { label: 'In Transit', color: 'bg-cyan-500/12 text-cyan-700', step: 7 },
+  arrived: { label: 'Arrived', color: 'bg-teal-500/12 text-teal-700', step: 6 },
 };
 
 export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
@@ -101,35 +120,35 @@ export const QUOTATION_STATUS_META: Record<
   QuotationStatus,
   { label: string; color: string }
 > = {
-  draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700' },
-  pending_approval: { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700' },
-  approved: { label: 'Approved', color: 'bg-teal-100 text-teal-700' },
-  sent: { label: 'Sent', color: 'bg-blue-100 text-blue-700' },
-  accepted: { label: 'Accepted', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
-  expired: { label: 'Expired', color: 'bg-gray-100 text-gray-500' },
-  cancelled: { label: 'Cancelled', color: 'bg-gray-200 text-gray-800' },
-  archived: { label: 'Archived', color: 'bg-slate-200 text-slate-600' },
+  draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
+  pending_approval: { label: 'Pending Approval', color: 'bg-warning/15 text-warning' },
+  approved: { label: 'Approved', color: 'bg-teal-500/12 text-teal-700' },
+  sent: { label: 'Sent', color: 'bg-primary/12 text-primary' },
+  accepted: { label: 'Accepted', color: 'bg-success/12 text-success' },
+  rejected: { label: 'Rejected', color: 'bg-destructive/12 text-destructive' },
+  expired: { label: 'Expired', color: 'bg-muted text-muted-foreground' },
+  cancelled: { label: 'Cancelled', color: 'bg-muted text-muted-foreground' },
+  archived: { label: 'Archived', color: 'bg-muted text-muted-foreground' },
 };
 
 export const CUSTOMER_STATUS_META: Record<
   CustomerStatus,
   { label: string; color: string }
 > = {
-  active: { label: 'Active', color: 'bg-green-100 text-green-700' },
-  inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-700' },
-  blacklisted: { label: 'Blacklisted', color: 'bg-red-100 text-red-700' },
+  active: { label: 'Active', color: 'bg-success/12 text-success' },
+  inactive: { label: 'Inactive', color: 'bg-muted text-muted-foreground' },
+  blacklisted: { label: 'Blacklisted', color: 'bg-destructive/12 text-destructive' },
 };
 
 export const INVOICE_STATUS_META: Record<
   InvoiceStatus,
   { label: string; color: string }
 > = {
-  draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700' },
-  sent: { label: 'Unpaid', color: 'bg-blue-100 text-blue-700' },
-  partial: { label: 'Partial', color: 'bg-amber-100 text-amber-700' },
-  paid: { label: 'Paid', color: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
+  draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
+  sent: { label: 'Unpaid', color: 'bg-primary/12 text-primary' },
+  partial: { label: 'Partial', color: 'bg-warning/15 text-warning' },
+  paid: { label: 'Paid', color: 'bg-success/12 text-success' },
+  cancelled: { label: 'Cancelled', color: 'bg-muted text-muted-foreground' },
 };
 
 /**
@@ -169,9 +188,9 @@ export const EXPENSE_STATUS_META: Record<
   ExpenseStatus,
   { label: string; color: string }
 > = {
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
-  approved: { label: 'Approved', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  pending: { label: 'Pending', color: 'bg-warning/15 text-warning' },
+  approved: { label: 'Approved', color: 'bg-success/12 text-success' },
+  rejected: { label: 'Rejected', color: 'bg-destructive/12 text-destructive' },
 };
 
 export type StockStatus = 'available' | 'low_stock' | 'out_of_stock';
@@ -187,60 +206,60 @@ export function getStockStatus(quantity: number, reorderPoint: number): StockSta
 }
 
 export const STOCK_STATUS_META: Record<StockStatus, { label: string; color: string }> = {
-  available: { label: 'Available', color: 'bg-green-100 text-green-700' },
-  low_stock: { label: 'Low Stock', color: 'bg-amber-100 text-amber-700' },
-  out_of_stock: { label: 'Out of Stock', color: 'bg-red-100 text-red-700' },
+  available: { label: 'Available', color: 'bg-success/12 text-success' },
+  low_stock: { label: 'Low Stock', color: 'bg-warning/15 text-warning' },
+  out_of_stock: { label: 'Out of Stock', color: 'bg-destructive/12 text-destructive' },
 };
 
 export const STOCK_MOVEMENT_TYPE_META: Record<
   StockMovementType,
   { label: string; color: string }
 > = {
-  inbound: { label: 'Inbound', color: 'bg-green-100 text-green-700' },
-  outbound: { label: 'Outbound', color: 'bg-blue-100 text-blue-700' },
-  adjustment_increase: { label: 'Adjustment (+)', color: 'bg-purple-100 text-purple-700' },
-  adjustment_decrease: { label: 'Adjustment (-)', color: 'bg-purple-100 text-purple-700' },
-  transfer: { label: 'Transfer', color: 'bg-cyan-100 text-cyan-700' },
+  inbound: { label: 'Inbound', color: 'bg-success/12 text-success' },
+  outbound: { label: 'Outbound', color: 'bg-primary/12 text-primary' },
+  adjustment_increase: { label: 'Adjustment (+)', color: 'bg-purple-500/12 text-purple-700' },
+  adjustment_decrease: { label: 'Adjustment (-)', color: 'bg-purple-500/12 text-purple-700' },
+  transfer: { label: 'Transfer', color: 'bg-cyan-500/12 text-cyan-700' },
 };
 
 export const PLAN_STATUS_META: Record<
   PlanStatus,
   { label: string; color: string; step: number }
 > = {
-  planned: { label: 'Planned', color: 'bg-blue-100 text-blue-700', step: 0 },
-  approved: { label: 'Approved', color: 'bg-indigo-100 text-indigo-700', step: 1 },
-  in_progress: { label: 'In Progress', color: 'bg-amber-100 text-amber-700', step: 2 },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-700', step: 3 },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', step: -1 },
+  planned: { label: 'Planned', color: 'bg-primary/12 text-primary', step: 0 },
+  approved: { label: 'Approved', color: 'bg-indigo-500/12 text-indigo-700', step: 1 },
+  in_progress: { label: 'In Progress', color: 'bg-warning/15 text-warning', step: 2 },
+  completed: { label: 'Completed', color: 'bg-success/12 text-success', step: 3 },
+  cancelled: { label: 'Cancelled', color: 'bg-destructive/12 text-destructive', step: -1 },
 };
 
 export const PLAN_STATUS_FLOW: PlanStatus[] = ['planned', 'approved', 'in_progress', 'completed'];
 
 export const PRIORITY_META: Record<PriorityLevel, { label: string; color: string }> = {
-  low: { label: 'Low', color: 'bg-slate-100 text-slate-700' },
-  medium: { label: 'Medium', color: 'bg-amber-100 text-amber-700' },
-  high: { label: 'High', color: 'bg-red-100 text-red-700' },
+  low: { label: 'Low', color: 'bg-muted text-muted-foreground' },
+  medium: { label: 'Medium', color: 'bg-warning/15 text-warning' },
+  high: { label: 'High', color: 'bg-destructive/12 text-destructive' },
 };
 
 export const PLAN_TASK_STATUS_META: Record<PlanTaskStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
-  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
-  done: { label: 'Done', color: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700' },
+  pending: { label: 'Pending', color: 'bg-warning/15 text-warning' },
+  in_progress: { label: 'In Progress', color: 'bg-primary/12 text-primary' },
+  done: { label: 'Done', color: 'bg-success/12 text-success' },
+  cancelled: { label: 'Cancelled', color: 'bg-destructive/12 text-destructive' },
 };
 
 export const WORKFLOW_STAGE_STATUS_META: Record<WorkflowStageStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-slate-100 text-slate-700' },
-  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
+  pending: { label: 'Pending', color: 'bg-muted text-muted-foreground' },
+  in_progress: { label: 'In Progress', color: 'bg-primary/12 text-primary' },
+  completed: { label: 'Completed', color: 'bg-success/12 text-success' },
   skipped: { label: 'Skipped', color: 'bg-muted text-muted-foreground' },
 };
 
 export const DOCUMENT_STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
-  uploaded: { label: 'Uploaded', color: 'bg-blue-100 text-blue-700' },
-  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
-  expired: { label: 'Expired', color: 'bg-amber-100 text-amber-700' },
+  uploaded: { label: 'Uploaded', color: 'bg-primary/12 text-primary' },
+  verified: { label: 'Verified', color: 'bg-success/12 text-success' },
+  rejected: { label: 'Rejected', color: 'bg-destructive/12 text-destructive' },
+  expired: { label: 'Expired', color: 'bg-warning/15 text-warning' },
 };
 
 /**
@@ -258,10 +277,10 @@ export function isDocumentExpired(doc: Pick<DocumentRecord, 'expiry_date'>): boo
  * customs-clearance `status` on the same shipment_customs record.
  */
 export const DUTY_STATUS_META: Record<DutyStatus, { label: string; color: string }> = {
-  not_assessed: { label: 'Not Assessed', color: 'bg-gray-100 text-gray-700' },
-  awaiting_payment: { label: 'Awaiting Payment', color: 'bg-amber-100 text-amber-700' },
-  paid: { label: 'Paid', color: 'bg-blue-100 text-blue-700' },
-  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
+  not_assessed: { label: 'Not Assessed', color: 'bg-muted text-muted-foreground' },
+  awaiting_payment: { label: 'Awaiting Payment', color: 'bg-warning/15 text-warning' },
+  paid: { label: 'Paid', color: 'bg-primary/12 text-primary' },
+  verified: { label: 'Verified', color: 'bg-success/12 text-success' },
 };
 
 /**
@@ -270,12 +289,12 @@ export const DUTY_STATUS_META: Record<DutyStatus, { label: string; color: string
  * charge. See lib/utils/financial-exposure.ts for the accrual calculator.
  */
 export const EXPOSURE_TYPE_META: Record<ExposureType, { label: string; color: string }> = {
-  demurrage: { label: 'Demurrage', color: 'bg-red-100 text-red-700' },
-  detention: { label: 'Detention', color: 'bg-orange-100 text-orange-700' },
-  terminal_storage: { label: 'Terminal Storage', color: 'bg-amber-100 text-amber-700' },
-  warehouse_storage: { label: 'Warehouse Storage', color: 'bg-purple-100 text-purple-700' },
-  penalty: { label: 'Penalty', color: 'bg-pink-100 text-pink-700' },
-  emergency_charge: { label: 'Emergency Charge', color: 'bg-rose-100 text-rose-700' },
+  demurrage: { label: 'Demurrage', color: 'bg-destructive/12 text-destructive' },
+  detention: { label: 'Detention', color: 'bg-orange-500/12 text-orange-700' },
+  terminal_storage: { label: 'Terminal Storage', color: 'bg-warning/15 text-warning' },
+  warehouse_storage: { label: 'Warehouse Storage', color: 'bg-purple-500/12 text-purple-700' },
+  penalty: { label: 'Penalty', color: 'bg-pink-500/12 text-pink-700' },
+  emergency_charge: { label: 'Emergency Charge', color: 'bg-rose-500/12 text-rose-700' },
 };
 
 export const RESPONSIBLE_PARTY_META: Record<ResponsibleParty, { label: string }> = {
@@ -287,38 +306,38 @@ export const RESPONSIBLE_PARTY_META: Record<ResponsibleParty, { label: string }>
 };
 
 export const EXPOSURE_STATUS_META: Record<ExposureStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
-  disputed: { label: 'Disputed', color: 'bg-red-100 text-red-700' },
-  approved: { label: 'Approved', color: 'bg-blue-100 text-blue-700' },
-  paid: { label: 'Paid', color: 'bg-green-100 text-green-700' },
+  pending: { label: 'Pending', color: 'bg-warning/15 text-warning' },
+  disputed: { label: 'Disputed', color: 'bg-destructive/12 text-destructive' },
+  approved: { label: 'Approved', color: 'bg-primary/12 text-primary' },
+  paid: { label: 'Paid', color: 'bg-success/12 text-success' },
 };
 
 export const BOOKING_STATUS_META: Record<BookingStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700' },
-  confirmed: { label: 'Confirmed', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
-  cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-700' },
+  pending: { label: 'Pending', color: 'bg-warning/15 text-warning' },
+  confirmed: { label: 'Confirmed', color: 'bg-success/12 text-success' },
+  rejected: { label: 'Rejected', color: 'bg-destructive/12 text-destructive' },
+  cancelled: { label: 'Cancelled', color: 'bg-muted text-muted-foreground' },
 };
 
 export const CHECKLIST_DOCUMENT_STATUS_META: Record<ChecklistDocumentStatus, { label: string; color: string }> = {
-  not_received: { label: 'Not Received', color: 'bg-gray-100 text-gray-700' },
-  received: { label: 'Received', color: 'bg-blue-100 text-blue-700' },
-  verified: { label: 'Verified', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  not_received: { label: 'Not Received', color: 'bg-muted text-muted-foreground' },
+  received: { label: 'Received', color: 'bg-primary/12 text-primary' },
+  verified: { label: 'Verified', color: 'bg-success/12 text-success' },
+  rejected: { label: 'Rejected', color: 'bg-destructive/12 text-destructive' },
 };
 
 export const PLAN_ASSIGNMENT_STATUS_META: Record<PlanAssignmentStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
-  working: { label: 'Working', color: 'bg-blue-100 text-blue-700' },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
-  blocked: { label: 'Blocked', color: 'bg-red-100 text-red-700' },
+  pending: { label: 'Pending', color: 'bg-muted text-muted-foreground' },
+  working: { label: 'Working', color: 'bg-primary/12 text-primary' },
+  completed: { label: 'Completed', color: 'bg-success/12 text-success' },
+  blocked: { label: 'Blocked', color: 'bg-destructive/12 text-destructive' },
 };
 
 /** Container "DO Status" — Delivery Order collection state (Container Management enrichment). */
 export const CONTAINER_DO_STATUS_META: Record<ContainerDoStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
-  issued: { label: 'Issued', color: 'bg-blue-100 text-blue-700' },
-  collected: { label: 'Collected', color: 'bg-green-100 text-green-700' },
+  pending: { label: 'Pending', color: 'bg-muted text-muted-foreground' },
+  issued: { label: 'Issued', color: 'bg-primary/12 text-primary' },
+  collected: { label: 'Collected', color: 'bg-success/12 text-success' },
 };
 
 /** Financial Planning's 10 cost categories (Planning Command Center §11). */
@@ -344,22 +363,22 @@ export const ORGANIZATION_STATUS_META: Record<
   import('@/types').OrganizationStatus,
   { label: string; color: string }
 > = {
-  pending_verification: { label: 'Pending Verification', color: 'bg-amber-100 text-amber-700' },
-  active_trial: { label: 'Active Trial', color: 'bg-blue-100 text-blue-700' },
-  active_subscription: { label: 'Active', color: 'bg-green-100 text-green-700' },
-  trial_expired: { label: 'Trial Expired', color: 'bg-orange-100 text-orange-700' },
-  suspended: { label: 'Suspended', color: 'bg-red-100 text-red-700' },
-  cancelled: { label: 'Cancelled', color: 'bg-gray-200 text-gray-600' },
+  pending_verification: { label: 'Pending Verification', color: 'bg-warning/15 text-warning' },
+  active_trial: { label: 'Active Trial', color: 'bg-warning/15 text-warning' },
+  active_subscription: { label: 'Active', color: 'bg-success/12 text-success' },
+  trial_expired: { label: 'Trial Expired', color: 'bg-orange-500/12 text-orange-700' },
+  suspended: { label: 'Suspended', color: 'bg-destructive/12 text-destructive' },
+  cancelled: { label: 'Cancelled', color: 'bg-muted text-muted-foreground' },
 };
 
 export const ORGANIZATION_ORIGIN_META: Record<
   import('@/types').OrganizationOrigin,
   { label: string; color: string }
 > = {
-  self_service: { label: 'Self-Service', color: 'bg-emerald-100 text-emerald-700' },
-  platform_admin: { label: 'Assisted Onboarding', color: 'bg-slate-100 text-slate-700' },
-  demo: { label: 'Demo', color: 'bg-purple-100 text-purple-700' },
-  internal: { label: 'Internal', color: 'bg-indigo-100 text-indigo-700' },
+  self_service: { label: 'Self-Service', color: 'bg-success/12 text-success' },
+  platform_admin: { label: 'Assisted Onboarding', color: 'bg-muted text-muted-foreground' },
+  demo: { label: 'Demo', color: 'bg-purple-500/12 text-purple-700' },
+  internal: { label: 'Internal', color: 'bg-indigo-500/12 text-indigo-700' },
 };
 
 /**

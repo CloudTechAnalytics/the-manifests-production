@@ -131,7 +131,7 @@ function RouteIllustration() {
       <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden>
         <path
           d="M40 180 C 120 60, 260 60, 360 40"
-          stroke="hsl(var(--brand-gold))"
+          stroke="hsl(var(--sidebar-accent))"
           strokeOpacity="0.3"
           strokeWidth="1.5"
           strokeDasharray="6 8"
@@ -139,7 +139,7 @@ function RouteIllustration() {
         />
         <path
           d="M40 180 C 140 220, 300 210, 360 145"
-          stroke="hsl(var(--brand-gold))"
+          stroke="hsl(var(--sidebar-accent))"
           strokeOpacity="0.18"
           strokeWidth="1.5"
           strokeDasharray="6 8"
@@ -246,20 +246,20 @@ export function LandingPage() {
             alt=""
             className="h-full w-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/85 to-brand-dark/45" />
-          <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/80 via-transparent to-brand-dark/40" />
+          <div className="absolute inset-0 bg-gradient-to-r from-sidebar via-sidebar/85 to-sidebar/45" />
+          <div className="absolute inset-0 bg-gradient-to-t from-sidebar/80 via-transparent to-sidebar/40" />
         </div>
         <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <div className="animate-fade-up">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-brand-gold-soft backdrop-blur-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-sidebar-accent backdrop-blur-sm">
               <Layers className="h-3.5 w-3.5" />
               Freight Operations Platform
             </div>
             <h1 className="mt-5 font-serif text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
               The operating system for modern{' '}
-              <span className="text-brand-gold-soft">freight forwarders.</span>
+              <span className="text-sidebar-accent">freight forwarders.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-brand-dark-muted sm:text-lg">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-sidebar-muted sm:text-lg">
               Quotations, shipments, planning, tracking, warehouse, invoicing, and
               documents — one workspace for your whole operation, with every
               branch and role scoped to exactly what it needs.
@@ -275,14 +275,14 @@ export function LandingPage() {
                 size="lg"
                 variant="outline"
                 asChild
-                className="border-brand-dark-border bg-transparent text-white hover:bg-white/10 hover:text-white"
+                className="border-sidebar-border bg-transparent text-white hover:bg-white/10 hover:text-white"
               >
                 <a href="#contact">Request a Demo</a>
               </Button>
             </div>
-            <p className="mt-4 text-sm text-brand-dark-muted">
+            <p className="mt-4 text-sm text-sidebar-muted">
               Already have an account?{' '}
-              <Link href="/login" className="font-medium text-brand-gold-soft hover:underline">
+              <Link href="/login" className="font-medium text-sidebar-accent hover:underline">
                 Sign in
               </Link>
             </p>
@@ -416,12 +416,12 @@ export function LandingPage() {
           </Reveal>
 
           <Reveal delay={1}>
-            <div className="rounded-2xl border border-brand-dark-border bg-brand-dark p-6 text-brand-dark-foreground shadow-xl">
+            <div className="rounded-2xl border border-sidebar-border bg-sidebar p-6 text-sidebar-foreground shadow-xl">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-widest text-brand-gold-soft">
+                <span className="text-xs font-semibold uppercase tracking-widest text-sidebar-accent">
                   Organizations
                 </span>
-                <Building2 className="h-4 w-4 text-brand-gold-soft" />
+                <Building2 className="h-4 w-4 text-sidebar-accent" />
               </div>
               <div className="mt-4 space-y-2.5">
                 {[
@@ -431,27 +431,27 @@ export function LandingPage() {
                 ].map((org) => (
                   <div
                     key={org.name}
-                    className="flex items-center justify-between rounded-lg border border-brand-dark-border bg-brand-dark-elevated px-3.5 py-2.5"
+                    className="flex items-center justify-between rounded-lg border border-sidebar-border bg-sidebar-hover px-3.5 py-2.5"
                   >
                     <div>
                       <p className="text-sm font-medium">{org.name}</p>
-                      <p className="text-[11px] text-brand-dark-muted">{org.plan} plan</p>
+                      <p className="text-[11px] text-sidebar-muted">{org.plan} plan</p>
                     </div>
-                    <span className="rounded-full bg-brand-gold/15 px-2 py-0.5 text-[10px] font-medium text-brand-gold-soft">
+                    <span className="rounded-full bg-sidebar-accent/15 px-2 py-0.5 text-[10px] font-medium text-sidebar-accent">
                       {org.status}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-brand-dark-border pt-4">
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-sidebar-border pt-4">
                 {[
                   { icon: Users, label: 'Staff directory' },
                   { icon: BarChart3, label: 'Plans & billing' },
                   { icon: History, label: 'Audit logs' },
                 ].map((item) => (
                   <div key={item.label} className="flex flex-col items-center gap-1.5 text-center">
-                    <item.icon className="h-4 w-4 text-brand-gold-soft" />
-                    <span className="text-[10px] leading-tight text-brand-dark-muted">
+                    <item.icon className="h-4 w-4 text-sidebar-accent" />
+                    <span className="text-[10px] leading-tight text-sidebar-muted">
                       {item.label}
                     </span>
                   </div>
@@ -465,7 +465,7 @@ export function LandingPage() {
       {/* ---------------------------------------------------------------- */}
       {/* Contact CTA */}
       {/* ---------------------------------------------------------------- */}
-      <section id="contact" className="relative overflow-hidden bg-brand-dark py-24 text-brand-dark-foreground">
+      <section id="contact" className="relative overflow-hidden bg-sidebar py-24 text-sidebar-foreground">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
@@ -477,13 +477,13 @@ export function LandingPage() {
         />
         <div className="relative mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
           <Reveal>
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-gold-soft">
+            <p className="text-xs font-semibold uppercase tracking-widest text-sidebar-accent">
               Get in touch
             </p>
             <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight sm:text-4xl">
               Ready to modernize your freight operations?
             </h2>
-            <p className="mt-4 text-brand-dark-muted">
+            <p className="mt-4 text-sidebar-muted">
               Reach out and we'll set up your organization, branches, and staff
               on The Manifest.
             </p>
@@ -492,32 +492,32 @@ export function LandingPage() {
           <Reveal delay={1} className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="group flex items-center gap-3 rounded-xl border border-brand-dark-border bg-brand-dark-elevated px-5 py-4 text-left transition-colors hover:border-brand-gold/50"
+              className="group flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-hover px-5 py-4 text-left transition-colors hover:border-sidebar-accent/50"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15">
-                <Mail className="h-4.5 w-4.5 text-brand-gold-soft" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent/15">
+                <Mail className="h-4.5 w-4.5 text-sidebar-accent" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-brand-dark-muted">Email us</p>
+                <p className="text-xs text-sidebar-muted">Email us</p>
                 <p className="truncate text-sm font-medium">{CONTACT_EMAIL}</p>
               </div>
             </a>
             <a
               href={`tel:${CONTACT_PHONE_HREF}`}
-              className="group flex items-center gap-3 rounded-xl border border-brand-dark-border bg-brand-dark-elevated px-5 py-4 text-left transition-colors hover:border-brand-gold/50"
+              className="group flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-hover px-5 py-4 text-left transition-colors hover:border-sidebar-accent/50"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15">
-                <Phone className="h-4.5 w-4.5 text-brand-gold-soft" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent/15">
+                <Phone className="h-4.5 w-4.5 text-sidebar-accent" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-brand-dark-muted">Call us</p>
+                <p className="text-xs text-sidebar-muted">Call us</p>
                 <p className="truncate text-sm font-medium">{CONTACT_PHONE}</p>
               </div>
             </a>
           </Reveal>
 
           <Reveal delay={2} className="mt-8">
-            <Button size="lg" variant="outline" className="border-brand-dark-border bg-transparent text-brand-dark-foreground hover:bg-brand-dark-elevated hover:text-brand-dark-foreground" asChild>
+            <Button size="lg" variant="outline" className="border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-foreground" asChild>
               <Link href="/login">
                 Already a customer? Sign in
                 <ArrowRight className="ml-1.5 h-4 w-4" />

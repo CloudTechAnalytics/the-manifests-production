@@ -6,14 +6,14 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { Toaster } from '@/components/ui/sonner';
 
 // Inter for all regular UI (body, buttons, tables, labels). Playfair
-// Display ships real weights (400-900), so it's used sparingly for
-// hero/brand moments — logo, page titles, the dashboard greeting —
-// and always at bold weight, which is an actual cut of the font, not
-// a synthetic/faux bold.
+// Display for hero/brand moments — logo, page titles, the dashboard
+// greeting. Loaded at 500/600/700/800 (matching the design reference
+// exactly) so a heading set at any of those weights renders a real
+// cut of the font, never a synthetic/faux bold.
 const inter = Inter({ subsets: ['latin'] });
 const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
-  weight: ['700'],
+  weight: ['500', '600', '700', '800'],
   variable: '--font-serif',
 });
 

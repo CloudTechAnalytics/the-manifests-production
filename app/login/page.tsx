@@ -59,7 +59,7 @@ function RouteIllustration() {
       >
         <path
           d="M40 140 C 110 50, 210 50, 320 30"
-          stroke="hsl(var(--brand-gold-soft))"
+          stroke="hsl(var(--sidebar-accent))"
           strokeOpacity="0.35"
           strokeWidth="1.5"
           strokeDasharray="5 7"
@@ -67,7 +67,7 @@ function RouteIllustration() {
         />
         <path
           d="M40 140 C 100 165, 240 165, 320 100"
-          stroke="hsl(var(--brand-gold-soft))"
+          stroke="hsl(var(--sidebar-accent))"
           strokeOpacity="0.2"
           strokeWidth="1.5"
           strokeDasharray="5 7"
@@ -80,9 +80,9 @@ function RouteIllustration() {
           className="absolute -translate-x-1/2 -translate-y-1/2"
           style={{ left, top }}
         >
-          <span className="absolute inset-0 animate-ping rounded-full bg-brand-gold/20" />
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold/10 ring-1 ring-brand-gold/30 backdrop-blur-sm">
-            <Icon className="h-3.5 w-3.5 text-brand-gold-soft" />
+          <span className="absolute inset-0 animate-ping rounded-full bg-sidebar-accent/20" />
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent/10 ring-1 ring-sidebar-accent/30 backdrop-blur-sm">
+            <Icon className="h-3.5 w-3.5 text-sidebar-accent" />
           </div>
         </div>
       ))}
@@ -167,7 +167,7 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel (lg+) */}
-      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-brand-dark px-12 py-10 text-brand-dark-foreground lg:flex">
+      <div className="relative hidden w-[46%] flex-col justify-between overflow-hidden bg-sidebar px-12 py-10 text-sidebar-foreground lg:flex">
         {/* Decorative background */}
         <div
           aria-hidden
@@ -181,21 +181,21 @@ function LoginForm() {
 
         <div className="relative flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gold">
-              <Ship className="h-5 w-5 text-brand-dark" strokeWidth={2.25} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-accent">
+              <Ship className="h-5 w-5 text-sidebar" strokeWidth={2.25} />
             </div>
             <div className="flex flex-col">
-              <span className="font-serif text-xl font-bold leading-none tracking-tight text-brand-gold-soft">
+              <span className="font-serif text-xl font-bold leading-none tracking-tight text-sidebar-accent">
                 The Manifest
               </span>
-              <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-dark-muted">
+              <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-sidebar-muted">
                 CloudTech Logistics Suite
               </span>
             </div>
           </div>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark-muted transition-colors hover:text-brand-gold-soft"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-sidebar-muted transition-colors hover:text-sidebar-accent"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to home
@@ -208,9 +208,9 @@ function LoginForm() {
           <div className="space-y-2.5">
             <h1 className="font-serif text-2xl font-bold leading-tight tracking-tight">
               The operating system for modern{' '}
-              <span className="text-brand-gold-soft">freight forwarders.</span>
+              <span className="text-sidebar-accent">freight forwarders.</span>
             </h1>
-            <p className="max-w-sm text-sm leading-relaxed text-brand-dark-muted">
+            <p className="max-w-sm text-sm leading-relaxed text-sidebar-muted">
               Manage shipments, planning, tracking, warehouse operations,
               quotations, invoices, and documents — all from one workspace.
             </p>
@@ -219,14 +219,14 @@ function LoginForm() {
           <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
             {features.map((f) => (
               <div key={f.label} className="flex items-center gap-2">
-                <f.icon className="h-4 w-4 shrink-0 text-brand-gold-soft" />
-                <span className="text-xs text-brand-dark-muted">{f.label}</span>
+                <f.icon className="h-4 w-4 shrink-0 text-sidebar-accent" />
+                <span className="text-xs text-sidebar-muted">{f.label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative text-xs text-brand-dark-muted/70">
+        <p className="relative text-xs text-sidebar-muted/70">
           &copy; {new Date().getFullYear()} The Manifest. All rights reserved.
         </p>
       </div>
@@ -244,8 +244,8 @@ function LoginForm() {
 
           {/* Mobile logo (brand panel hidden below lg) */}
           <div className="flex flex-col items-center gap-3 lg:hidden">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-gold shadow-lg shadow-brand-gold/20">
-              <Ship className="h-7 w-7 text-brand-dark" strokeWidth={2.25} />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-sidebar-accent shadow-lg shadow-sidebar-accent/20">
+              <Ship className="h-7 w-7 text-sidebar" strokeWidth={2.25} />
             </div>
             <div className="text-center">
               <h1 className="font-serif text-xl font-bold tracking-tight">The Manifest</h1>

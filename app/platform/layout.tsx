@@ -170,16 +170,16 @@ function SidebarContent({
 
   return (
     <>
-      <div className={cn('flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border', collapsed ? 'justify-center px-2' : 'px-6')}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
-          <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
+      <div className={cn('flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border', collapsed ? 'justify-center px-2' : 'px-6')}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sidebar-accent shadow-sm shadow-sidebar-accent/30">
+          <Ship className="h-[18px] w-[18px] text-sidebar" strokeWidth={2.25} />
         </div>
         {!collapsed && (
           <div className="flex flex-col overflow-hidden">
-            <span className="truncate font-serif text-lg font-bold leading-none tracking-tight text-brand-dark-foreground">
+            <span className="truncate font-serif text-lg font-bold leading-none tracking-tight text-sidebar-foreground">
               The Manifest
             </span>
-            <span className="mt-1.5 truncate text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
+            <span className="mt-1.5 truncate text-xs font-medium uppercase tracking-[0.08em] text-sidebar-muted">
               Platform Console
             </span>
           </div>
@@ -195,8 +195,8 @@ function SidebarContent({
             'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
             collapsed && 'justify-center px-0',
             isDashboard
-              ? 'bg-brand-dark-elevated text-brand-gold-soft'
-              : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
+              ? 'bg-sidebar-hover text-sidebar-accent'
+              : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
           )}
         >
           <LayoutDashboard className="h-4 w-4 shrink-0" />
@@ -206,7 +206,7 @@ function SidebarContent({
         {navGroups.map((group) => (
           <div key={group.label}>
             {!collapsed && (
-              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted/80">
                 {group.label}
               </p>
             )}
@@ -224,12 +224,12 @@ function SidebarContent({
                       'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       collapsed && 'justify-center px-0',
                       active
-                        ? 'bg-brand-dark-elevated text-brand-gold-soft'
-                        : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
+                        ? 'bg-sidebar-hover text-sidebar-accent'
+                        : 'text-sidebar-muted hover:bg-sidebar-hover/60 hover:text-sidebar-foreground'
                     )}
                   >
                     {active && (
-                      <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
+                      <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-accent" />
                     )}
                     <Icon className="h-4 w-4 shrink-0" />
                     {!collapsed && item.label}
@@ -242,8 +242,8 @@ function SidebarContent({
       </nav>
 
       {!collapsed && (
-        <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
-          <p className="text-[11px] font-medium text-brand-dark-muted/70">
+        <div className="shrink-0 border-t border-sidebar-border px-6 py-3">
+          <p className="text-[11px] font-medium text-sidebar-muted/70">
             Platform Console · v1.0
           </p>
         </div>
@@ -271,7 +271,7 @@ function UserMenu({
           className="h-auto gap-2.5 px-2 py-1.5 hover:bg-accent"
         >
           <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-brand-gold/15 text-xs font-semibold text-brand-gold-soft">
+            <AvatarFallback className="bg-sidebar-accent/15 text-xs font-semibold text-sidebar-accent">
               {initials(profile.full_name)}
             </AvatarFallback>
           </Avatar>
@@ -387,8 +387,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'relative hidden h-screen shrink-0 flex-col bg-brand-dark transition-[width] duration-200 lg:flex',
-          collapsed ? 'w-[76px]' : 'w-64'
+          'relative hidden h-screen shrink-0 flex-col bg-sidebar transition-[width] duration-200 lg:flex',
+          collapsed ? 'w-[68px]' : 'w-64'
         )}
       >
         <SidebarContent pathname={pathname} collapsed={collapsed} />
@@ -396,7 +396,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="absolute -right-3 top-20 z-10 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex"
+          className="absolute -right-3 top-20 z-10 hidden h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex"
         >
           {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </button>
@@ -414,7 +414,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
                 <span className="sr-only">Open menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="flex w-72 flex-col bg-brand-dark p-0">
+            <SheetContent side="left" className="flex w-72 flex-col bg-sidebar p-0">
               <SheetTitle className="sr-only">Platform navigation</SheetTitle>
               <SidebarContent
                 pathname={pathname}

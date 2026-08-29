@@ -143,14 +143,14 @@ function ProfileCard() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingAvatar}
-            className="group relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-brand-gold/15"
+            className="group relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-sidebar-accent/15"
             title={profile.avatar_url ? 'Change photo' : 'Upload photo'}
           >
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
             ) : (
-              <span className="font-serif text-lg font-bold text-brand-gold-soft">{initials || '?'}</span>
+              <span className="font-serif text-lg font-bold text-sidebar-accent">{initials || '?'}</span>
             )}
             <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
               {uploadingAvatar ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Camera className="h-4 w-4 text-white" />}
