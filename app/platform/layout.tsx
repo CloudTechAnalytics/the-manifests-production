@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   LayoutDashboard,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Menu,
   CreditCard,
   Tag,
@@ -22,6 +24,7 @@ import {
   LineChart,
   BarChart3,
   LifeBuoy,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { usePlatformNotifications } from '@/hooks/use-platform-notifications';
@@ -38,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { PlatformSearch } from '@/components/platform/platform-search';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /** Live onboarding signals (orgs with no admin, invites/trials expiring
  *  soon) from usePlatformNotifications — the badge clears when the
@@ -152,48 +156,60 @@ function initials(name: string): string {
 function SidebarContent({
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  /** Icon-only mode — always false for the mobile Sheet (an overlay has
+   *  room to spare; collapsing only makes sense for the persistent
+   *  desktop rail). Labels/group headers hide, a native `title`
+   *  attribute stands in for a tooltip. */
+  collapsed?: boolean;
 }) {
   const isDashboard = pathname === '/platform';
 
   return (
     <>
-      <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
+      <div className={cn('flex h-16 shrink-0 items-center gap-2.5 border-b border-brand-dark-border', collapsed ? 'justify-center px-2' : 'px-6')}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gold shadow-sm shadow-brand-gold/30">
           <Ship className="h-[18px] w-[18px] text-brand-dark" strokeWidth={2.25} />
         </div>
-        <div className="flex flex-col">
-          <span className="font-serif text-lg font-bold leading-none tracking-tight text-brand-dark-foreground">
-            The Manifest
-          </span>
-          <span className="mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
-            Platform Console
-          </span>
-        </div>
+        {!collapsed && (
+          <div className="flex flex-col overflow-hidden">
+            <span className="truncate font-serif text-lg font-bold leading-none tracking-tight text-brand-dark-foreground">
+              The Manifest
+            </span>
+            <span className="mt-1.5 truncate text-xs font-medium uppercase tracking-[0.08em] text-brand-dark-muted">
+              Platform Console
+            </span>
+          </div>
+        )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto scrollbar-thin px-3 py-4">
+      <nav className="flex flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4">
         <Link
           href="/platform"
           onClick={onNavigate}
+          title={collapsed ? 'Dashboard' : undefined}
           className={cn(
             'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            collapsed && 'justify-center px-0',
             isDashboard
               ? 'bg-brand-dark-elevated text-brand-gold-soft'
               : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
           )}
         >
           <LayoutDashboard className="h-4 w-4 shrink-0" />
-          Dashboard
+          {!collapsed && 'Dashboard'}
         </Link>
 
         {navGroups.map((group) => (
           <div key={group.label}>
-            <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
-              {group.label}
-            </p>
+            {!collapsed && (
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-dark-muted/80">
+                {group.label}
+              </p>
+            )}
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const active = pathname.startsWith(item.href);
@@ -203,8 +219,10 @@ function SidebarContent({
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
+                    title={collapsed ? item.label : undefined}
                     className={cn(
                       'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      collapsed && 'justify-center px-0',
                       active
                         ? 'bg-brand-dark-elevated text-brand-gold-soft'
                         : 'text-brand-dark-muted hover:bg-brand-dark-elevated/60 hover:text-brand-dark-foreground'
@@ -214,7 +232,7 @@ function SidebarContent({
                       <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-gold" />
                     )}
                     <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
+                    {!collapsed && item.label}
                   </Link>
                 );
               })}
@@ -223,11 +241,13 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
-        <p className="text-[11px] font-medium text-brand-dark-muted/70">
-          Platform Console · v1.0
-        </p>
-      </div>
+      {!collapsed && (
+        <div className="shrink-0 border-t border-brand-dark-border px-6 py-3">
+          <p className="text-[11px] font-medium text-brand-dark-muted/70">
+            Platform Console · v1.0
+          </p>
+        </div>
+      )}
     </>
   );
 }
@@ -296,11 +316,34 @@ function UserMenu({
  * separate top-level route group precisely to keep platform operations
  * and tenant operations visually and structurally apart.
  */
+const SIDEBAR_COLLAPSED_KEY = 'platform-sidebar-collapsed';
+
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+    } catch {
+      // Corrupt/inaccessible storage just means the sidebar starts expanded.
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        // Best-effort persistence — a failed write just won't survive a reload.
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -342,8 +385,21 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   return (
     <div className="platform-light-theme flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
-        <SidebarContent pathname={pathname} />
+      <aside
+        className={cn(
+          'relative hidden h-screen shrink-0 flex-col bg-brand-dark transition-[width] duration-200 lg:flex',
+          collapsed ? 'w-[76px]' : 'w-64'
+        )}
+      >
+        <SidebarContent pathname={pathname} collapsed={collapsed} />
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="absolute -right-3 top-20 z-10 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex"
+        >
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
       </aside>
 
       {/* Main column */}
@@ -370,6 +426,16 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <PlatformSearch />
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Refresh"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <ThemeToggle />
             <PlatformNotificationsBell />
             <UserMenu profile={profile} onSignOut={signOut} />
           </div>
