@@ -10,7 +10,12 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+        // Same Noto Sans glyph-gap fallback as globals.css's `body` rule
+        // (see app/layout.tsx) — a font-serif element showing a currency
+        // figure (there shouldn't be any left; isCurrency on KpiCard
+        // strips this class for the ones that matter) still lands on a
+        // weight-matched glyph instead of the browser's own default.
+        serif: ['var(--font-serif)', 'var(--font-sans-fallback)', 'Georgia', 'serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

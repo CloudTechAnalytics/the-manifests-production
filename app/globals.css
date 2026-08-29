@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Deliberately outside any @layer so it always wins over Tailwind's own
+   preflight body rule (unlayered CSS beats @layer-wrapped CSS
+   regardless of specificity/order). --font-sans is Inter; --font-sans-
+   fallback is Noto Sans, loaded only to cover the handful of glyphs
+   Inter's own subset lacks — the Naira sign (₦, U+20A6) being the one
+   that actually matters here (see app/layout.tsx's docstring). Every
+   character Inter already has keeps rendering in Inter; this fallback
+   is only ever reached for the ones it doesn't. */
+body {
+  font-family: var(--font-sans), var(--font-sans-fallback), ui-sans-serif, system-ui, sans-serif;
+}
+
 @layer base {
   :root {
     /* Exact values from the design reference (The Counsel,
