@@ -480,6 +480,9 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         badges={badges}
         hasFeature={hasFeature}
         onNavigate={onNavigate}
+        collapsible
+        collapsed={!!collapsed['Administration']}
+        onToggleCollapse={() => toggle('Administration')}
       />
     </nav>
   );
