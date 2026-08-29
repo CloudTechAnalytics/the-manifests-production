@@ -19,10 +19,11 @@ export interface KpiCardProps {
   /** Optional trend badge, e.g. { direction: 'up', label: '3 this week' } */
   trend?: { direction: 'up' | 'down'; label: string };
   loading?: boolean;
-  /** A currency-formatted value (e.g. "₦150,000") renders in Inter, not
-   *  the Playfair Display serif face — the Naira sign's authentic glyph
-   *  (an "N" with two horizontal strokes) reads as a rendering error at
-   *  display-face size and weight. Plain counts stay serif. */
+  /** A currency-formatted value (e.g. "NGN 150,000" — see formatCurrency,
+   *  lib/utils/status.ts, which prints the code rather than the ₦ symbol
+   *  glyph now) renders in Inter, not the Playfair Display serif face —
+   *  numeric/data figures read as data, not a headline. Plain counts
+   *  stay serif. */
   isCurrency?: boolean;
 }
 
@@ -62,7 +63,14 @@ export function KpiCard({
             <p
               className={
                 isCurrency
-                  ? 'text-3xl font-semibold leading-none tracking-tight'
+                  // One size down from the plain-count case — "NGN
+                  // 1,800,000" is a much longer string than a bare
+                  // number, and text-3xl wrapped it onto two lines on
+                  // narrower KPI grids (Revenue Analytics' 6-up row).
+                  // whitespace-nowrap trims that further: it still wraps
+                  // the *card* height evenly across a row if truly out
+                  // of room, but never breaks mid-value.
+                  ? 'whitespace-nowrap text-2xl font-semibold leading-none tracking-tight'
                   : 'font-serif text-3xl font-semibold leading-none tracking-tight'
               }
             >

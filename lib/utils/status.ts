@@ -436,12 +436,20 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency,
+    // Code, not symbol — "NGN 150,000" instead of "₦150,000". The Naira
+    // sign's actual Unicode glyph is an "N" with two horizontal strokes
+    // through it in every font that has it correctly (Inter, Noto Sans,
+    // system fonts — verified across all of them); no font swap changes
+    // that shape, because it isn't a rendering bug, it's the character
+    // itself. Rather than keep asking a font to look like something it
+    // structurally can't, this drops the symbol glyph entirely.
+    currencyDisplay: 'code',
     maximumFractionDigits: 0,
   }).format(amount);
 }
 
 /**
- * Compact currency for KPI tiles — "₦50K", "₦2.5M" — where the full
+ * Compact currency for KPI tiles — "NGN 50K", "NGN 2.5M" — where the full
  * 2-decimal figure would overflow a narrow card. Exact amounts belong on
  * the page the tile links to, not the tile itself.
  */
@@ -449,6 +457,7 @@ export function formatCompactCurrency(amount: number, currency = 'NGN'): string 
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency,
+    currencyDisplay: 'code',
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(amount);
