@@ -165,7 +165,7 @@ export function GenerateInvoiceFromExpenses({
               </div>
               <div className="flex-1 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Invoice total</p>
-                <p className="font-serif text-lg font-bold">{formatCurrency(total, currency)}</p>
+                <p className="text-lg font-bold">{formatCurrency(total, currency)}</p>
               </div>
             </div>
 

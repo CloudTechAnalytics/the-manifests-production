@@ -103,7 +103,7 @@ export function FinancialExposureAlertCard() {
                 <AlertTriangle className="h-4.5 w-4.5" />
               </div>
               <div className="min-w-0">
-                <p className="font-serif text-xl font-bold text-red-800">
+                <p className="text-xl font-bold text-red-800">
                   {Object.entries(totalsByCurrency)
                     .map(([currency, total]) => formatCurrency(total, currency))
                     .join(' · ')}

@@ -111,7 +111,7 @@ export function FinanceSummary({ finance, loading, restricted }: FinanceSummaryP
                     {row.label}
                   </p>
                   <p
-                    className={`mt-1.5 truncate font-serif text-lg font-bold tracking-tight ${row.tone}`}
+                    className={`mt-1.5 truncate text-lg font-bold tracking-tight ${row.tone}`}
                   >
                     {formatCurrency(row.value, currency)}
                   </p>

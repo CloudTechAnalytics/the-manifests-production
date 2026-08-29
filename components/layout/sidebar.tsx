@@ -43,10 +43,8 @@ import {
   Sun,
   Moon,
   UserRound,
-  Gauge,
-  IdCard,
-  Boxes,
-  GraduationCap,
+  RefreshCw,
+  Users2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useSearchContext } from '@/contexts/search-context';
@@ -95,6 +93,11 @@ type NavItem = {
 // department role (documentation/customs/terminal/warehouse/transport)
 // sees only its own lane plus Dashboard and Work Queue; admin and
 // branch_manager see everything (branch_manager loses only Organization).
+// Mirrors app/hr/layout.tsx's own HR_ROLES — used only to decide which
+// landing page the account dropdown's "HR Workspace" link sends someone
+// to (its management dashboard vs. straight to Training/self-enrollment),
+// not for gating (that shell defines and enforces its own copy).
+const HR_WORKSPACE_ROLES: UserRole[] = ['admin', 'branch_manager', 'hr_manager', 'hr_officer'];
 const OPERATIONS_ROLES: UserRole[] = ['admin', 'branch_manager', 'operations'];
 const SALES_ROLES: UserRole[] = ['admin', 'branch_manager', 'sales'];
 const FINANCE_ROLES: UserRole[] = ['admin', 'branch_manager', 'finance'];
@@ -112,8 +115,6 @@ const WORK_QUEUE_ROLES: UserRole[] = [
   'examination',
   'planning',
 ];
-const HR_ROLES: UserRole[] = ['admin', 'branch_manager', 'hr_manager', 'hr_officer'];
-
 const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Operations',
@@ -169,30 +170,13 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: '/activity-log?view=audit', label: 'Audit Trail', icon: ShieldAlert, roles: APPROVAL_ROLES },
     ],
   },
-  {
-    // Phase 1 of the HR & People Capacity module — Dashboard, People/
-    // Department/Branch Capacity, Employees. Leave/Attendance/Documents/
-    // Onboarding/Offboarding/Performance/Training/Reports/Settings are
-    // deliberately not listed yet: they ship (and get their own nav
-    // entries) in later phases, not as dead links now. Gated behind the
-    // 'HR & People Management' plan feature (Professional+, see
-    // lib/feature-gating.ts) — genuine back-office tooling, same
-    // category as Expense Tracking/Rate Management, never something a
-    // shipment can get stuck on.
-    label: 'HR & People',
-    items: [
-      { href: '/hr/dashboard', label: 'HR Dashboard', icon: LayoutDashboard, roles: HR_ROLES },
-      { href: '/hr/capacity', label: 'People Capacity', icon: Gauge, roles: HR_ROLES },
-      { href: '/hr/employees', label: 'Employees', icon: IdCard, roles: HR_ROLES },
-      // No `roles` here on purpose — every employee can browse/self-enroll
-      // in the training catalog, not just HR staff. The /hr prefix's
-      // existing plan-feature gate (lib/feature-gating.ts) still applies.
-      { href: '/hr/training', label: 'Training', icon: GraduationCap },
-      { href: '/hr/capacity/departments', label: 'Department Capacity', icon: Boxes, roles: HR_ROLES },
-      { href: '/hr/capacity/branches', label: 'Branch Capacity', icon: Network, roles: HR_ROLES },
-    ],
-  },
 ];
+
+// HR is its own separate workspace (app/hr/layout.tsx, its own sidebar
+// shell), not a group in this one — matching the reference: entered
+// via "HR Workspace" in the account dropdown, with a "Back to
+// Workspace" link to return here. That layout defines its own copy of
+// an HR-roles check for gating its management-only items.
 
 const administrationItems: NavItem[] = [
   { href: '/users', label: 'Users', icon: UserCog, roles: APPROVAL_ROLES },
@@ -503,6 +487,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function UserMenu() {
   const { profile, signOut } = useAuth();
+  const hrHref = profile?.role && HR_WORKSPACE_ROLES.includes(profile.role) ? '/hr/dashboard' : '/hr/training';
 
   const initials =
     profile?.full_name
@@ -558,9 +543,9 @@ function UserMenu() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer">
-            <Link href="/hr/training/my">
-              <GraduationCap className="mr-2 h-4 w-4" />
-              My Learning
+            <Link href={hrHref}>
+              <Users2 className="mr-2 h-4 w-4" />
+              HR Workspace
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer">
@@ -611,6 +596,7 @@ export function Sidebar() {
  *  UserMenu is styled for the dark sidebar and stays in the mobile drawer). */
 function HeaderUserMenu() {
   const { profile, signOut } = useAuth();
+  const hrHref = profile?.role && HR_WORKSPACE_ROLES.includes(profile.role) ? '/hr/dashboard' : '/hr/training';
 
   const initials =
     profile?.full_name
@@ -657,9 +643,9 @@ function HeaderUserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href="/hr/training/my">
-            <GraduationCap className="mr-2 h-4 w-4" />
-            My Learning
+          <Link href={hrHref}>
+            <Users2 className="mr-2 h-4 w-4" />
+            HR Workspace
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
@@ -789,6 +775,15 @@ export function TopBar() {
         </kbd>
       </button>
       <div className="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
+          aria-label="Refresh"
+          onClick={() => window.location.reload()}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
         <ThemeToggle />
         <NotificationsBell />
         <HeaderUserMenu />

@@ -86,6 +86,7 @@ export default function WarehousePage() {
       icon: DollarSign,
       href: '/warehouse?tab=items',
       caption: 'On hand',
+      isCurrency: true,
     },
     {
       label: 'Available Stock',

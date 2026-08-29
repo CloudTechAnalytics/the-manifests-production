@@ -247,7 +247,7 @@ export function DutyAssessmentDialog({
 
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
             <span className="text-sm font-medium text-muted-foreground">Total Duty</span>
-            <span className="font-serif text-lg font-bold">
+            <span className="text-lg font-bold">
               {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalDuty)}
             </span>
           </div>
