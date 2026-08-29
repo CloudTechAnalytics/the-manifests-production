@@ -88,6 +88,41 @@
     --brand-gold: 28 68% 56%;
     --brand-gold-soft: 28 55% 68%;
   }
+
+  /* Platform Console is locked to the light theme always — an internal
+     operator tool, not a tenant preference, so it shouldn't follow
+     whichever admin's personal dark/light toggle happens to be set. The
+     light palette above is already tuned to this brand identity (warm
+     ivory + amber-orange), so this block is just that same :root light
+     block redeclared on a scoped wrapper class, which wins over an
+     ancestor .dark on <html> via normal CSS custom-property inheritance
+     — no JS theme-detection needed, and nothing here touches how the
+     tenant app's dark/light toggle behaves anywhere else. */
+  .platform-light-theme {
+    --background: 38 28% 96%;
+    --foreground: 25 15% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 25 15% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 15% 12%;
+    --primary: 28 65% 50%;
+    --primary-foreground: 25 25% 12%;
+    --secondary: 38 22% 94%;
+    --secondary-foreground: 25 15% 12%;
+    --muted: 38 18% 95%;
+    --muted-foreground: 25 8% 42%;
+    --accent: 38 45% 92%;
+    --accent-foreground: 28 65% 32%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 34 18% 88%;
+    --input: 34 18% 88%;
+    --ring: 28 65% 50%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {

@@ -38,7 +38,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { PlatformSearch } from '@/components/platform/platform-search';
-import { ThemeToggle } from '@/components/theme-toggle';
 
 /** Live onboarding signals (orgs with no admin, invites/trials expiring
  *  soon) from usePlatformNotifications — the badge clears when the
@@ -331,7 +330,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
     profile.must_change_password
   ) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="platform-light-theme flex h-screen items-center justify-center bg-background">
         <div className="space-y-4">
           <Skeleton className="h-12 w-64" />
           <Skeleton className="h-4 w-48" />
@@ -341,7 +340,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="platform-light-theme flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden h-screen w-64 shrink-0 flex-col bg-brand-dark lg:flex">
         <SidebarContent pathname={pathname} />
@@ -371,7 +370,6 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <PlatformSearch />
           </div>
           <div className="flex items-center gap-1">
-            <ThemeToggle />
             <PlatformNotificationsBell />
             <UserMenu profile={profile} onSignOut={signOut} />
           </div>
