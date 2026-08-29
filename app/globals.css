@@ -171,6 +171,23 @@
   letter-spacing: -0.01em;
 }
 
+/* Platform Console reads its own page titles bigger/bolder than the
+   tenant app's — matching the reference (The Counsel) exactly, same
+   serif face, sized like .welcome-heading rather than .page-title's
+   smaller responsive steps. Scoped to .platform-light-theme so every
+   existing `page-title` usage across the Platform Console's ~15 pages
+   picks this up automatically, with zero changes needed in any of
+   those files. */
+.platform-light-theme .page-title {
+  font-size: 32px;
+  line-height: 1.2;
+}
+@media (min-width: 640px) {
+  .platform-light-theme .page-title {
+    font-size: 34px;
+  }
+}
+
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;

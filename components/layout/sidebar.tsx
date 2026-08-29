@@ -558,6 +558,12 @@ function UserMenu() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer">
+            <Link href="/hr/training/my">
+              <GraduationCap className="mr-2 h-4 w-4" />
+              My Learning
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="cursor-pointer">
             <Link href="/settings?tab=preferences">
               <Settings className="mr-2 h-4 w-4" />
               Settings
@@ -648,6 +654,12 @@ function HeaderUserMenu() {
           <Link href="/settings?tab=profile">
             <UserRound className="mr-2 h-4 w-4" />
             My Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/hr/training/my">
+            <GraduationCap className="mr-2 h-4 w-4" />
+            My Learning
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">

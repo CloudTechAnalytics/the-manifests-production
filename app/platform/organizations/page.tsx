@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Plus,
   Building2,
-  MapPin,
   Loader2,
   MoreHorizontal,
   Eye,
@@ -17,7 +16,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
 import { getErrorMessage, cn } from '@/lib/utils';
-import { formatDate, formatCurrency, ORGANIZATION_STATUS_META, ORGANIZATION_ORIGIN_META } from '@/lib/utils/status';
+import { formatDate, formatCurrency, ORGANIZATION_STATUS_META } from '@/lib/utils/status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,7 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Organization, OrganizationOrigin, Plan, BillingCycle, PlatformSettings } from '@/types';
+import type { Organization, OrganizationOrigin, OrgSubscription, Plan, BillingCycle, PlatformSettings } from '@/types';
 
 // Fallback only, used for the instant before platform_settings loads (or if
 // it somehow fails to) — the real value always comes from
@@ -97,6 +96,17 @@ export default function PlatformOrganizationsPage() {
   const [loading, setLoading] = useState(true);
 
   const [plans, setPlans] = useState<Plan[]>([]);
+  // Keyed by organization_id — the table's Owner/Plan/Users/Renewal
+  // columns (matching the reference layout) read from these instead of
+  // adding per-row queries. Owner = the org-wide admin (branch_id IS
+  // NULL), same "Organization Owner" convention used everywhere else
+  // in this app. Storage is deliberately NOT included here — per-org
+  // storage metering isn't reliably attributable today (storage.objects
+  // has no organization_id), so the table shows an honest "—" for it
+  // rather than a fabricated number.
+  const [subsByOrg, setSubsByOrg] = useState<Map<string, OrgSubscription>>(new Map());
+  const [ownerByOrg, setOwnerByOrg] = useState<Map<string, { full_name: string; email: string }>>(new Map());
+  const [userCountByOrg, setUserCountByOrg] = useState<Map<string, number>>(new Map());
   const [trialDays, setTrialDays] = useState(DEFAULT_TRIAL_DAYS);
   // The internal Trial plan (migration 065) — kept out of `plans` (filtered
   // by is_public below) but still needed to actually assign a subscription
@@ -131,38 +141,47 @@ export default function PlatformOrganizationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [activeRes, trashedRes, plansRes, settingsRes, trialPlanRes] = await Promise.all([
-        supabase
-          .from('organizations')
-          .select('*')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('organizations')
-          .select('id', { count: 'exact', head: true })
-          .not('deleted_at', 'is', null),
-        supabase
-          .from('plans')
-          .select('*')
-          .is('deleted_at', null)
-          .eq('is_active', true)
-          // is_public excludes the internal "Trial" plan (migration 065) —
-          // it's auto-assigned by self-service registration via
-          // platform_settings.default_trial_plan_id, not something to pick
-          // from this list. Without this filter it showed up as a real,
-          // separately-selectable "Trial — ₦0.00/mo" tier right next to
-          // the "Free trial — N days" sentinel above, which is a different,
-          // no-plan-assigned option — two confusingly similar "trial"
-          // choices that did different things.
-          .eq('is_public', true)
-          .order('sort_order', { ascending: true }),
-        supabase
-          .from('platform_settings')
-          .select('trial_duration_days')
-          .eq('id', true)
-          .maybeSingle(),
-        supabase.from('plans').select('id, max_users').eq('slug', 'trial').maybeSingle(),
-      ]);
+      const [activeRes, trashedRes, plansRes, settingsRes, trialPlanRes, subsRes, ownersRes, profilesRes] =
+        await Promise.all([
+          supabase
+            .from('organizations')
+            .select('*')
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('organizations')
+            .select('id', { count: 'exact', head: true })
+            .not('deleted_at', 'is', null),
+          supabase
+            .from('plans')
+            .select('*')
+            .is('deleted_at', null)
+            .eq('is_active', true)
+            // is_public excludes the internal "Trial" plan (migration 065) —
+            // it's auto-assigned by self-service registration via
+            // platform_settings.default_trial_plan_id, not something to pick
+            // from this list. Without this filter it showed up as a real,
+            // separately-selectable "Trial — ₦0.00/mo" tier right next to
+            // the "Free trial — N days" sentinel above, which is a different,
+            // no-plan-assigned option — two confusingly similar "trial"
+            // choices that did different things.
+            .eq('is_public', true)
+            .order('sort_order', { ascending: true }),
+          supabase
+            .from('platform_settings')
+            .select('trial_duration_days')
+            .eq('id', true)
+            .maybeSingle(),
+          supabase.from('plans').select('id, max_users').eq('slug', 'trial').maybeSingle(),
+          supabase.from('org_subscriptions').select('*, plan:plans(*)'),
+          supabase
+            .from('profiles')
+            .select('organization_id, full_name, email')
+            .eq('role', 'admin')
+            .is('branch_id', null)
+            .is('deleted_at', null),
+          supabase.from('profiles').select('organization_id').is('deleted_at', null),
+        ]);
       if (activeRes.error) throw activeRes.error;
       if (plansRes.error) throw plansRes.error;
       setOrgs((activeRes.data as Organization[]) ?? []);
@@ -171,6 +190,25 @@ export default function PlatformOrganizationsPage() {
       const settings = settingsRes.data as Pick<PlatformSettings, 'trial_duration_days'> | null;
       if (settings?.trial_duration_days) setTrialDays(settings.trial_duration_days);
       setTrialPlan((trialPlanRes.data as { id: string; max_users: number | null } | null) ?? null);
+
+      const subsMap = new Map<string, OrgSubscription>();
+      for (const s of (subsRes.data as OrgSubscription[]) ?? []) subsMap.set(s.organization_id, s);
+      setSubsByOrg(subsMap);
+
+      const ownerMap = new Map<string, { full_name: string; email: string }>();
+      for (const o of (ownersRes.data as { organization_id: string | null; full_name: string; email: string }[]) ?? []) {
+        if (o.organization_id && !ownerMap.has(o.organization_id)) {
+          ownerMap.set(o.organization_id, { full_name: o.full_name, email: o.email });
+        }
+      }
+      setOwnerByOrg(ownerMap);
+
+      const countMap = new Map<string, number>();
+      for (const p of (profilesRes.data as { organization_id: string | null }[]) ?? []) {
+        if (!p.organization_id) continue;
+        countMap.set(p.organization_id, (countMap.get(p.organization_id) ?? 0) + 1);
+      }
+      setUserCountByOrg(countMap);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load organizations'));
     } finally {
@@ -494,15 +532,23 @@ export default function PlatformOrganizationsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Organization</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Users</TableHead>
+                  <TableHead>Storage</TableHead>
+                  <TableHead>Renewal</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="w-10" />
+                  <TableHead className="w-10">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orgs.map((org) => (
+                {orgs.map((org) => {
+                  const sub = subsByOrg.get(org.id);
+                  const owner = ownerByOrg.get(org.id);
+                  const userCount = userCountByOrg.get(org.id) ?? 0;
+                  const renewalDate = sub?.current_period_end ?? sub?.trial_ends_at ?? null;
+                  return (
                   <TableRow key={org.id}>
                     <TableCell>
                       <Link
@@ -511,27 +557,36 @@ export default function PlatformOrganizationsPage() {
                       >
                         {org.name}
                       </Link>
-                      <p className="text-xs text-muted-foreground">{org.slug}</p>
+                      <p className="text-xs text-muted-foreground">/{org.slug}</p>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {org.city || org.country ? (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {[org.city, org.country].filter(Boolean).join(', ')}
-                        </span>
+                    <TableCell className="text-sm">
+                      {owner ? (
+                        <>
+                          <p className="font-medium">{owner.full_name}</p>
+                          <p className="text-xs text-muted-foreground">{owner.email}</p>
+                        </>
                       ) : (
-                        '—'
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn(ORGANIZATION_ORIGIN_META[org.origin]?.color)}>
-                        {ORGANIZATION_ORIGIN_META[org.origin]?.label ?? org.origin}
-                      </Badge>
+                      {sub?.plan ? (
+                        <Badge variant="outline">{sub.plan.name}</Badge>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
                         {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{userCount}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground" title="Per-organization storage usage isn't tracked yet">
+                      —
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {renewalDate ? formatDate(renewalDate) : '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(org.created_at)}
@@ -574,7 +629,8 @@ export default function PlatformOrganizationsPage() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
