@@ -426,11 +426,17 @@ export function formatDateTime(date: string | null): string {
   });
 }
 
+/**
+ * No decimals — matches the design reference's own formatNaira()
+ * exactly (used there for every currency figure, including invoice
+ * line items and receipts, not just KPI tiles). Kobo-level precision
+ * is never shown in this app's UI.
+ */
 export function formatCurrency(amount: number, currency = 'NGN'): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 

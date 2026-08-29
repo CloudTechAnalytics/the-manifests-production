@@ -91,10 +91,10 @@ export default function BillingPage() {
     .slice(0, 8);
 
   const kpis = [
-    { label: 'Monthly Revenue', value: formatCurrency(mrr), icon: CreditCard, href: '/platform/subscriptions', caption: 'MRR' },
-    { label: 'Annual Revenue', value: formatCurrency(arr), icon: DollarSign, href: '/platform/subscriptions', caption: 'ARR' },
+    { label: 'Monthly Revenue', value: formatCurrency(mrr), icon: CreditCard, href: '/platform/subscriptions', caption: 'MRR', isCurrency: true },
+    { label: 'Annual Revenue', value: formatCurrency(arr), icon: DollarSign, href: '/platform/subscriptions', caption: 'ARR', isCurrency: true },
     { label: 'Active Plans', value: active.length, icon: Tag, href: '/platform/subscriptions', caption: 'Billing now' },
-    { label: 'ARPA', value: formatCurrency(arpa), icon: Users, href: '/platform/subscriptions', caption: 'Avg / account' },
+    { label: 'ARPA', value: formatCurrency(arpa), icon: Users, href: '/platform/subscriptions', caption: 'Avg / account', isCurrency: true },
     {
       // No payment-collection or invoicing model exists for platform
       // subscriptions in this schema — always 0, not a fabricated number.
@@ -103,6 +103,7 @@ export default function BillingPage() {
       icon: AlertTriangle,
       href: '/platform/subscriptions',
       caption: '0 past due',
+      isCurrency: true,
     },
     { label: 'Trials', value: trials.length, icon: Hourglass, href: '/platform/subscriptions', caption: 'Not yet billing' },
   ];

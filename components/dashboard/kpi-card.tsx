@@ -19,6 +19,11 @@ export interface KpiCardProps {
   /** Optional trend badge, e.g. { direction: 'up', label: '3 this week' } */
   trend?: { direction: 'up' | 'down'; label: string };
   loading?: boolean;
+  /** A currency-formatted value (e.g. "₦150,000") renders in Inter, not
+   *  the Playfair Display serif face — the Naira sign's authentic glyph
+   *  (an "N" with two horizontal strokes) reads as a rendering error at
+   *  display-face size and weight. Plain counts stay serif. */
+  isCurrency?: boolean;
 }
 
 export function KpiCard({
@@ -29,6 +34,7 @@ export function KpiCard({
   caption,
   trend,
   loading,
+  isCurrency,
 }: KpiCardProps) {
   if (loading) {
     return (
@@ -53,7 +59,13 @@ export function KpiCard({
             </div>
           </div>
           <div className="mt-3 flex items-end justify-between gap-2">
-            <p className="font-serif text-3xl font-semibold leading-none tracking-tight">
+            <p
+              className={
+                isCurrency
+                  ? 'text-3xl font-semibold leading-none tracking-tight'
+                  : 'font-serif text-3xl font-semibold leading-none tracking-tight'
+              }
+            >
               {value}
             </p>
             {trend && (

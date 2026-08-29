@@ -133,7 +133,7 @@ function UpgradePageContent() {
                     <p className="text-xs text-muted-foreground">{plan.description}</p>
                   </div>
                   <div>
-                    <span className="font-serif text-2xl font-bold">
+                    <span className="text-2xl font-bold">
                       {price && price > 0 ? formatCurrency(price, plan.currency) : 'Contact us'}
                     </span>
                     {!!price && price > 0 && (

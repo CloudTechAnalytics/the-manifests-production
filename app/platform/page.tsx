@@ -81,6 +81,7 @@ export default function PlatformDashboardPage() {
       icon: TrendingUp,
       href: '/platform/subscriptions',
       caption: 'Monthly recurring',
+      isCurrency: true,
     },
     {
       label: 'ARR',
@@ -88,6 +89,7 @@ export default function PlatformDashboardPage() {
       icon: DollarSign,
       href: '/platform/subscriptions',
       caption: 'Annual recurring',
+      isCurrency: true,
     },
     {
       label: 'Expired Trials',

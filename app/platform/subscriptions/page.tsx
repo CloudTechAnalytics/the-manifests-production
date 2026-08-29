@@ -305,7 +305,7 @@ export default function SubscriptionsPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">MRR</p>
               <TrendingUp className="h-4 w-4 text-primary" />
             </div>
-            <p className="mt-3 font-serif text-2xl font-bold">{formatCurrency(stats.mrr)}</p>
+            <p className="mt-3 text-2xl font-bold">{formatCurrency(stats.mrr)}</p>
             <p className="mt-1 text-xs text-muted-foreground">Monthly recurring revenue</p>
           </CardContent>
         </Card>
@@ -315,7 +315,7 @@ export default function SubscriptionsPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ARR</p>
               <DollarSign className="h-4 w-4 text-primary" />
             </div>
-            <p className="mt-3 font-serif text-2xl font-bold">{formatCurrency(stats.arr)}</p>
+            <p className="mt-3 text-2xl font-bold">{formatCurrency(stats.arr)}</p>
             <p className="mt-1 text-xs text-muted-foreground">Annualised</p>
           </CardContent>
         </Card>

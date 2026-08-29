@@ -360,7 +360,7 @@ export default function PlansPricingPage() {
                 </div>
 
                 <div>
-                  <p className="font-serif text-2xl font-bold">
+                  <p className="text-2xl font-bold">
                     {formatCurrency(plan.monthly_price, plan.currency)}
                     <span className="text-sm font-normal text-muted-foreground">/month</span>
                   </p>

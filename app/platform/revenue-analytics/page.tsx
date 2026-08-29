@@ -101,12 +101,12 @@ export default function RevenueAnalyticsPage() {
   const projectedArr = forecast[forecast.length - 1].mrr * 12;
 
   const kpis = [
-    { label: 'MRR', value: formatCurrency(mrr), icon: TrendingUp, href: '/platform/subscriptions', caption: 'Monthly recurring' },
-    { label: 'ARR', value: formatCurrency(arr), icon: DollarSign, href: '/platform/subscriptions', caption: 'Annualised' },
-    { label: 'ARPA', value: formatCurrency(arpa), icon: CreditCard, href: '/platform/subscriptions', caption: 'Avg / account' },
+    { label: 'MRR', value: formatCurrency(mrr), icon: TrendingUp, href: '/platform/subscriptions', caption: 'Monthly recurring', isCurrency: true },
+    { label: 'ARR', value: formatCurrency(arr), icon: DollarSign, href: '/platform/subscriptions', caption: 'Annualised', isCurrency: true },
+    { label: 'ARPA', value: formatCurrency(arpa), icon: CreditCard, href: '/platform/subscriptions', caption: 'Avg / account', isCurrency: true },
     { label: 'Paying', value: active.length, icon: Users, href: '/platform/subscriptions', caption: 'Active plans' },
     { label: 'At Risk', value: atRisk, icon: AlertTriangle, href: '/platform/subscriptions', caption: 'Past-due MRR' },
-    { label: 'Proj. ARR', value: formatCurrency(projectedArr), icon: LineChart, href: '/platform/revenue-analytics', caption: '6-mo forecast' },
+    { label: 'Proj. ARR', value: formatCurrency(projectedArr), icon: LineChart, href: '/platform/revenue-analytics', caption: '6-mo forecast', isCurrency: true },
   ];
 
   return (
