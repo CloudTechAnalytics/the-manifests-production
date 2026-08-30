@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -89,7 +88,7 @@ type ShipmentFormValues = z.infer<typeof shipmentSchema>;
 // --- Page -----------------------------------------------------------------
 
 export default function NewShipmentPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
@@ -309,7 +308,7 @@ export default function NewShipmentPage() {
       }
 
       toast.success('Shipment created successfully');
-      router.push(`/shipments/${shipmentId}`);
+      navigate(`/shipments/${shipmentId}`);
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to create shipment');
@@ -326,7 +325,7 @@ export default function NewShipmentPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/shipments">Shipments</Link>
+              <Link to="/shipments">Shipments</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -338,7 +337,7 @@ export default function NewShipmentPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/shipments">
+        <Link to="/shipments">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -694,7 +693,7 @@ export default function NewShipmentPage() {
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/shipments" className="sm:shrink-0">
+          <Link to="/shipments" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

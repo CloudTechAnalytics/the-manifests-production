@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 type Status = 'checking' | 'success' | 'failed' | 'missing_reference';
 
 function BillingCallbackContent() {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const reference = searchParams.get('reference') ?? searchParams.get('trxref');
   // Where initialize-payment was told to send the user back to (e.g.
   // /onboarding, when checkout started there instead of /upgrade) — only
@@ -93,7 +92,7 @@ function BillingCallbackContent() {
               <h1 className="font-serif text-lg font-bold">Payment confirmed</h1>
               <p className="text-sm text-muted-foreground">Your plan is now active. A receipt has been emailed to you.</p>
               <Button asChild className="mt-2 w-full">
-                <Link href={returnTo}>{returnTo === '/onboarding' ? 'Continue setup' : 'Go to Dashboard'}</Link>
+                <Link to={returnTo}>{returnTo === '/onboarding' ? 'Continue setup' : 'Go to Dashboard'}</Link>
               </Button>
             </>
           )}
@@ -107,7 +106,7 @@ function BillingCallbackContent() {
                   : message ?? 'Something went wrong confirming this payment.'}
               </p>
               <Button asChild variant="outline" className="mt-2 w-full">
-                <Link href="/upgrade">Back to plans</Link>
+                <Link to="/upgrade">Back to plans</Link>
               </Button>
             </>
           )}
@@ -118,9 +117,5 @@ function BillingCallbackContent() {
 }
 
 export default function BillingCallbackPage() {
-  return (
-    <Suspense fallback={null}>
-      <BillingCallbackContent />
-    </Suspense>
-  );
+  return <BillingCallbackContent />;
 }

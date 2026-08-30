@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { Users, Plus, Search, Filter, Building2, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -52,7 +51,7 @@ const CUSTOMER_EXPORT_COLUMNS: ExportColumn<Customer>[] = [
 type StatusFilter = 'all' | CustomerStatus;
 
 export default function CustomersPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -175,7 +174,7 @@ export default function CustomersPage() {
             columns={CUSTOMER_EXPORT_COLUMNS}
             filename="customers"
           />
-          <Link href="/customers/new">
+          <Link to="/customers/new">
             <Button size="sm" className="w-full sm:w-auto">
               <Plus className="mr-1.5 h-4 w-4" />
               New Customer
@@ -251,7 +250,7 @@ export default function CustomersPage() {
                 </p>
               </div>
               {!debouncedSearch && statusFilter === 'all' && (
-                <Link href="/customers/new">
+                <Link to="/customers/new">
                   <Button size="sm" variant="outline">
                     <Plus className="mr-1.5 h-4 w-4" />
                     New Customer
@@ -282,7 +281,7 @@ export default function CustomersPage() {
                     <TableRow
                       key={customer.id}
                       className="cursor-pointer transition-colors hover:bg-accent/60"
-                      onClick={() => router.push(`/customers/${customer.id}`)}
+                      onClick={() => navigate(`/customers/${customer.id}`)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">

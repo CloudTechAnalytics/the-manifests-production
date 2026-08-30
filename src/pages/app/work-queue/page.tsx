@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   ClipboardList,
   FileClock,
@@ -507,7 +507,7 @@ export default function WorkQueuePage() {
                         key={row.id}
                         className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent"
                       >
-                        <Link href={row.href} className="min-w-0 flex-1 truncate">
+                        <Link to={row.href} className="min-w-0 flex-1 truncate">
                           <span className="font-medium">{row.primary}</span>
                           <span className="text-muted-foreground"> · {row.secondary}</span>
                         </Link>
@@ -523,7 +523,7 @@ export default function WorkQueuePage() {
                     ) : (
                       <Link
                         key={row.id}
-                        href={row.href}
+                        to={row.href}
                         className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent"
                       >
                         <span className="min-w-0 flex-1 truncate">
@@ -538,7 +538,7 @@ export default function WorkQueuePage() {
                   )}
                   {section.count > 5 && (
                     <Link
-                      href={section.viewAllHref}
+                      to={section.viewAllHref}
                       className="block px-2 pt-1 text-xs font-medium text-primary hover:underline"
                     >
                       View all {section.count} →

@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, ClipboardList, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -90,9 +89,9 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
-  const planId = params.id;
+  const planId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
@@ -258,7 +257,7 @@ export default function PlanDetailPage() {
       });
 
       toast.success('Plan deleted');
-      router.push('/planning');
+      navigate('/planning');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete plan'));
     } finally {
@@ -378,7 +377,7 @@ export default function PlanDetailPage() {
             This plan may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/planning">
+        <Link to="/planning">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Planning
@@ -401,7 +400,7 @@ export default function PlanDetailPage() {
             longer editable here.
           </p>
         </div>
-        <Link href="/planning">
+        <Link to="/planning">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Planning
@@ -428,7 +427,7 @@ export default function PlanDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/planning">Planning</Link>
+              <Link to="/planning">Planning</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -440,7 +439,7 @@ export default function PlanDetailPage() {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/planning">
+          <Link to="/planning">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>

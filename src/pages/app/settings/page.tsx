@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Plus,
@@ -133,7 +133,7 @@ type BranchFormErrors = Partial<Record<keyof BranchForm, string>>;
 // --- Component -------------------------------------------------------------
 
 function SettingsPageInner() {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { profile, refreshProfile } = useAuth();
 
   const validTabs = ['company', 'branches', 'departments', 'billing', 'profile', 'preferences', 'webhooks', 'support'];

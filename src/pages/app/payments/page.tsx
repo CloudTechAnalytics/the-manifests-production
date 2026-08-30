@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { Wallet, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -56,7 +55,7 @@ const PAYMENT_EXPORT_COLUMNS: ExportColumn<PaymentRow>[] = [
 ];
 
 export default function PaymentsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -228,7 +227,7 @@ export default function PaymentsPage() {
             columns={PAYMENT_EXPORT_COLUMNS}
             filename="payments"
           />
-          <Link href="/payments/new">
+          <Link to="/payments/new">
             <Button size="sm" className="w-full sm:w-auto">
               <Plus className="mr-1.5 h-4 w-4" />
               Record Payment
@@ -368,7 +367,7 @@ export default function PaymentsPage() {
                       <TableRow
                         key={p.id}
                         className="cursor-pointer transition-colors hover:bg-accent/60"
-                        onClick={() => router.push(`/payments/${p.id}`)}
+                        onClick={() => navigate(`/payments/${p.id}`)}
                       >
                         <TableCell className="font-medium text-primary">
                           {p.payment_number ?? '—'}

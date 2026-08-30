@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -88,9 +87,9 @@ type AllocationRow = PaymentAllocation & {
 
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
-  const invoiceId = params.id;
+  const invoiceId = params.id!;
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
@@ -141,7 +140,7 @@ export default function InvoiceDetailPage() {
         const result = await adminForceDelete('invoice', invoiceId);
         if (!result.success) throw new Error(result.error);
         toast.success('Invoice permanently deleted');
-        router.push('/invoices');
+        navigate('/invoices');
         return;
       }
 
@@ -175,7 +174,7 @@ export default function InvoiceDetailPage() {
       });
 
       toast.success('Invoice deleted');
-      router.push('/invoices');
+      navigate('/invoices');
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to delete invoice');
       toast.error(message);
@@ -239,7 +238,7 @@ export default function InvoiceDetailPage() {
             This invoice may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/invoices">
+        <Link to="/invoices">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Invoices
@@ -269,7 +268,7 @@ export default function InvoiceDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/invoices">Invoices</Link>
+              <Link to="/invoices">Invoices</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -281,7 +280,7 @@ export default function InvoiceDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/invoices">
+          <Link to="/invoices">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -306,14 +305,14 @@ export default function InvoiceDetailPage() {
             Print
           </Button>
           {canRecordPayment && (
-            <Link href={`/payments/new?invoice_id=${invoiceId}`}>
+            <Link to={`/payments/new?invoice_id=${invoiceId}`}>
               <Button size="sm">
                 <Wallet className="mr-1.5 h-4 w-4" />
                 Record Payment
               </Button>
             </Link>
           )}
-          <Link href={`/invoices/${invoiceId}/edit`}>
+          <Link to={`/invoices/${invoiceId}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit
@@ -424,7 +423,7 @@ export default function InvoiceDetailPage() {
               <CardContent className="space-y-2 text-sm">
                 {invoice.shipment && (
                   <Link
-                    href={`/shipments/${invoice.shipment.id}`}
+                    to={`/shipments/${invoice.shipment.id}`}
                     className="flex justify-between hover:text-primary"
                   >
                     <span className="text-muted-foreground">Shipment</span>
@@ -435,7 +434,7 @@ export default function InvoiceDetailPage() {
                 )}
                 {invoice.quotation && (
                   <Link
-                    href={`/quotations/${invoice.quotation.id}`}
+                    to={`/quotations/${invoice.quotation.id}`}
                     className="flex justify-between hover:text-primary"
                   >
                     <span className="text-muted-foreground">Quotation</span>
@@ -504,7 +503,7 @@ export default function InvoiceDetailPage() {
                 <CardDescription>Payments applied to this invoice.</CardDescription>
               </div>
               {canRecordPayment && (
-                <Link href={`/payments/new?invoice_id=${invoiceId}`}>
+                <Link to={`/payments/new?invoice_id=${invoiceId}`}>
                   <Button variant="outline" size="sm">
                     <Plus className="mr-1.5 h-4 w-4" />
                     Add Payment
@@ -533,7 +532,7 @@ export default function InvoiceDetailPage() {
                     {allocations.map((a) => (
                       <TableRow key={a.id} className="transition-colors hover:bg-accent/60">
                         <TableCell className="font-medium text-primary">
-                          <Link href={`/payments/${a.payment?.id}`}>
+                          <Link to={`/payments/${a.payment?.id}`}>
                             {a.payment?.payment_number ?? '—'}
                           </Link>
                         </TableCell>

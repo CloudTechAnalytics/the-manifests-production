@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, Phone, User as UserIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -100,7 +100,7 @@ export function AccountStep() {
               <Checkbox checked={field.value} onCheckedChange={field.onChange} className="mt-0.5" />
               <span>
                 I agree to the{' '}
-                <Link href="/terms" target="_blank" className="font-medium text-primary underline underline-offset-2">
+                <Link to="/terms" target="_blank" className="font-medium text-primary underline underline-offset-2">
                   Terms of Service
                 </Link>
               </span>
@@ -117,7 +117,7 @@ export function AccountStep() {
               <Checkbox checked={field.value} onCheckedChange={field.onChange} className="mt-0.5" />
               <span>
                 I agree to the{' '}
-                <Link href="/privacy" target="_blank" className="font-medium text-primary underline underline-offset-2">
+                <Link to="/privacy" target="_blank" className="font-medium text-primary underline underline-offset-2">
                   Privacy Policy
                 </Link>
               </span>

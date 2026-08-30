@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -207,7 +206,7 @@ function getStatusActions(
 
 export default function QuotationDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
 
   const [quotation, setQuotation] = useState<QuotationDetail | null>(null);
@@ -233,7 +232,7 @@ export default function QuotationDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
-  const quotationId = params.id;
+  const quotationId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const canDelete =
     !!quotation && !quotation.converted_shipment_id && canDeleteOwnRecord({ hasRole });
@@ -422,7 +421,7 @@ export default function QuotationDetailPage() {
         const result = await adminForceDelete('quotation', quotationId);
         if (!result.success) throw new Error(result.error);
         toast.success('Quotation permanently deleted');
-        router.push('/quotations');
+        navigate('/quotations');
         return;
       }
 
@@ -444,7 +443,7 @@ export default function QuotationDetailPage() {
       });
 
       toast.success('Quotation deleted');
-      router.push('/quotations');
+      navigate('/quotations');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete quotation'));
     } finally {
@@ -561,7 +560,7 @@ export default function QuotationDetailPage() {
       });
 
       toast.success('Quotation duplicated');
-      router.push(`/quotations/${newId}`);
+      navigate(`/quotations/${newId}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to duplicate quotation'));
     } finally {
@@ -691,7 +690,7 @@ export default function QuotationDetailPage() {
       });
 
       toast.success(`Version ${quotation.version + 1} created`);
-      router.push(`/quotations/${newId}/edit`);
+      navigate(`/quotations/${newId}/edit`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to create new version'));
     } finally {
@@ -828,7 +827,7 @@ export default function QuotationDetailPage() {
             This quotation may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/quotations">
+        <Link to="/quotations">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Quotations
@@ -867,7 +866,7 @@ export default function QuotationDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/quotations">Quotations</Link>
+              <Link to="/quotations">Quotations</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -879,7 +878,7 @@ export default function QuotationDetailPage() {
 
       <div className="no-print sticky top-0 z-10 flex flex-col gap-3 border-b border-border bg-background pb-3 pt-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/quotations">
+          <Link to="/quotations">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -920,7 +919,7 @@ export default function QuotationDetailPage() {
             </Button>
           )}
           {quotation.converted_shipment_id && (
-            <Link href={`/shipments/${quotation.converted_shipment_id}`}>
+            <Link to={`/shipments/${quotation.converted_shipment_id}`}>
               <Button variant="outline" size="sm">
                 <ArrowRightLeft className="mr-1.5 h-4 w-4" />
                 View Shipment
@@ -998,7 +997,7 @@ export default function QuotationDetailPage() {
           )}
 
           {canEditInPlace && (
-            <Link href={`/quotations/${quotationId}/edit`}>
+            <Link to={`/quotations/${quotationId}/edit`}>
               <Button variant="outline" size="sm">
                 <Pencil className="mr-1.5 h-4 w-4" />
                 Edit

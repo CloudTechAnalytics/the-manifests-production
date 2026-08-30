@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Package,
   Plus,
@@ -116,8 +115,8 @@ const SHIPMENT_EXPORT_COLUMNS: ExportColumn<ShipmentRow>[] = [
 const VALID_SHIPMENT_STATUSES = new Set<string>([...SHIPMENT_STATUS_FLOW, 'cancelled']);
 
 export default function ShipmentsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -274,7 +273,7 @@ export default function ShipmentsPage() {
             columns={SHIPMENT_EXPORT_COLUMNS}
             filename="shipments"
           />
-          <Link href="/shipments/new">
+          <Link to="/shipments/new">
             <Button size="sm" className="w-full sm:w-auto">
               <Plus className="mr-1.5 h-4 w-4" />
               New Shipment
@@ -389,7 +388,7 @@ export default function ShipmentsPage() {
                 statusFilter === 'all' &&
                 typeFilter === 'all' &&
                 branchIdFilter === 'all' && (
-                  <Link href="/shipments/new">
+                  <Link to="/shipments/new">
                     <Button size="sm" variant="outline">
                       <Plus className="mr-1.5 h-4 w-4" />
                       New Shipment
@@ -424,7 +423,7 @@ export default function ShipmentsPage() {
                     <TableRow
                       key={s.id}
                       className="cursor-pointer transition-colors hover:bg-accent/60"
-                      onClick={() => router.push(`/shipments/${s.id}`)}
+                      onClick={() => navigate(`/shipments/${s.id}`)}
                     >
                       <TableCell className="font-medium text-primary">
                         {s.reference_number ?? '—'}

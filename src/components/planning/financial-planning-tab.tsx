@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -169,7 +169,7 @@ export function FinancialPlanningTab({ shipmentId, branchId, plan, onChanged }: 
               <InfoRow
                 label="Quotation Total"
                 value={
-                  <Link href={`/quotations/${plan.quotation.id}`} className="text-primary hover:underline">
+                  <Link to={`/quotations/${plan.quotation.id}`} className="text-primary hover:underline">
                     {formatCurrency(plan.quotation.total, plan.quotation.currency)}
                   </Link>
                 }

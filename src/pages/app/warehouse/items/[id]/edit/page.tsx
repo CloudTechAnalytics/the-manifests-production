@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,9 +46,9 @@ type ItemFormValues = z.infer<typeof itemSchema>;
 
 export default function EditStockItemPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const itemId = params.id;
+  const itemId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -143,7 +142,7 @@ export default function EditStockItemPage() {
       });
 
       toast.success('Item updated successfully');
-      router.push(`/warehouse/items/${itemId}`);
+      navigate(`/warehouse/items/${itemId}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to update item');
       toast.error(message);
@@ -173,7 +172,7 @@ export default function EditStockItemPage() {
             This item may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/warehouse">
+        <Link to="/warehouse">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Warehouse
@@ -189,13 +188,13 @@ export default function EditStockItemPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/warehouse">Warehouse</Link>
+              <Link to="/warehouse">Warehouse</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/warehouse/items/${itemId}`}>{itemName ?? 'Item'}</Link>
+              <Link to={`/warehouse/items/${itemId}`}>{itemName ?? 'Item'}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -206,7 +205,7 @@ export default function EditStockItemPage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href={`/warehouse/items/${itemId}`}>
+        <Link to={`/warehouse/items/${itemId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -294,7 +293,7 @@ export default function EditStockItemPage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href={`/warehouse/items/${itemId}`} className="sm:shrink-0">
+          <Link to={`/warehouse/items/${itemId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

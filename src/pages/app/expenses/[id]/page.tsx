@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -58,9 +57,9 @@ type ExpenseDetail = Expense & {
 
 export default function ExpenseDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
-  const expenseId = params.id;
+  const expenseId = params.id!;
   const isAdmin = profile?.role === 'admin';
   // Mirrors can_manage_finance() (migration 034's RLS for expenses UPDATE):
   // admin, branch_manager, and finance can all approve/reject, not just
@@ -146,7 +145,7 @@ export default function ExpenseDetailPage() {
         const result = await adminForceDelete('expense', expenseId);
         if (!result.success) throw new Error(result.error);
         toast.success('Expense permanently deleted');
-        router.push('/expenses');
+        navigate('/expenses');
         return;
       }
 
@@ -167,7 +166,7 @@ export default function ExpenseDetailPage() {
       });
 
       toast.success('Expense deleted');
-      router.push('/expenses');
+      navigate('/expenses');
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to delete expense');
       toast.error(message);
@@ -198,7 +197,7 @@ export default function ExpenseDetailPage() {
             This expense may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/expenses">
+        <Link to="/expenses">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Expenses
@@ -219,7 +218,7 @@ export default function ExpenseDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/expenses">Expenses</Link>
+              <Link to="/expenses">Expenses</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -231,7 +230,7 @@ export default function ExpenseDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/expenses">
+          <Link to="/expenses">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -267,7 +266,7 @@ export default function ExpenseDetailPage() {
               </Button>
             </>
           )}
-          <Link href={`/expenses/${expenseId}/edit`}>
+          <Link to={`/expenses/${expenseId}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit
@@ -345,7 +344,7 @@ export default function ExpenseDetailPage() {
           {expense.shipment && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipment</span>
-              <Link href={`/shipments/${expense.shipment.id}`} className="font-medium text-primary flex items-center gap-1">
+              <Link to={`/shipments/${expense.shipment.id}`} className="font-medium text-primary flex items-center gap-1">
                 <Package className="h-3.5 w-3.5" />
                 {expense.shipment.reference_number}
               </Link>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Container, Search, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -42,7 +42,7 @@ const STATUS_META: Record<TerminalStatus, { label: string; color: string }> = {
 };
 
 export default function TerminalQueuePage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -154,7 +154,7 @@ export default function TerminalQueuePage() {
                   <TableRow
                     key={r.id}
                     className="cursor-pointer hover:bg-accent/60"
-                    onClick={() => router.push(`/shipments/${r.id}?tab=terminal`)}
+                    onClick={() => navigate(`/shipments/${r.id}?tab=terminal`)}
                   >
                     <TableCell className="font-medium">{r.reference_number ?? '—'}</TableCell>
                     <TableCell className="text-sm">{r.customer?.company_name ?? '—'}</TableCell>

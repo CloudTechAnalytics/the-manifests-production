@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -184,11 +183,11 @@ const KNOWN_TABS = new Set([
 
 export default function ShipmentDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile, hasRole } = useAuth();
 
-  const shipmentId = params.id;
+  const shipmentId = params.id!;
   // A department queue links straight into the right tab, e.g. ?tab=customs.
   const requestedTab = searchParams.get('tab');
   const initialTab = requestedTab && KNOWN_TABS.has(requestedTab) ? requestedTab : 'overview';
@@ -581,7 +580,7 @@ export default function ShipmentDetailPage() {
         const result = await adminForceDelete('shipment', shipmentId);
         if (!result.success) throw new Error(result.error);
         toast.success('Shipment permanently deleted');
-        router.push('/shipments');
+        navigate('/shipments');
         return;
       }
 
@@ -610,7 +609,7 @@ export default function ShipmentDetailPage() {
       });
 
       toast.success('Shipment deleted');
-      router.push('/shipments');
+      navigate('/shipments');
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to delete shipment');
@@ -650,7 +649,7 @@ export default function ShipmentDetailPage() {
             This shipment may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/shipments">
+        <Link to="/shipments">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Shipments
@@ -697,7 +696,7 @@ export default function ShipmentDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/shipments">Shipments</Link>
+              <Link to="/shipments">Shipments</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -710,7 +709,7 @@ export default function ShipmentDetailPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/shipments">
+          <Link to="/shipments">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -787,7 +786,7 @@ export default function ShipmentDetailPage() {
           )}
 
           {canManageShipment && (
-            <Link href={`/shipments/${shipmentId}/edit`}>
+            <Link to={`/shipments/${shipmentId}/edit`}>
               <Button variant="outline" size="sm">
                 <Pencil className="mr-1.5 h-4 w-4" />
                 Edit

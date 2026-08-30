@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { CreditCard, ExternalLink, Receipt } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -92,7 +92,7 @@ export function BillingTab() {
                 </p>
               </div>
               <Button asChild variant="outline">
-                <Link href="/upgrade">
+                <Link to="/upgrade">
                   Change plan
                   <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
                 </Link>

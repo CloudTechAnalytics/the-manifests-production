@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Check, ChevronLeft, ChevronRight, Loader2, PartyPopper, Ship } from 'lucide-react';
@@ -40,7 +39,7 @@ const stepFade = {
 function OnboardingHeader() {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4 sm:px-6">
-      <Link href="/" className="flex items-center gap-2">
+      <Link to="/" className="flex items-center gap-2">
         <Ship className="h-5 w-5 text-primary" />
         <span className="font-display text-lg font-bold tracking-tight">The Manifest</span>
       </Link>
@@ -59,16 +58,16 @@ function OnboardingHeader() {
  */
 export default function OnboardingPage() {
   const { user, profile, loading, refreshProfile } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [stage, setStage] = useState<'welcome' | number>('welcome');
   const [finishing, setFinishing] = useState(false);
 
   useEffect(() => {
     if (loading) return;
-    if (!user) { router.replace('/login'); return; }
-    if (profile && profile.role !== 'admin') { router.replace('/dashboard'); return; }
-    if (profile?.organization?.onboarding_completed_at) { router.replace('/dashboard'); return; }
-  }, [loading, user, profile, router]);
+    if (!user) { navigate('/login', { replace: true }); return; }
+    if (profile && profile.role !== 'admin') { navigate('/dashboard', { replace: true }); return; }
+    if (profile?.organization?.onboarding_completed_at) { navigate('/dashboard', { replace: true }); return; }
+  }, [loading, user, profile, navigate]);
 
   const finish = async () => {
     setFinishing(true);
@@ -90,7 +89,7 @@ export default function OnboardingPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error ?? 'Failed to finish setup');
       await refreshProfile();
-      router.replace('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to finish setup'));
     } finally {

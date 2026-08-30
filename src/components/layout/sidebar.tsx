@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -381,7 +380,7 @@ function NavGroup({
           return (
             <Link
               key={`${item.href}-${item.label}`}
-              href={item.href}
+              to={item.href}
               onClick={onNavigate}
               title={railCollapsed ? item.label : undefined}
               className={cn(
@@ -456,8 +455,8 @@ function NavLinks({
    *  collapses. */
   railCollapsed?: boolean;
 }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useLocation().pathname;
+  const [searchParams] = useSearchParams();
   const { roles } = useAuth();
   const badges = useNavBadges();
   const { hasFeature } = useOrgPlan();
@@ -470,7 +469,7 @@ function NavLinks({
     <nav className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4">
       <div className="space-y-1">
         <Link
-          href="/dashboard"
+          to="/dashboard"
           onClick={onNavigate}
           title={railCollapsed ? 'Dashboard' : undefined}
           className={cn(
@@ -579,19 +578,19 @@ function UserMenu() {
           </div>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild className="cursor-pointer">
-            <Link href="/settings?tab=profile">
+            <Link to="/settings?tab=profile">
               <UserRound className="mr-2 h-4 w-4" />
               My Profile
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer">
-            <Link href={hrHref}>
+            <Link to={hrHref}>
               <Users2 className="mr-2 h-4 w-4" />
               HR Workspace
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="cursor-pointer">
-            <Link href="/settings?tab=preferences">
+            <Link to="/settings?tab=preferences">
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </Link>
@@ -717,19 +716,19 @@ function HeaderUserMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href="/settings?tab=profile">
+          <Link to="/settings?tab=profile">
             <UserRound className="mr-2 h-4 w-4" />
             My Profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href={hrHref}>
+          <Link to={hrHref}>
             <Users2 className="mr-2 h-4 w-4" />
             HR Workspace
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href="/settings?tab=preferences">
+          <Link to="/settings?tab=preferences">
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>
@@ -752,13 +751,13 @@ function HeaderUserMenu() {
  *  released, etc. Unread count badges the bell; opening an item marks
  *  it read and navigates to the record it's about. */
 function NotificationsBell() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
 
   const handleOpen = (item: AppNotification) => {
     if (!item.read_at) markRead(item.id);
     const href = item.entity_type === 'shipment' ? `/shipments/${item.entity_id}` : `/quotations/${item.entity_id}`;
-    router.push(href);
+    navigate(href);
   };
 
   return (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ClipboardList, Search, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -43,7 +43,7 @@ const EXPORT_COLUMNS: ExportColumn<PlanningRow>[] = [
 ];
 
 export default function PlanningPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
 
   const [rows, setRows] = useState<PlanningRow[]>([]);
@@ -155,7 +155,7 @@ export default function PlanningPage() {
         metadata: { shipment_id: row.shipment.id },
       });
 
-      router.push(`/planning/${created.id}`);
+      navigate(`/planning/${created.id}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to start planning'));
     } finally {
@@ -239,7 +239,7 @@ export default function PlanningPage() {
                     <TableRow
                       key={row.shipment.id}
                       className={row.plan ? 'cursor-pointer transition-colors hover:bg-accent/60' : undefined}
-                      onClick={() => row.plan && router.push(`/planning/${row.plan.id}`)}
+                      onClick={() => row.plan && navigate(`/planning/${row.plan.id}`)}
                     >
                       <TableCell className="font-medium text-primary">
                         {row.shipment.reference_number ?? '—'}
@@ -261,7 +261,7 @@ export default function PlanningPage() {
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         {row.plan ? (
-                          <Button size="sm" variant="ghost" onClick={() => router.push(`/planning/${row.plan!.id}`)}>
+                          <Button size="sm" variant="ghost" onClick={() => navigate(`/planning/${row.plan!.id}`)}>
                             Open
                             <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                           </Button>

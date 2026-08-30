@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FormProvider, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -35,7 +34,6 @@ interface RegisterResult {
  * server-side — see migration 064's provision_organization().
  */
 export default function RegisterPage() {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<RegisterResult | null>(null);
   const [resending, setResending] = useState(false);
@@ -145,7 +143,7 @@ export default function RegisterPage() {
               {resending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Resend verification email
             </Button>
-            <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+            <Link to="/login" className="text-sm font-medium text-primary hover:underline">
               Already verified? Sign in
             </Link>
           </div>
@@ -158,11 +156,11 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10 sm:px-6">
       <div className="w-full max-w-2xl space-y-6">
         <div className="flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
             Back to home
           </Link>
-          <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+          <Link to="/login" className="text-sm font-medium text-primary hover:underline">
             Already have an account? Sign in
           </Link>
         </div>

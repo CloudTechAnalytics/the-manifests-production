@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Trash2, Wallet, User, Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -59,9 +58,9 @@ type AllocationRow = PaymentAllocation & {
 
 export default function PaymentDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
-  const paymentId = params.id;
+  const paymentId = params.id!;
 
   const [payment, setPayment] = useState<PaymentDetail | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
@@ -241,7 +240,7 @@ export default function PaymentDetailPage() {
         const result = await adminForceDelete('payment', paymentId);
         if (!result.success) throw new Error(result.error);
         toast.success('Payment permanently deleted');
-        router.push('/payments');
+        navigate('/payments');
         return;
       }
 
@@ -274,7 +273,7 @@ export default function PaymentDetailPage() {
       });
 
       toast.success('Payment deleted');
-      router.push('/payments');
+      navigate('/payments');
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to delete payment');
       toast.error(message);
@@ -308,7 +307,7 @@ export default function PaymentDetailPage() {
             This payment may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/payments">
+        <Link to="/payments">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Payments
@@ -324,7 +323,7 @@ export default function PaymentDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/payments">Payments</Link>
+              <Link to="/payments">Payments</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -336,7 +335,7 @@ export default function PaymentDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/payments">
+          <Link to="/payments">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -596,7 +595,7 @@ export default function PaymentDetailPage() {
                     {allocations.map((a) => (
                       <TableRow key={a.id} className="transition-colors hover:bg-accent/60">
                         <TableCell className="font-medium text-primary">
-                          <Link href={`/invoices/${a.invoice?.id}`}>
+                          <Link to={`/invoices/${a.invoice?.id}`}>
                             {a.invoice?.invoice_number ?? '—'}
                           </Link>
                         </TableCell>

@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -33,7 +32,7 @@ import { QuotationSummaryPanel } from '@/components/quotations/quotation-summary
 import type { Customer, Profile } from '@/types';
 
 export default function NewQuotationPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -226,7 +225,7 @@ export default function NewQuotationPage() {
       });
 
       toast.success('Quotation created successfully');
-      router.push(`/quotations/${quotationId}`);
+      navigate(`/quotations/${quotationId}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to create quotation'));
     } finally {
@@ -240,7 +239,7 @@ export default function NewQuotationPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/quotations">Quotations</Link>
+              <Link to="/quotations">Quotations</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -251,7 +250,7 @@ export default function NewQuotationPage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href="/quotations">
+        <Link to="/quotations">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -292,7 +291,7 @@ export default function NewQuotationPage() {
             />
 
             <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">
-              <Link href="/quotations" className="sm:shrink-0">
+              <Link to="/quotations" className="sm:shrink-0">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Cancel
                 </Button>

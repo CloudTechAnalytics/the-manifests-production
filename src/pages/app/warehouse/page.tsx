@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   Boxes,
   DollarSign,
@@ -139,13 +139,13 @@ export default function WarehousePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ExportButton data={items} columns={STOCK_EXPORT_COLUMNS} filename="warehouse-stock" />
-          <Link href="/warehouse/locations">
+          <Link to="/warehouse/locations">
             <Button variant="outline" size="sm">
               <Settings2 className="mr-1.5 h-4 w-4" />
               Warehouses
             </Button>
           </Link>
-          <Link href="/warehouse/items/new">
+          <Link to="/warehouse/items/new">
             <Button size="sm">
               <Plus className="mr-1.5 h-4 w-4" />
               New Item

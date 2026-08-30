@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronLeft,
@@ -280,7 +280,7 @@ export default function CalendarPage() {
                 {agendaEvents.map((e) => (
                   <Link
                     key={e.id}
-                    href={`/shipments/${e.shipmentId}`}
+                    to={`/shipments/${e.shipmentId}`}
                     className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-accent/60"
                   >
                     <div className="w-20 shrink-0 text-sm font-medium text-muted-foreground">
@@ -344,7 +344,7 @@ export default function CalendarPage() {
                       {dayEvents.slice(0, 3).map((e) => (
                         <Link
                           key={e.id}
-                          href={`/shipments/${e.shipmentId}`}
+                          to={`/shipments/${e.shipmentId}`}
                           className={cn(
                             'block truncate rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80',
                             EVENT_TYPE_META[e.type].chip
@@ -400,7 +400,7 @@ export default function CalendarPage() {
                       {dayEvents.map((e) => (
                         <Link
                           key={e.id}
-                          href={`/shipments/${e.shipmentId}`}
+                          to={`/shipments/${e.shipmentId}`}
                           className={cn(
                             'flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-opacity hover:opacity-80',
                             EVENT_TYPE_META[e.type].chip

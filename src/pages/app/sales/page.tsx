@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import {
   TrendingUp,
   DollarSign,
@@ -43,9 +42,8 @@ import type { Branch, Quotation, QuotationStatus } from '@/types';
 
 // recharts is a large dependency — code-split so it only loads once
 // this card actually renders, not bundled into this page's own chunk.
-const MonthlyRevenueChart = dynamic(
-  () => import('@/components/sales/monthly-revenue-chart').then((m) => m.MonthlyRevenueChart),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+const MonthlyRevenueChart = lazy(() =>
+  import('@/components/sales/monthly-revenue-chart').then((m) => ({ default: m.MonthlyRevenueChart }))
 );
 
 type QuotationRow = Quotation & {
@@ -455,7 +453,9 @@ export default function SalesPage() {
                 No accepted quotations yet
               </div>
             ) : (
-              <MonthlyRevenueChart data={monthlyTrend} currency={primaryCurrency ?? 'NGN'} />
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <MonthlyRevenueChart data={monthlyTrend} currency={primaryCurrency ?? 'NGN'} />
+              </Suspense>
             )}
           </CardContent>
         </Card>

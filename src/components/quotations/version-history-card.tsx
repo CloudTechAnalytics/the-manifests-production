@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { History } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,7 +68,7 @@ export function VersionHistoryCard({ quotation }: VersionHistoryCardProps) {
           return (
             <Link
               key={row.id}
-              href={`/quotations/${row.id}`}
+              to={`/quotations/${row.id}`}
               className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-accent/60 ${
                 isCurrent ? 'border-primary/40 bg-primary/[0.04]' : 'border-border'
               }`}

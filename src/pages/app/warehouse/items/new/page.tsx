@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -56,7 +55,7 @@ const itemSchema = z.object({
 type ItemFormValues = z.infer<typeof itemSchema>;
 
 export default function NewStockItemPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -164,7 +163,7 @@ export default function NewStockItemPage() {
       }
 
       toast.success('Item added to catalog');
-      router.push(`/warehouse/items/${item.id}`);
+      navigate(`/warehouse/items/${item.id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to create item');
       toast.error(message);
@@ -179,7 +178,7 @@ export default function NewStockItemPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/warehouse">Warehouse</Link>
+              <Link to="/warehouse">Warehouse</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -190,7 +189,7 @@ export default function NewStockItemPage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href="/warehouse">
+        <Link to="/warehouse">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -318,7 +317,7 @@ export default function NewStockItemPage() {
                 {warehouses.length === 0 && (
                   <p className="text-xs text-muted-foreground">
                     No warehouses yet —{' '}
-                    <Link href="/warehouse/locations" className="text-primary hover:underline">
+                    <Link to="/warehouse/locations" className="text-primary hover:underline">
                       add one first
                     </Link>
                     .
@@ -341,7 +340,7 @@ export default function NewStockItemPage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/warehouse" className="sm:shrink-0">
+          <Link to="/warehouse" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

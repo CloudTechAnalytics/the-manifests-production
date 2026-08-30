@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { FileSearch, Search, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -41,7 +41,7 @@ const RESULT_META: Record<ExaminationResult, { label: string; color: string }> =
 };
 
 export default function ExaminationQueuePage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -153,7 +153,7 @@ export default function ExaminationQueuePage() {
                   <TableRow
                     key={r.id}
                     className="cursor-pointer hover:bg-accent/60"
-                    onClick={() => router.push(`/shipments/${r.id}?tab=examination`)}
+                    onClick={() => navigate(`/shipments/${r.id}?tab=examination`)}
                   >
                     <TableCell className="font-medium">{r.reference_number ?? '—'}</TableCell>
                     <TableCell className="text-sm">{r.customer?.company_name ?? '—'}</TableCell>

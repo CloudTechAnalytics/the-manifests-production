@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { AlertTriangle, PackageX, ChevronRight, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,7 +62,7 @@ export function WarehouseAlerts({
               return (
                 <Link
                   key={a.key}
-                  href={a.href}
+                  to={a.href}
                   className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-accent/60"
                 >
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.color}`}>

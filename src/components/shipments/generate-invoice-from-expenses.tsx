@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2, Receipt, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -37,7 +37,7 @@ export function GenerateInvoiceFromExpenses({
   branchId: string;
   customerId: string;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +110,7 @@ export function GenerateInvoiceFromExpenses({
       });
 
       toast.success('Invoice generated — review before sending');
-      router.push(`/invoices/${invoice.id}`);
+      navigate(`/invoices/${invoice.id}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to generate invoice'));
     } finally {

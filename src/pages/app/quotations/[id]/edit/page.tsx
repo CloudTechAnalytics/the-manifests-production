@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -35,9 +34,9 @@ type QuotationWithItems = Quotation & { items: QuotationItem[] };
 
 export default function EditQuotationPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const quotationId = params.id;
+  const quotationId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -299,7 +298,7 @@ export default function EditQuotationPage() {
 
         if (!silent) {
           toast.success('Quotation updated successfully');
-          router.push(`/quotations/${quotationId}`);
+          navigate(`/quotations/${quotationId}`);
         }
       } catch (err) {
         if (silent) {
@@ -311,7 +310,7 @@ export default function EditQuotationPage() {
         if (!silent) setSubmitting(false);
       }
     },
-    [profile, quotation, quotationId, customers, existingItemIds, router]
+    [profile, quotation, quotationId, customers, existingItemIds, navigate]
   );
 
   const onSubmit = (values: QuotationFormValues) => performSave(values, false);
@@ -361,7 +360,7 @@ export default function EditQuotationPage() {
             This quotation may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/quotations">
+        <Link to="/quotations">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Quotations
@@ -384,13 +383,13 @@ export default function EditQuotationPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/quotations/${quotationId}`}>
+          <Link to={`/quotations/${quotationId}`}>
             <Button variant="outline" size="sm">
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Back to Quotation
             </Button>
           </Link>
-          <Link href={`/shipments/${quotation.converted_shipment_id}`}>
+          <Link to={`/shipments/${quotation.converted_shipment_id}`}>
             <Button size="sm">View Shipment</Button>
           </Link>
         </div>
@@ -410,7 +409,7 @@ export default function EditQuotationPage() {
             A newer version of this quotation exists — edit that one instead.
           </p>
         </div>
-        <Link href={`/quotations/${quotationId}`}>
+        <Link to={`/quotations/${quotationId}`}>
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Quotation
@@ -426,13 +425,13 @@ export default function EditQuotationPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/quotations">Quotations</Link>
+              <Link to="/quotations">Quotations</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/quotations/${quotationId}`}>
+              <Link to={`/quotations/${quotationId}`}>
                 {quotation.quotation_number ?? 'Quotation'}
               </Link>
             </BreadcrumbLink>
@@ -445,7 +444,7 @@ export default function EditQuotationPage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href={`/quotations/${quotationId}`}>
+        <Link to={`/quotations/${quotationId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -475,7 +474,7 @@ export default function EditQuotationPage() {
             <QuotationAttachmentsPanel quotationId={quotationId} branchId={quotation.branch_id} />
 
             <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t border-border bg-background px-6 py-3 sm:mx-0 sm:flex-row sm:items-center sm:justify-end sm:rounded-lg sm:border">
-              <Link href={`/quotations/${quotationId}`} className="sm:shrink-0">
+              <Link to={`/quotations/${quotationId}`} className="sm:shrink-0">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Cancel
                 </Button>

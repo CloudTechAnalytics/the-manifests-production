@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DollarSign, TrendingUp, Percent, ShieldAlert, Copy, XCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -28,7 +28,7 @@ interface PlanSummaryCardProps {
 }
 
 export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [duplicating, setDuplicating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -97,7 +97,7 @@ export function PlanSummaryCard({ plan, onUpdated }: PlanSummaryCardProps) {
       if (error || !data) throw new Error(error?.message ?? 'Failed to duplicate plan');
 
       toast.success(`Duplicated as ${data.plan_number}`);
-      router.push(`/planning/${data.id}`);
+      navigate(`/planning/${data.id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to duplicate plan');
       toast.error(message);

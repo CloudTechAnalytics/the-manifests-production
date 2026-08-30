@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   Radar,
   Search,
@@ -428,7 +428,7 @@ export default function TrackingPage() {
                         {selected.customer?.company_name ?? 'Unknown customer'}
                       </p>
                     </div>
-                    <Link href={`/shipments/${selected.id}`}>
+                    <Link to={`/shipments/${selected.id}`}>
                       <Button variant="outline" size="sm">
                         Full Details
                         <ExternalLink className="ml-1.5 h-3.5 w-3.5" />

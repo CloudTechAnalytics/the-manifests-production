@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -97,7 +96,7 @@ export function WarehouseInventoryTabs({
   loading,
   onOpenMovement,
 }: WarehouseInventoryTabsProps) {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<TabKey>('items');
   const [search, setSearch] = useState('');
@@ -337,7 +336,7 @@ export function WarehouseInventoryTabs({
                     return (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium text-primary">
-                          <Link href={`/warehouse/items/${r.item.id}`}>{r.item.name}</Link>
+                          <Link to={`/warehouse/items/${r.item.id}`}>{r.item.name}</Link>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{r.item.sku}</TableCell>
                         <TableCell className="text-muted-foreground">{r.item.category ?? '—'}</TableCell>
@@ -362,7 +361,7 @@ export function WarehouseInventoryTabs({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/warehouse/items/${r.item.id}`}>View History</Link>
+                                <Link to={`/warehouse/items/${r.item.id}`}>View History</Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => onOpenMovement('inbound', r.item!.id)}>
                                 Receive Stock
@@ -413,7 +412,7 @@ export function WarehouseInventoryTabs({
                       <TableCell className="text-muted-foreground">{formatDateTime(m.created_at)}</TableCell>
                       <TableCell className="font-medium">
                         {m.item ? (
-                          <Link href={`/warehouse/items/${m.item.id}`} className="text-primary">
+                          <Link to={`/warehouse/items/${m.item.id}`} className="text-primary">
                             {m.item.name}
                           </Link>
                         ) : (

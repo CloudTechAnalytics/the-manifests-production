@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { CreditCard, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -57,7 +56,7 @@ const EXPENSE_EXPORT_COLUMNS: ExportColumn<ExpenseRow>[] = [
 ];
 
 export default function ExpensesPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -218,7 +217,7 @@ export default function ExpensesPage() {
             columns={EXPENSE_EXPORT_COLUMNS}
             filename="expenses"
           />
-          <Link href="/expenses/new">
+          <Link to="/expenses/new">
             <Button size="sm" className="w-full sm:w-auto">
               <Plus className="mr-1.5 h-4 w-4" />
               Add Expense
@@ -362,7 +361,7 @@ export default function ExpensesPage() {
                       <TableRow
                         key={exp.id}
                         className="cursor-pointer transition-colors hover:bg-accent/60"
-                        onClick={() => router.push(`/expenses/${exp.id}`)}
+                        onClick={() => navigate(`/expenses/${exp.id}`)}
                       >
                         <TableCell className="font-medium text-primary">
                           {exp.expense_number ?? '—'}

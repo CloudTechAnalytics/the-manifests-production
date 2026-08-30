@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Ship, Loader2, Eye, EyeOff, Lock, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 function AcceptInviteForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signIn } = useAuth();
   const token = searchParams.get('token') ?? '';
 
@@ -69,10 +69,10 @@ function AcceptInviteForm() {
         // Account was created successfully; sign-in just didn't chain
         // automatically. Send them to the login page instead of stalling.
         toast.success('Account created. Please sign in.');
-        router.replace('/login');
+        navigate('/login', { replace: true });
         return;
       }
-      router.replace('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to accept invitation'));
     } finally {
@@ -171,9 +171,5 @@ function AcceptInviteForm() {
 }
 
 export default function AcceptInvitePage() {
-  return (
-    <Suspense fallback={null}>
-      <AcceptInviteForm />
-    </Suspense>
-  );
+  return <AcceptInviteForm />;
 }

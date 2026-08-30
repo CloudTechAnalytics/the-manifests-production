@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -102,7 +101,7 @@ type CustomerFormValues = z.infer<typeof customerSchema>;
 // --- Page -----------------------------------------------------------------
 
 export default function NewCustomerPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [branchError, setBranchError] = useState('');
@@ -255,7 +254,7 @@ export default function NewCustomerPage() {
       }
 
       toast.success('Customer created successfully');
-      router.push(`/customers/${customerId}`);
+      navigate(`/customers/${customerId}`);
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to create customer');
@@ -272,7 +271,7 @@ export default function NewCustomerPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/customers">Customers</Link>
+              <Link to="/customers">Customers</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -284,7 +283,7 @@ export default function NewCustomerPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/customers">
+        <Link to="/customers">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -588,7 +587,7 @@ export default function NewCustomerPage() {
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/customers" className="sm:shrink-0">
+          <Link to="/customers" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

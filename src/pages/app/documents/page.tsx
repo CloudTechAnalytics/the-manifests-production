@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'react-router-dom';
 import {
   FileText,
   Upload,
@@ -141,7 +141,7 @@ interface PendingFile {
 
 export default function DocumentsPage() {
   const { profile } = useAuth();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shipments, setShipments] = useState<{ id: string; reference_number: string | null }[]>([]);

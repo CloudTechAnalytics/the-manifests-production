@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -89,9 +88,9 @@ type ShipmentFormValues = z.infer<typeof shipmentSchema>;
 
 export default function EditShipmentPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const shipmentId = params.id;
+  const shipmentId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -323,7 +322,7 @@ export default function EditShipmentPage() {
       }
 
       toast.success('Shipment updated successfully');
-      router.push(`/shipments/${shipmentId}`);
+      navigate(`/shipments/${shipmentId}`);
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to update shipment');
@@ -359,7 +358,7 @@ export default function EditShipmentPage() {
             This shipment may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/shipments">
+        <Link to="/shipments">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Shipments
@@ -376,13 +375,13 @@ export default function EditShipmentPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/shipments">Shipments</Link>
+              <Link to="/shipments">Shipments</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/shipments/${shipmentId}`}>
+              <Link to={`/shipments/${shipmentId}`}>
                 {referenceNumber ?? 'Shipment'}
               </Link>
             </BreadcrumbLink>
@@ -396,7 +395,7 @@ export default function EditShipmentPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/shipments/${shipmentId}`}>
+        <Link to={`/shipments/${shipmentId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -744,7 +743,7 @@ export default function EditShipmentPage() {
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href={`/shipments/${shipmentId}`} className="sm:shrink-0">
+          <Link to={`/shipments/${shipmentId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

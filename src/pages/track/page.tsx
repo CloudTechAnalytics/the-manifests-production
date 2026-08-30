@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Ship, Search, Loader2, Package, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { SHIPMENT_STATUS_META, SHIPMENT_STATUS_FLOW, formatDate } from '@/lib/utils/status';
@@ -12,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import type { PublicTrackedShipment } from '@/types';
 
 function TrackShipmentForm() {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [reference, setReference] = useState(searchParams.get('ref') ?? '');
   const [result, setResult] = useState<PublicTrackedShipment | null>(null);
   const [searched, setSearched] = useState(false);
@@ -54,7 +52,7 @@ function TrackShipmentForm() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 max-w-3xl items-center px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
               <Ship className="h-4.5 w-4.5 text-primary-foreground" strokeWidth={2.25} />
             </div>
@@ -182,9 +180,5 @@ function TrackShipmentForm() {
 }
 
 export default function TrackShipmentPage() {
-  return (
-    <Suspense fallback={null}>
-      <TrackShipmentForm />
-    </Suspense>
-  );
+  return <TrackShipmentForm />;
 }

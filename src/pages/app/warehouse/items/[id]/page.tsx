@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -69,9 +68,9 @@ import type { StockItem, StockMovement, Warehouse, WarehouseStock } from '@/type
 
 export default function StockItemDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
-  const itemId = params.id;
+  const itemId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
@@ -167,7 +166,7 @@ export default function StockItemDetailPage() {
       });
 
       toast.success('Item deleted');
-      router.push('/warehouse');
+      navigate('/warehouse');
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to delete item');
       toast.error(message);
@@ -198,7 +197,7 @@ export default function StockItemDetailPage() {
             This item may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/warehouse">
+        <Link to="/warehouse">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Warehouse
@@ -217,7 +216,7 @@ export default function StockItemDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/warehouse">Warehouse</Link>
+              <Link to="/warehouse">Warehouse</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -229,7 +228,7 @@ export default function StockItemDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/warehouse">
+          <Link to="/warehouse">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -258,7 +257,7 @@ export default function StockItemDetailPage() {
             <ArrowLeftRight className="mr-1.5 h-4 w-4" />
             Transfer
           </Button>
-          <Link href={`/warehouse/items/${itemId}/edit`}>
+          <Link to={`/warehouse/items/${itemId}/edit`}>
             <Button size="sm" variant="outline">
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit

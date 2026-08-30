@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -61,7 +60,7 @@ const invoiceSchema = z.object({
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
 export default function NewInvoicePage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
@@ -219,7 +218,7 @@ export default function NewInvoicePage() {
       });
 
       toast.success('Invoice created successfully');
-      router.push(`/invoices/${invoiceData.id}`);
+      navigate(`/invoices/${invoiceData.id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to create invoice');
       toast.error(message);
@@ -234,7 +233,7 @@ export default function NewInvoicePage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/invoices">Invoices</Link>
+              <Link to="/invoices">Invoices</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -245,7 +244,7 @@ export default function NewInvoicePage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href="/invoices">
+        <Link to="/invoices">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -456,7 +455,7 @@ export default function NewInvoicePage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/invoices" className="sm:shrink-0">
+          <Link to="/invoices" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

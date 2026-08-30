@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SHIPMENT_STATUS_META, formatCurrency } from '@/lib/utils/status';
@@ -45,7 +45,7 @@ export function PlanningShipmentHeader({ shipment, containers }: PlanningShipmen
     <Card>
       <CardContent className="py-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Link href={`/shipments/${shipment.id}`} className="font-serif text-lg font-bold text-primary hover:underline">
+          <Link to={`/shipments/${shipment.id}`} className="font-serif text-lg font-bold text-primary hover:underline">
             {shipment.reference_number ?? 'Shipment'}
           </Link>
           <Badge variant="secondary" className={statusMeta.color}>

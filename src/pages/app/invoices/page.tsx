@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Receipt, Plus, Search, Filter, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -76,8 +75,8 @@ const STATUS_TABS: { value: StatusTab; label: string }[] = [
 const VALID_TABS = new Set(STATUS_TABS.map((t) => t.value));
 
 export default function InvoicesPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -261,7 +260,7 @@ export default function InvoicesPage() {
             columns={INVOICE_EXPORT_COLUMNS}
             filename="invoices"
           />
-          <Link href="/invoices/new">
+          <Link to="/invoices/new">
             <Button size="sm" className="w-full sm:w-auto">
               <Plus className="mr-1.5 h-4 w-4" />
               New Invoice
@@ -401,7 +400,7 @@ export default function InvoicesPage() {
                       <TableRow
                         key={inv.id}
                         className="cursor-pointer transition-colors hover:bg-accent/60"
-                        onClick={() => router.push(`/invoices/${inv.id}`)}
+                        onClick={() => navigate(`/invoices/${inv.id}`)}
                       >
                         <TableCell className="font-medium text-primary">
                           {inv.invoice_number ?? '—'}

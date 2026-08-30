@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   Package,
   FileClock,
@@ -164,7 +164,7 @@ export default function DashboardPage() {
           <div className="flex shrink-0 flex-wrap items-center gap-2 xl:ml-auto">
             {canManageSales && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/customers/new">
+                <Link to="/customers/new">
                   <UserPlus className="mr-1.5 h-4 w-4" />
                   New Customer
                 </Link>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
             )}
             {canManageSales && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/quotations/new">
+                <Link to="/quotations/new">
                   <FilePlus className="mr-1.5 h-4 w-4" />
                   New Quotation
                 </Link>
@@ -180,7 +180,7 @@ export default function DashboardPage() {
             )}
             {canManageOperations && (
               <Button asChild size="sm">
-                <Link href="/shipments/new">
+                <Link to="/shipments/new">
                   <Plus className="mr-1.5 h-4 w-4" />
                   New Shipment
                 </Link>
@@ -188,7 +188,7 @@ export default function DashboardPage() {
             )}
             {(canManageOperations || hasRole('transport')) && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/transportation">
+                <Link to="/transportation">
                   <Truck className="mr-1.5 h-4 w-4" />
                   Assign Truck
                 </Link>
@@ -196,7 +196,7 @@ export default function DashboardPage() {
             )}
             {canSeeFinance && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/invoices/new">
+                <Link to="/invoices/new">
                   <Receipt className="mr-1.5 h-4 w-4" />
                   Generate Invoice
                 </Link>
@@ -204,7 +204,7 @@ export default function DashboardPage() {
             )}
             {canSeeFinance && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/payments/new">
+                <Link to="/payments/new">
                   <Wallet className="mr-1.5 h-4 w-4" />
                   Create Payment
                 </Link>

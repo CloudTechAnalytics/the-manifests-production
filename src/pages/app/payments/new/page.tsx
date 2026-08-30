@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -56,8 +55,8 @@ const paymentSchema = z.object({
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
 export default function NewPaymentPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const preselectInvoiceId = searchParams.get('invoice_id');
 
@@ -271,7 +270,7 @@ export default function NewPaymentPage() {
       });
 
       toast.success('Payment recorded successfully');
-      router.push(`/payments/${paymentData.id}`);
+      navigate(`/payments/${paymentData.id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to record payment');
       toast.error(message);
@@ -286,7 +285,7 @@ export default function NewPaymentPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/payments">Payments</Link>
+              <Link to="/payments">Payments</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -297,7 +296,7 @@ export default function NewPaymentPage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href="/payments">
+        <Link to="/payments">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -498,7 +497,7 @@ export default function NewPaymentPage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/payments" className="sm:shrink-0">
+          <Link to="/payments" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -100,14 +99,11 @@ type CustomerFormValues = z.infer<typeof customerSchema>;
 
 // --- Component ------------------------------------------------------------
 
-export default function EditCustomerPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const router = useRouter();
+export default function EditCustomerPage() {
+  const navigate = useNavigate();
+  const params = useParams<{ id: string }>();
   const { profile } = useAuth();
-  const customerId = params.id;
+  const customerId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -160,7 +156,7 @@ export default function EditCustomerPage({
 
         if (custErr || !cust) {
           toast.error('Customer not found');
-          router.push('/customers');
+          navigate('/customers');
           return;
         }
 
@@ -312,7 +308,7 @@ export default function EditCustomerPage({
       });
 
       toast.success('Customer updated successfully');
-      router.push(`/customers/${customerId}`);
+      navigate(`/customers/${customerId}`);
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to update customer');
@@ -339,13 +335,13 @@ export default function EditCustomerPage({
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/customers">Customers</Link>
+              <Link to="/customers">Customers</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/customers/${customerId}`}>
+              <Link to={`/customers/${customerId}`}>
                 {watch('company_name') || 'Customer'}
               </Link>
             </BreadcrumbLink>
@@ -359,7 +355,7 @@ export default function EditCustomerPage({
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/customers/${customerId}`}>
+        <Link to={`/customers/${customerId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -639,7 +635,7 @@ export default function EditCustomerPage({
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href={`/customers/${customerId}`} className="sm:shrink-0">
+          <Link to={`/customers/${customerId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

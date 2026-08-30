@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Warehouse as WarehouseIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +15,7 @@ export function InventoryByWarehouse({ rows, loading }: InventoryByWarehouseProp
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-lg font-semibold">Inventory by Warehouse</CardTitle>
-        <Link href="/warehouse/locations" className="text-xs font-medium text-primary hover:underline">
+        <Link to="/warehouse/locations" className="text-xs font-medium text-primary hover:underline">
           View all warehouses
         </Link>
       </CardHeader>

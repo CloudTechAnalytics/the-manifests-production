@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, Loader2, Mail, Lock, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -26,7 +25,7 @@ import type { Plan, BillingCycle } from '@/types';
  * data at all — RLS on `plans` is `TO authenticated`).
  */
 function UpgradePageContent() {
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const requestedFeature = searchParams.get('feature');
   const { profile } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -83,7 +82,7 @@ function UpgradePageContent() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
-      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </Link>
 
@@ -201,9 +200,5 @@ function UpgradePageContent() {
 }
 
 export default function UpgradePage() {
-  return (
-    <Suspense fallback={null}>
-      <UpgradePageContent />
-    </Suspense>
-  );
+  return <UpgradePageContent />;
 }

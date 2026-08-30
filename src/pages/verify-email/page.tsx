@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Ship, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getErrorMessage } from '@/lib/utils';
@@ -17,8 +16,8 @@ type State = 'verifying' | 'success' | 'error';
  * out of an edge function.
  */
 function VerifyEmailContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
 
   const [state, setState] = useState<State>('verifying');
@@ -56,7 +55,7 @@ function VerifyEmailContent() {
 
         setState('success');
         setTimeout(() => {
-          router.replace(`/login?verified=1${data.email ? `&email=${encodeURIComponent(data.email)}` : ''}`);
+          navigate(`/login?verified=1${data.email ? `&email=${encodeURIComponent(data.email)}` : ''}`, { replace: true });
         }, 1800);
       } catch (err) {
         if (!cancelled) {
@@ -101,10 +100,10 @@ function VerifyEmailContent() {
             <p className="text-sm text-foreground">{message}</p>
             <div className="flex w-full flex-col gap-2 pt-2">
               <Button asChild>
-                <Link href="/register">Register again</Link>
+                <Link to="/register">Register again</Link>
               </Button>
               <Button variant="outline" asChild>
-                <Link href="/login">Go to sign in</Link>
+                <Link to="/login">Go to sign in</Link>
               </Button>
             </div>
           </div>
@@ -115,9 +114,5 @@ function VerifyEmailContent() {
 }
 
 export default function VerifyEmailPage() {
-  return (
-    <Suspense fallback={null}>
-      <VerifyEmailContent />
-    </Suspense>
-  );
+  return <VerifyEmailContent />;
 }

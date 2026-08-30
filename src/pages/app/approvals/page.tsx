@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ShieldCheck, Receipt, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -143,7 +143,7 @@ export default function ApprovalsPage() {
             {rows.map((row) => (
               <Link
                 key={`${row.kind}-${row.id}`}
-                href={row.href}
+                to={row.href}
                 className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-accent"
               >
                 <div

@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -85,7 +84,7 @@ import type {
 
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -97,7 +96,7 @@ export default function CustomerDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const customerId = params.id;
+  const customerId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const canDelete =
     !!customer &&
@@ -182,7 +181,7 @@ export default function CustomerDetailPage() {
         const result = await adminForceDelete('customer', customerId);
         if (!result.success) throw new Error(result.error);
         toast.success('Customer permanently deleted');
-        router.push('/customers');
+        navigate('/customers');
         return;
       }
 
@@ -208,7 +207,7 @@ export default function CustomerDetailPage() {
       });
 
       toast.success('Customer deleted');
-      router.push('/customers');
+      navigate('/customers');
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to delete customer');
@@ -245,7 +244,7 @@ export default function CustomerDetailPage() {
             This customer may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/customers">
+        <Link to="/customers">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Customers
@@ -268,7 +267,7 @@ export default function CustomerDetailPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/customers">Customers</Link>
+              <Link to="/customers">Customers</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -281,7 +280,7 @@ export default function CustomerDetailPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/customers">
+          <Link to="/customers">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -302,7 +301,7 @@ export default function CustomerDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/customers/${customerId}/edit`}>
+          <Link to={`/customers/${customerId}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="mr-1.5 h-4 w-4" />
               Edit
@@ -544,7 +543,7 @@ export default function CustomerDetailPage() {
                             <TableRow
                               key={s.id}
                               className="cursor-pointer transition-colors hover:bg-accent/60"
-                              onClick={() => router.push(`/shipments/${s.id}`)}
+                              onClick={() => navigate(`/shipments/${s.id}`)}
                             >
                               <TableCell className="font-medium">
                                 {s.reference_number ?? '—'}
@@ -599,7 +598,7 @@ export default function CustomerDetailPage() {
                             <TableRow
                               key={q.id}
                               className="cursor-pointer transition-colors hover:bg-accent/60"
-                              onClick={() => router.push(`/quotations/${q.id}`)}
+                              onClick={() => navigate(`/quotations/${q.id}`)}
                             >
                               <TableCell className="font-medium">
                                 {q.quotation_number ?? '—'}

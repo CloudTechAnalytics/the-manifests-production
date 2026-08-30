@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -68,9 +67,9 @@ const CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
 
 export default function EditExpensePage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const expenseId = params.id;
+  const expenseId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -184,7 +183,7 @@ export default function EditExpensePage() {
       });
 
       toast.success('Expense updated successfully');
-      router.push(`/expenses/${expenseId}`);
+      navigate(`/expenses/${expenseId}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to update expense');
       toast.error(message);
@@ -214,7 +213,7 @@ export default function EditExpensePage() {
             This expense may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/expenses">
+        <Link to="/expenses">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Expenses
@@ -230,13 +229,13 @@ export default function EditExpensePage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/expenses">Expenses</Link>
+              <Link to="/expenses">Expenses</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/expenses/${expenseId}`}>{expenseNumber ?? 'Expense'}</Link>
+              <Link to={`/expenses/${expenseId}`}>{expenseNumber ?? 'Expense'}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -247,7 +246,7 @@ export default function EditExpensePage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href={`/expenses/${expenseId}`}>
+        <Link to={`/expenses/${expenseId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -388,7 +387,7 @@ export default function EditExpensePage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href={`/expenses/${expenseId}`} className="sm:shrink-0">
+          <Link to={`/expenses/${expenseId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

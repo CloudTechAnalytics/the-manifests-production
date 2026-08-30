@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -58,9 +57,9 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
 export default function EditInvoicePage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
-  const invoiceId = params.id;
+  const invoiceId = params.id!;
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -168,7 +167,7 @@ export default function EditInvoicePage() {
       });
 
       toast.success('Invoice updated successfully');
-      router.push(`/invoices/${invoiceId}`);
+      navigate(`/invoices/${invoiceId}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to update invoice');
       toast.error(message);
@@ -199,7 +198,7 @@ export default function EditInvoicePage() {
             This invoice may have been deleted or you don&apos;t have access.
           </p>
         </div>
-        <Link href="/invoices">
+        <Link to="/invoices">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Invoices
@@ -215,13 +214,13 @@ export default function EditInvoicePage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/invoices">Invoices</Link>
+              <Link to="/invoices">Invoices</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/invoices/${invoiceId}`}>{invoiceNumber ?? 'Invoice'}</Link>
+              <Link to={`/invoices/${invoiceId}`}>{invoiceNumber ?? 'Invoice'}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -232,7 +231,7 @@ export default function EditInvoicePage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href={`/invoices/${invoiceId}`}>
+        <Link to={`/invoices/${invoiceId}`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -347,7 +346,7 @@ export default function EditInvoicePage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href={`/invoices/${invoiceId}`} className="sm:shrink-0">
+          <Link to={`/invoices/${invoiceId}`} className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowLeft, Ship } from 'lucide-react';
 
 export const metadata = { title: 'Terms of Service — The Manifest' };
@@ -12,7 +12,7 @@ export const metadata = { title: 'Terms of Service — The Manifest' };
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back to home
       </Link>
       <div className="mt-6 flex items-center gap-2.5">

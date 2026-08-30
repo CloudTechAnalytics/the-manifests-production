@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { FileText, Package, Users, FolderOpen, Boxes, Truck, Receipt, Wallet, UserCog } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -53,7 +53,7 @@ interface GlobalSearchProps {
  * can reach the Users page itself.
  */
 export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const canSearchUsers = hasRole('admin') || hasRole('branch_manager');
   const [query, setQuery] = useState('');
@@ -192,9 +192,9 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
   const go = useCallback(
     (href: string) => {
       onOpenChange(false);
-      router.push(href);
+      navigate(href);
     },
-    [onOpenChange, router]
+    [onOpenChange, navigate]
   );
 
   const hasResults =

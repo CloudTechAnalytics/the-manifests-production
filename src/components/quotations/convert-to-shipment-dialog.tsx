@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowRightLeft, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -42,7 +42,7 @@ export function ConvertToShipmentDialog({
   onOpenChange,
   onConverted,
 }: ConvertToShipmentDialogProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [converting, setConverting] = useState(false);
 
   const blockers = getConversionBlockers(quotation);
@@ -61,7 +61,7 @@ export function ConvertToShipmentDialog({
           const shipmentId = message.slice('ALREADY_CONVERTED:'.length).trim();
           toast.info('This quotation has already been converted to a shipment.');
           onOpenChange(false);
-          router.push(`/shipments/${shipmentId}`);
+          navigate(`/shipments/${shipmentId}`);
           return;
         }
         if (message.startsWith('VALIDATION_FAILED:')) {
@@ -81,7 +81,7 @@ export function ConvertToShipmentDialog({
       );
       onConverted();
       onOpenChange(false);
-      router.push(`/shipments/${result.shipment_id}`);
+      navigate(`/shipments/${result.shipment_id}`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to convert quotation'));
     } finally {

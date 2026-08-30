@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Ship, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase/client';
@@ -12,16 +12,16 @@ import { toast } from 'sonner';
 
 export default function ChangePasswordPage() {
   const { user, profile, loading, refreshProfile, signOut } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace('/login');
+      navigate('/login', { replace: true });
     }
-  }, [loading, user, router]);
+  }, [loading, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +60,7 @@ export default function ChangePasswordPage() {
 
     await refreshProfile();
     toast.success('Password changed successfully!');
-    router.replace(profile?.role === 'platform_admin' ? '/platform' : '/dashboard');
+    navigate(profile?.role === 'platform_admin' ? '/platform' : '/dashboard', { replace: true });
     setSubmitting(false);
   };
 

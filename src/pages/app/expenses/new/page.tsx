@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -68,7 +67,7 @@ type ExpenseFormValues = z.infer<typeof expenseSchema>;
 const CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
 
 export default function NewExpensePage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -160,7 +159,7 @@ export default function NewExpensePage() {
       });
 
       toast.success('Expense logged successfully');
-      router.push(`/expenses/${data.id}`);
+      navigate(`/expenses/${data.id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to create expense');
       toast.error(message);
@@ -175,7 +174,7 @@ export default function NewExpensePage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/expenses">Expenses</Link>
+              <Link to="/expenses">Expenses</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -186,7 +185,7 @@ export default function NewExpensePage() {
       </Breadcrumb>
 
       <div className="flex items-center gap-3">
-        <Link href="/expenses">
+        <Link to="/expenses">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -338,7 +337,7 @@ export default function NewExpensePage() {
         </Card>
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Link href="/expenses" className="sm:shrink-0">
+          <Link to="/expenses" className="sm:shrink-0">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
               Cancel
             </Button>
