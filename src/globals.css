@@ -1,0 +1,292 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Deliberately outside any @layer so it always wins over Tailwind's own
+   preflight body rule (unlayered CSS beats @layer-wrapped CSS
+   regardless of specificity/order). --font-sans/--font-serif are
+   defined below in :root, backed by @fontsource/inter and
+   @fontsource/playfair-display (imported in src/main.tsx) — plain
+   self-hosted @font-face rules under their real family names, not
+   next/font's hashed ones, so no CSS-variable indirection is needed
+   for them the way next/font required.
+   (The Noto Sans glyph-fallback this used to need for the Naira sign
+   is moot — lib/utils/status.ts prints "NGN", not the ₦ symbol, so
+   there's no glyph gap left to cover.) */
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :root {
+    /* @fontsource/inter and @fontsource/playfair-display (imported in
+       src/main.tsx) register these under their real family names —
+       previously next/font injected these two custom properties
+       itself via a hashed name; now they're just literal strings. */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+
+    /* Exact values from the design reference (The Counsel,
+       github.com/CloudTechAnalytics/thecounsels-testing,
+       src/app/globals.css) — verified by direct source read, not
+       approximated from screenshots. Warm ivory background, gold
+       primary. */
+    --background: 40 38% 96%;
+    --foreground: 24 16% 15%;
+    --card: 42 46% 98.5%;
+    --card-foreground: 24 16% 15%;
+    --popover: 42 46% 99%;
+    --popover-foreground: 24 16% 15%;
+    --primary: 39 49% 47%;
+    --primary-foreground: 42 60% 98%;
+    --primary-muted: 39 45% 92%;
+    --secondary: 40 26% 91%;
+    --secondary-foreground: 24 18% 22%;
+    --muted: 40 24% 92%;
+    --muted-foreground: 28 8% 42%;
+    --accent: 39 44% 90%;
+    --accent-foreground: 30 34% 22%;
+    --destructive: 3 68% 46%;
+    --destructive-foreground: 0 0% 99%;
+    --border: 38 24% 85%;
+    --input: 38 24% 85%;
+    --ring: 39 49% 47%;
+    --chart-1: 39 49% 47%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.85rem;
+    --success: 152 42% 34%;
+    --success-foreground: 0 0% 99%;
+    --warning: 32 78% 46%;
+    --warning-foreground: 0 0% 99%;
+
+    /* Sidebar — rich charcoal, constant regardless of light/dark mode.
+       Used for the always-dark sidebar and the login page's brand
+       panel so they read as one consistent identity, independent of
+       the app theme toggle. */
+    --sidebar: 216 14% 13%;
+    --sidebar-foreground: 40 18% 86%;
+    --sidebar-muted: 216 8% 56%;
+    --sidebar-accent: 39 52% 55%;
+    --sidebar-border: 216 10% 22%;
+    --sidebar-hover: 216 14% 18%;
+  }
+  .dark {
+    --background: 220 16% 10%;
+    --foreground: 40 18% 92%;
+    --card: 220 15% 13%;
+    --card-foreground: 40 18% 92%;
+    --popover: 220 15% 13%;
+    --popover-foreground: 40 18% 92%;
+    --primary: 39 54% 58%;
+    --primary-foreground: 220 20% 12%;
+    --primary-muted: 39 30% 22%;
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 40 18% 90%;
+    --muted: 220 12% 18%;
+    --muted-foreground: 220 8% 62%;
+    --accent: 220 12% 20%;
+    --accent-foreground: 40 18% 90%;
+    --destructive: 3 62% 52%;
+    --destructive-foreground: 0 0% 99%;
+    --border: 220 12% 22%;
+    --input: 220 12% 22%;
+    --ring: 39 54% 58%;
+    --chart-1: 39 54% 58%;
+    --chart-2: 173 58% 45%;
+    --chart-3: 197 37% 40%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --success: 152 40% 44%;
+    --success-foreground: 0 0% 99%;
+    --warning: 32 74% 54%;
+    --warning-foreground: 220 20% 12%;
+
+    --sidebar: 220 18% 8%;
+    --sidebar-foreground: 40 16% 84%;
+    --sidebar-muted: 220 8% 52%;
+    --sidebar-accent: 39 54% 58%;
+    --sidebar-border: 220 12% 18%;
+    --sidebar-hover: 220 16% 13%;
+  }
+
+  /* Platform Console is locked to the light theme always — an internal
+     operator tool, not a tenant preference, so it shouldn't follow
+     whichever admin's personal dark/light toggle happens to be set.
+     This is the same :root light block redeclared on a scoped wrapper
+     class, which wins over an ancestor .dark on <html> via normal CSS
+     custom-property inheritance — no JS theme-detection needed, and
+     nothing here touches how the tenant app's dark/light toggle
+     behaves anywhere else. */
+  .platform-light-theme {
+    --background: 40 38% 96%;
+    --foreground: 24 16% 15%;
+    --card: 42 46% 98.5%;
+    --card-foreground: 24 16% 15%;
+    --popover: 42 46% 99%;
+    --popover-foreground: 24 16% 15%;
+    --primary: 39 49% 47%;
+    --primary-foreground: 42 60% 98%;
+    --primary-muted: 39 45% 92%;
+    --secondary: 40 26% 91%;
+    --secondary-foreground: 24 18% 22%;
+    --muted: 40 24% 92%;
+    --muted-foreground: 28 8% 42%;
+    --accent: 39 44% 90%;
+    --accent-foreground: 30 34% 22%;
+    --destructive: 3 68% 46%;
+    --destructive-foreground: 0 0% 99%;
+    --border: 38 24% 85%;
+    --input: 38 24% 85%;
+    --ring: 39 49% 47%;
+    --success: 152 42% 34%;
+    --success-foreground: 0 0% 99%;
+    --warning: 32 78% 46%;
+    --warning-foreground: 0 0% 99%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* 'rlig'/'calt' were already on for ligatures/contextual alternates;
+       the cv0x set is Inter's own recommended stylistic-set numerals —
+       'cv02' open four, 'cv03' open six, 'cv04' open nine, 'cv11' single-
+       storey a — reads calmer at table/data density than the defaults. */
+    font-feature-settings: 'rlig' 1, 'calt' 1, 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv11' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* ============================================================
+   Typography system — two fonts. Inter for all regular UI (body,
+   buttons, labels, tables, badges — normal/medium weight, never
+   forced bold). Playfair Display for hero/brand moments: the logo,
+   page titles, the dashboard welcome greeting. Loaded at weights
+   500/600/700/800 (app/layout.tsx) — matching the design reference
+   exactly, so a heading set at any of these weights renders a real
+   cut of the font, never a synthetic/faux bold.
+
+   .page-title's numbers match the reference's <PageHeader> component
+   (text-2xl sm:text-3xl font-semibold tracking-tight) — kept as a
+   global CSS class rather than porting that as a React component,
+   since every existing usage across ~50 pages already applies this
+   class as-is; retuning the two definitions here reaches the exact
+   same rendered result with far less risk than replacing 50 files.
+   ============================================================ */
+.page-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+@media (min-width: 640px) {
+  .page-title {
+    font-size: 30px;
+  }
+}
+
+.welcome-heading {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 999px;
+    /* A transparent border + content-box clip insets the visible thumb
+       away from the scrollbar's own edges, instead of it touching them
+       flush — the same "breathing room" look as the reference. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+    background-clip: content-box;
+  }
+
+  /* Faint inset hairline for a premium/elevated surface that wants a
+     softer edge than a real 1px border — an alternative to `border
+     border-border`, not a replacement for it (Card's own border stays
+     as-is; this is available for anything that wants the lighter touch). */
+  .ring-hairline {
+    box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.7);
+  }
+}
+
+/* Loading-state shimmer — a soft sweep across a muted block, distinct
+   from shadcn's default Skeleton (a flat opacity pulse). Applied by
+   components/ui/skeleton.tsx; kept as a plain CSS class (not a Tailwind
+   utility) since the ::after sweep needs its own keyframe + gradient
+   that isn't expressible as a one-line utility. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--muted));
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--foreground) / 0.06),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s infinite;
+}
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Print styles for quotation/invoice detail pages */
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body {
+    background: white !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}

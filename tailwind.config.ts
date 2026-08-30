@@ -2,11 +2,7 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   darkMode: ['class'],
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     // The `.container` utility itself isn't used anywhere in the app yet
     // (every shell wraps its own content in an explicit max-w-[1800px]
@@ -21,17 +17,16 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        // Same Noto Sans glyph-gap fallback as globals.css's `body` rule
-        // (see app/layout.tsx) — a font-serif element showing a currency
-        // figure (there shouldn't be any left; isCurrency on KpiCard
-        // strips this class for the ones that matter) still lands on a
-        // weight-matched glyph instead of the browser's own default.
-        serif: ['var(--font-serif)', 'var(--font-sans-fallback)', 'Georgia', 'serif'],
+        // --font-serif/--font-sans are literal 'Playfair Display'/'Inter'
+        // strings now (src/globals.css :root), backed by @fontsource
+        // (src/main.tsx) — no glyph-fallback var needed any more (see
+        // src/globals.css's docstring on why).
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
         // `display` is an alias for the same var/usage as `serif` above —
         // added so `font-display` works too without renaming the ~50
         // existing `font-serif` call sites across the app.
-        display: ['var(--font-serif)', 'var(--font-sans-fallback)', 'Georgia', 'serif'],
-        sans: ['var(--font-sans)', 'var(--font-sans-fallback)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-serif)', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
