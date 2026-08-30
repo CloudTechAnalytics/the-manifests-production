@@ -85,7 +85,10 @@ export default function EmployeesPage() {
     [profile, buildQuery]
   );
 
-  const { rows: employees, loading, loadingMore, hasMore, loadMore } = usePaginatedList<Employee>(fetchPage);
+  const { rows: employees, loading, loadingMore, hasMore, loadMore } = usePaginatedList<Employee>(
+    ['employees', statusFilter, debouncedSearch],
+    fetchPage
+  );
 
   const fetchAllForExport = useCallback(async (): Promise<Employee[]> => {
     const { data, error } = await buildQuery();

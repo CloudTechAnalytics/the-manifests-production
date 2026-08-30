@@ -51,7 +51,10 @@ export default function TrainingCatalogPage() {
     [buildQuery]
   );
 
-  const { rows: courses, loading, loadingMore, hasMore, loadMore } = usePaginatedList<Course>(fetchPage);
+  const { rows: courses, loading, loadingMore, hasMore, loadMore } = usePaginatedList<Course>(
+    ['training-courses', debouncedSearch],
+    fetchPage
+  );
 
   const isRecommended = (course: Course) =>
     course.target_roles.length > 0 && course.target_roles.some((r: UserRole) => roles.includes(r));

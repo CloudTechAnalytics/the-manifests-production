@@ -278,8 +278,10 @@ export default function DocumentsPage() {
     [profile, buildDocumentsQuery, reloadToken]
   );
 
-  const { rows: documents, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<DocumentRow>(fetchDocumentsPage);
+  const { rows: documents, loading, loadingMore, hasMore, loadMore } = usePaginatedList<DocumentRow>(
+    ['documents', isAdmin, userBranchId, categoryFilter, branchIdFilter, debouncedSearch, branches, reloadToken],
+    fetchDocumentsPage
+  );
 
   // Export intentionally does NOT reuse `documents` (the current page) —
   // it fetches every row matching the active filters, unbounded, only

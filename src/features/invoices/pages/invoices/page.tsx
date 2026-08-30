@@ -167,8 +167,10 @@ export default function InvoicesPage() {
     [profile, buildInvoicesListQuery]
   );
 
-  const { rows: invoices, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<InvoiceRow>(fetchInvoicesPage);
+  const { rows: invoices, loading, loadingMore, hasMore, loadMore } = usePaginatedList<InvoiceRow>(
+    ['invoices', isAdmin, userBranchId, branchIdFilter, debouncedSearch, branches, statusTab],
+    fetchInvoicesPage
+  );
 
   const fetchAllInvoicesForExport = useCallback(async (): Promise<InvoiceRow[]> => {
     const { data, error } = await buildInvoicesListQuery();

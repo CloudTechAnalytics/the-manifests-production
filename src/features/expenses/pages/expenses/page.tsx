@@ -136,8 +136,10 @@ export default function ExpensesPage() {
     [profile, buildExpensesListQuery]
   );
 
-  const { rows: expenses, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<ExpenseRow>(fetchExpensesPage);
+  const { rows: expenses, loading, loadingMore, hasMore, loadMore } = usePaginatedList<ExpenseRow>(
+    ['expenses', isAdmin, userBranchId, branchIdFilter, categoryFilter, statusFilter, debouncedSearch, branches],
+    fetchExpensesPage
+  );
 
   // Export intentionally does NOT reuse `expenses` (the current page) — it
   // fetches every row matching the active filters, unbounded, only when

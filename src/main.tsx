@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 // Inter for all regular UI (body, buttons, tables, labels). Playfair
 // Display for hero/brand moments — logo, page titles, the dashboard
@@ -23,16 +24,19 @@ import { ThemeProvider } from '@/shared/contexts/theme-context';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { RootErrorBoundary } from '@/shared/components/root-error-boundary';
 import { router } from './app/router';
+import { queryClient } from './app/query-client';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <RootErrorBoundary>
-      <AuthProvider>
-        <ThemeProvider>
-          <RouterProvider router={router} />
-          <Toaster />
-        </ThemeProvider>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ThemeProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </ThemeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </RootErrorBoundary>
   </StrictMode>
 );

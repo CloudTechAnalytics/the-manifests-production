@@ -137,8 +137,10 @@ export default function PaymentsPage() {
     [profile, buildPaymentsListQuery]
   );
 
-  const { rows: payments, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<PaymentRow>(fetchPaymentsPage);
+  const { rows: payments, loading, loadingMore, hasMore, loadMore } = usePaginatedList<PaymentRow>(
+    ['payments', isAdmin, userBranchId, branchIdFilter, methodFilter, debouncedSearch, branches],
+    fetchPaymentsPage
+  );
 
   const fetchAllPaymentsForExport = useCallback(async (): Promise<PaymentRow[]> => {
     const { data, error } = await buildPaymentsListQuery();

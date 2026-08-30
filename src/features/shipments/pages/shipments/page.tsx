@@ -218,7 +218,10 @@ export default function ShipmentsPage() {
   );
 
   const { rows: shipments, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<ShipmentRow>(fetchShipmentsPage);
+    usePaginatedList<ShipmentRow>(
+      ['shipments', isAdmin, userBranchId, statusFilter, typeFilter, branchIdFilter, debouncedSearch, branches],
+      fetchShipmentsPage
+    );
 
   // Export intentionally does NOT reuse `shipments` (the current page) —
   // it fetches every row matching the active filters, unbounded, only

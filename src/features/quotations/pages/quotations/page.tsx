@@ -187,7 +187,10 @@ export default function QuotationsPage() {
   );
 
   const { rows: quotations, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<QuotationRow>(fetchQuotationsPage);
+    usePaginatedList<QuotationRow>(
+      ['quotations', isAdmin, userBranchId, statusFilter, shipmentFilter, branchIdFilter, debouncedSearch, branches],
+      fetchQuotationsPage
+    );
 
   // Export intentionally does NOT reuse `quotations` (the current page) —
   // it fetches every row matching the active filters, unbounded, only

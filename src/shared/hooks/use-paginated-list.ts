@@ -1,68 +1,59 @@
-'use client';
-
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMemo } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 /**
- * Generic server-side pagination — the same "Load more" shape
- * app/(app)/activity-log/page.tsx already implements correctly,
- * extracted so every other list page (shipments, quotations, customers,
- * invoices, payments, documents, expenses) can reuse it instead of
- * hand-rolling an unbounded fetch.
+ * Generic server-side pagination — the same "Load more" shape every list
+ * page (shipments, quotations, customers, invoices, payments, documents,
+ * expenses, HR employees/training) already used before this was rebuilt
+ * on TanStack Query's useInfiniteQuery (Phase 3 of the migration plan).
  *
- * `fetchPage` must be a useCallback in the caller, memoized on whatever
- * filters/search/sort/tab it reads — a new function reference is the
- * trigger this hook resets to page 1 on, same as any other effect
- * dependency. It receives (offset, limit) and returns exactly the rows
- * for that window; hasMore is inferred from whether a full page came
- * back, so callers never need a separate count query.
+ * The public shape is unchanged from the pre-Query version on purpose —
+ * every existing call site keeps working with only one small addition:
+ * a `queryKey`, the same filter/search/sort values that were already
+ * being fed into `fetchPage`'s own useCallback dependency array (that
+ * array was always this hook's real cache key, just an implicit one via
+ * function-identity; useInfiniteQuery needs it explicit and serializable
+ * to do real caching — background refetch, cross-mount reuse, etc. —
+ * instead of a hard reset-and-refetch on every dependency change).
  *
- * A stale, slower request from a since-superseded filter is dropped via
- * requestId rather than applied out of order.
+ * `fetchPage` receives (offset, limit) and returns exactly the rows for
+ * that window; hasMore is inferred from whether a full page came back,
+ * same as before, so callers never need a separate count query.
  */
 export function usePaginatedList<T>(
+  queryKey: readonly unknown[],
   fetchPage: (offset: number, limit: number) => Promise<T[]>,
   pageSize = 25
 ) {
-  const [rows, setRows] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const requestId = useRef(0);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const id = ++requestId.current;
-    setLoading(true);
-    fetchPage(0, pageSize).then(
-      (first) => {
-        if (id !== requestId.current) return;
-        setRows(first);
-        setHasMore(first.length === pageSize);
-        setLoading(false);
-      },
-      () => {
-        if (id !== requestId.current) return;
-        setRows([]);
-        setHasMore(false);
-        setLoading(false);
-      }
-    );
-  }, [fetchPage, pageSize]);
+  const query = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ pageParam }) => fetchPage(pageParam, pageSize),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === pageSize ? allPages.length * pageSize : undefined,
+  });
 
-  const loadMore = useCallback(async () => {
-    const id = requestId.current;
-    setLoadingMore(true);
-    try {
-      const next = await fetchPage(rows.length, pageSize);
-      if (id !== requestId.current) return;
-      setRows((prev) => [...prev, ...next]);
-      setHasMore(next.length === pageSize);
-    } finally {
-      if (id === requestId.current) setLoadingMore(false);
-    }
-  }, [fetchPage, rows.length, pageSize]);
+  const rows = useMemo(() => query.data?.pages.flat() ?? [], [query.data]);
 
-  // Lets a page apply an optimistic local edit (e.g. after inline status
-  // change) without a full reload — same escape hatch every page already
-  // had when it owned its own rows state directly.
-  return { rows, setRows, loading, loadingMore, hasMore, loadMore };
+  // Same optimistic-local-edit escape hatch the pre-Query version had
+  // (unused by any current call site, kept for parity) — now backed by
+  // the query cache directly rather than local state, so an edit here
+  // survives a background refetch the same way a real mutation would.
+  const setRows = (updater: T[] | ((prev: T[]) => T[])) => {
+    queryClient.setQueryData(queryKey, (old: { pages: T[][]; pageParams: number[] } | undefined) => {
+      const nextRows = typeof updater === 'function' ? (updater as (prev: T[]) => T[])(rows) : updater;
+      return { pages: [nextRows], pageParams: [0] };
+    });
+  };
+
+  return {
+    rows,
+    setRows,
+    loading: query.isLoading,
+    loadingMore: query.isFetchingNextPage,
+    hasMore: query.hasNextPage ?? false,
+    loadMore: () => query.fetchNextPage(),
+  };
 }

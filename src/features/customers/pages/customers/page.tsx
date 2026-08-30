@@ -132,8 +132,10 @@ export default function CustomersPage() {
     [profile, buildCustomersQuery]
   );
 
-  const { rows: customers, loading, loadingMore, hasMore, loadMore } =
-    usePaginatedList<Customer>(fetchCustomersPage);
+  const { rows: customers, loading, loadingMore, hasMore, loadMore } = usePaginatedList<Customer>(
+    ['customers', branchFilter, isAdmin, adminBranchIds, statusFilter, debouncedSearch],
+    fetchCustomersPage
+  );
 
   // Export intentionally does NOT reuse `customers` (the current page) —
   // it fetches every row matching the active filters, unbounded, only
