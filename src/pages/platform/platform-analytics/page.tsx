@@ -1,6 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { lazy, Suspense } from 'react';
 import { Building2, UserPlus, Users, Activity } from 'lucide-react';
 import { usePlatformDashboardData } from '@/hooks/use-platform-dashboard-data';
 import { KpiCard } from '@/components/dashboard/kpi-card';
@@ -9,13 +9,11 @@ import { BreakdownBars } from '@/components/platform/breakdown-bars';
 
 // recharts is a large dependency — code-split so it only loads once
 // these cards actually render, not bundled into this page's own chunk.
-const OrganizationGrowthChart = dynamic(
-  () => import('@/components/platform/organization-growth-chart').then((m) => m.OrganizationGrowthChart),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+const OrganizationGrowthChart = lazy(() =>
+  import('@/components/platform/organization-growth-chart').then((m) => ({ default: m.OrganizationGrowthChart }))
 );
-const MonthlySignupsChart = dynamic(
-  () => import('@/components/platform/monthly-signups-chart').then((m) => m.MonthlySignupsChart),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+const MonthlySignupsChart = lazy(() =>
+  import('@/components/platform/monthly-signups-chart').then((m) => ({ default: m.MonthlySignupsChart }))
 );
 
 export default function PlatformAnalyticsPage() {
@@ -85,10 +83,14 @@ export default function PlatformAnalyticsPage() {
         ))}
       </div>
 
-      <OrganizationGrowthChart growth={growth} loading={loading} />
+      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+        <OrganizationGrowthChart growth={growth} loading={loading} />
+      </Suspense>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <MonthlySignupsChart growth={growth} loading={loading} />
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+          <MonthlySignupsChart growth={growth} loading={loading} />
+        </Suspense>
         <BreakdownBars
           title="Plan Distribution"
           rows={planRows}

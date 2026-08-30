@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ClipboardList, ArrowRight, Flame } from 'lucide-react';
 import {
   Card,
@@ -42,7 +42,7 @@ export function PlanningOverview({ planning, loading }: PlanningOverviewProps) {
           </p>
         </div>
         <Link
-          href="/planning"
+          to="/planning"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
           Planning

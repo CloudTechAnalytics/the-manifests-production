@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   Plus,
   Building2,
@@ -492,7 +492,7 @@ export default function PlatformOrganizationsPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <Link href="/platform/organizations/trash">
+            <Link to="/platform/organizations/trash">
               <Trash2 className="mr-1.5 h-4 w-4" />
               Trash{trashedCount > 0 ? ` (${trashedCount})` : ''}
             </Link>
@@ -552,7 +552,7 @@ export default function PlatformOrganizationsPage() {
                   <TableRow key={org.id}>
                     <TableCell>
                       <Link
-                        href={`/platform/organizations/${org.id}`}
+                        to={`/platform/organizations/${org.id}`}
                         className="font-medium hover:text-primary hover:underline"
                       >
                         {org.name}
@@ -604,7 +604,7 @@ export default function PlatformOrganizationsPage() {
                           </DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem asChild>
-                            <Link href={`/platform/organizations/${org.id}`}>
+                            <Link to={`/platform/organizations/${org.id}`}>
                               <Eye className="mr-2 h-4 w-4" />
                               View
                             </Link>
@@ -797,7 +797,7 @@ export default function PlatformOrganizationsPage() {
               {plans.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No paid plans defined yet. Add tiers on{' '}
-                  <Link href="/platform/plans-pricing" className="font-medium underline">
+                  <Link to="/platform/plans-pricing" className="font-medium underline">
                     Plans &amp; Pricing
                   </Link>{' '}
                   to offer them here.

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Wallet, ArrowRight, AlertTriangle, Lock } from 'lucide-react';
 import {
   Card,
@@ -74,7 +74,7 @@ export function FinanceSummary({ finance, loading, restricted }: FinanceSummaryP
         </div>
         {!restricted && (
           <Link
-            href="/invoices"
+            to="/invoices"
             className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             Invoices

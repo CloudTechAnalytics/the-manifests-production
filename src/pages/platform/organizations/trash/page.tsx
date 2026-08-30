@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowLeft, Trash2, ArchiveRestore, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -137,7 +137,7 @@ export default function OrganizationsTrashPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/platform/organizations">
+          <Link to="/platform/organizations">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>

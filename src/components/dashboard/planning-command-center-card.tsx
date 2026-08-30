@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowRight, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -176,7 +176,7 @@ export function PlanningCommandCenterCard() {
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-lg font-semibold">Planning Command Center</CardTitle>
-        <Link href="/planning">
+        <Link to="/planning">
           <Button variant="ghost" size="sm">
             View all
             <ArrowRight className="ml-1 h-3.5 w-3.5" />

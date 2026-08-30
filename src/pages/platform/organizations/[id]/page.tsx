@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
@@ -75,7 +75,7 @@ function generateTempPassword(): string {
 
 export default function OrganizationDetailPage() {
   const params = useParams();
-  const router = useRouter();
+  const navigate = useNavigate();
   const orgId = params.id as string;
 
   const [org, setOrg] = useState<Organization | null>(null);
@@ -128,7 +128,7 @@ export default function OrganizationDetailPage() {
       if (orgRes.error) throw orgRes.error;
       if (!orgRes.data) {
         toast.error('Organization not found');
-        router.replace('/platform/organizations');
+        navigate('/platform/organizations', { replace: true });
         return;
       }
       setOrg(orgRes.data as Organization);
@@ -140,7 +140,7 @@ export default function OrganizationDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [orgId, router]);
+  }, [orgId, navigate]);
 
   useEffect(() => {
     load();
@@ -394,7 +394,7 @@ export default function OrganizationDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/platform/organizations')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/platform/organizations')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
 

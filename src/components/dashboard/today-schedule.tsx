@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays,
   PackagePlus,
@@ -67,7 +67,7 @@ export function TodaySchedule({ events, loading }: TodayScheduleProps) {
           </p>
         </div>
         <Link
-          href="/calendar"
+          to="/calendar"
           className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
           Calendar
@@ -96,7 +96,7 @@ export function TodaySchedule({ events, loading }: TodayScheduleProps) {
               return (
                 <Link
                   key={evt.id}
-                  href={`/shipments/${evt.shipmentId}`}
+                  to={`/shipments/${evt.shipmentId}`}
                   className="flex items-center gap-2.5 rounded-lg border border-border p-2.5 transition-colors hover:border-primary/30 hover:bg-accent"
                 >
                   <div

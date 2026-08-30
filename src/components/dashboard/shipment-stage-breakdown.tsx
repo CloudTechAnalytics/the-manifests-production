@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useShipmentStageCounts, type ShipmentStageCounts } from '@/hooks/use-shipment-stage-counts';
@@ -37,7 +37,7 @@ export function ShipmentStageBreakdown() {
         {TILES.map((tile) => (
           <Link
             key={tile.key}
-            href={tile.href}
+            to={tile.href}
             className="rounded-lg border border-border p-3 text-center transition-colors hover:bg-accent/50"
           >
             {loading ? (

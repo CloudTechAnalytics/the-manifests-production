@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Building2, PackageCheck, Target, Users, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -273,7 +273,7 @@ export function OperationsOverview({
                 {recentDeliveries.map((d) => (
                   <Link
                     key={d.id}
-                    href={`/shipments/${d.id}`}
+                    to={`/shipments/${d.id}`}
                     className="flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
                   >
                     <div className="min-w-0">

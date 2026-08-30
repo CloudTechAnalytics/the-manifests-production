@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowRight, ArrowRightLeft, PackageSearch } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
@@ -68,7 +68,7 @@ export function AwaitingOperationsCard() {
     <Card>
       <CardHeader className="flex-row items-center justify-between px-4 py-3">
         <CardTitle className="text-lg font-semibold">Awaiting Operations</CardTitle>
-        <Link href="/quotations?status=accepted">
+        <Link to="/quotations?status=accepted">
           <Button variant="ghost" size="sm">
             View all
             <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -99,7 +99,7 @@ export function AwaitingOperationsCard() {
                 <div key={q.id} className="flex items-center justify-between gap-3 p-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Link href={`/quotations/${q.id}`} className="truncate font-medium text-primary hover:underline">
+                      <Link to={`/quotations/${q.id}`} className="truncate font-medium text-primary hover:underline">
                         {q.customer?.company_name ?? 'Unknown customer'}
                       </Link>
                       {q.priority !== 'normal' && priorityMeta && (

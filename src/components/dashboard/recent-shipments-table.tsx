@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowRight, Package } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,7 @@ export function RecentShipmentsTable({
         <CardTitle className="text-lg font-semibold">
           Recent Shipments
         </CardTitle>
-        <Link href="/shipments">
+        <Link to="/shipments">
           <Button variant="ghost" size="sm">
             View all
             <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -77,7 +77,7 @@ export function RecentShipmentsTable({
                       className="cursor-pointer transition-colors hover:bg-accent/60"
                     >
                       <TableCell className="py-2 px-3 font-medium text-primary">
-                        <Link href={`/shipments/${s.id}`} className="block">
+                        <Link to={`/shipments/${s.id}`} className="block">
                           {s.reference_number ?? '—'}
                         </Link>
                       </TableCell>

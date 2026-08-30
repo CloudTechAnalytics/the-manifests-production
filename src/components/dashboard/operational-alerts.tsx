@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   FileClock,
@@ -94,7 +94,7 @@ export function OperationalAlerts({ alerts, loading }: OperationalAlertsProps) {
               return (
                 <Link
                   key={def.key}
-                  href={def.href}
+                  to={def.href}
                   className="flex items-center gap-2.5 rounded-lg border border-border p-3 transition-colors hover:border-primary/30 hover:bg-accent"
                 >
                   <div

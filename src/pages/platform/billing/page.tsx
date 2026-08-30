@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { CreditCard, DollarSign, Tag, Users, AlertTriangle, Hourglass } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -150,7 +150,7 @@ export default function BillingPage() {
                 {topCustomers.map((s) => (
                   <Link
                     key={s.id}
-                    href={`/platform/organizations/${s.organization!.id}`}
+                    to={`/platform/organizations/${s.organization!.id}`}
                     className="flex items-center justify-between rounded-lg px-2 py-2 text-sm transition-colors hover:bg-accent"
                   >
                     <div>

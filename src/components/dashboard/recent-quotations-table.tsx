@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { ArrowRight, FileText } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,7 @@ export function RecentQuotationsTable({
         <CardTitle className="text-lg font-semibold">
           Recent Quotations
         </CardTitle>
-        <Link href="/quotations">
+        <Link to="/quotations">
           <Button variant="ghost" size="sm">
             View all
             <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -75,7 +75,7 @@ export function RecentQuotationsTable({
                       className="cursor-pointer transition-colors hover:bg-accent/60"
                     >
                       <TableCell className="py-2 px-3 font-medium text-primary">
-                        <Link href={`/quotations/${q.id}`} className="block">
+                        <Link to={`/quotations/${q.id}`} className="block">
                           {q.quotation_number ?? '—'}
                         </Link>
                       </TableCell>

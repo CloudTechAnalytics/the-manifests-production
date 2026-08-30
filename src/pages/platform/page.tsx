@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
+import { lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Building2,
   CheckCircle2,
@@ -33,9 +33,8 @@ import { formatCompactCurrency } from '@/lib/utils/status';
 // recharts is a large dependency — code-split so it only loads for
 // visitors who actually reach this page, not bundled into every route
 // that happens to import platform/page.tsx's chunk.
-const OrganizationGrowthChart = dynamic(
-  () => import('@/components/platform/organization-growth-chart').then((m) => m.OrganizationGrowthChart),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+const OrganizationGrowthChart = lazy(() =>
+  import('@/components/platform/organization-growth-chart').then((m) => ({ default: m.OrganizationGrowthChart }))
 );
 
 export default function PlatformDashboardPage() {
@@ -159,7 +158,7 @@ export default function PlatformDashboardPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/platform/organizations">
+          <Link to="/platform/organizations">
             <Plus className="mr-1.5 h-4 w-4" />
             Create Organization
           </Link>
@@ -182,7 +181,7 @@ export default function PlatformDashboardPage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between px-4 py-3">
             <CardTitle className="text-lg font-semibold">Organizations</CardTitle>
-            <Link href="/platform/organizations" className="text-sm text-primary hover:underline">
+            <Link to="/platform/organizations" className="text-sm text-primary hover:underline">
               Manage all
             </Link>
           </CardHeader>
@@ -205,7 +204,7 @@ export default function PlatformDashboardPage() {
                 {recentOrganizations.map((org) => (
                   <Link
                     key={org.id}
-                    href={`/platform/organizations/${org.id}`}
+                    to={`/platform/organizations/${org.id}`}
                     className="flex items-center justify-between rounded-lg px-2 py-2.5 transition-colors hover:bg-accent"
                   >
                     <div className="flex items-center gap-3">
@@ -242,7 +241,9 @@ export default function PlatformDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <OrganizationGrowthChart growth={growth} loading={loading} />
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+          <OrganizationGrowthChart growth={growth} loading={loading} />
+        </Suspense>
         <RecentActivity activity={recentActivity} loading={loading} />
       </div>
     </div>

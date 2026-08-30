@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Hourglass, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { daysRemaining } from '@/lib/utils/status';
@@ -87,7 +87,7 @@ function Banner({
         <Icon className="h-4 w-4 shrink-0" />
         {children}
       </span>
-      <Link href="/upgrade" className="font-medium text-primary hover:underline">
+      <Link to="/upgrade" className="font-medium text-primary hover:underline">
         {urgent ? 'Renew Plan' : 'Upgrade Plan'}
       </Link>
     </div>

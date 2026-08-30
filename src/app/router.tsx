@@ -29,6 +29,24 @@ import NewCoursePage from '@/pages/hr/training/courses/new/page';
 import CourseDetailPage from '@/pages/hr/training/courses/[id]/page';
 import EditCoursePage from '@/pages/hr/training/courses/[id]/edit/page';
 
+// Platform Console (2nd batch) — CloudTech's internal admin console.
+import PlatformLayout from '@/pages/platform/layout';
+import PlatformDashboardPage from '@/pages/platform/page';
+import OrganizationsPage from '@/pages/platform/organizations/page';
+import OrganizationDetailPage from '@/pages/platform/organizations/[id]/page';
+import OrganizationsTrashPage from '@/pages/platform/organizations/trash/page';
+import OrganizationUsersPage from '@/pages/platform/organization-users/page';
+import PlatformUsersPage from '@/pages/platform/platform-users/page';
+import SubscriptionsPage from '@/pages/platform/subscriptions/page';
+import BillingPage from '@/pages/platform/billing/page';
+import RevenueAnalyticsPage from '@/pages/platform/revenue-analytics/page';
+import PlatformAnalyticsPage from '@/pages/platform/platform-analytics/page';
+import AuditLogsPage from '@/pages/platform/audit-logs/page';
+import SystemHealthPage from '@/pages/platform/system-health/page';
+import SupportTicketsPage from '@/pages/platform/support-tickets/page';
+import PlansPricingPage from '@/pages/platform/plans-pricing/page';
+import PlatformSettingsPage from '@/pages/platform/settings/page';
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -62,6 +80,28 @@ export const router = createBrowserRouter([
           { path: 'training/courses/new', element: <NewCoursePage /> },
           { path: 'training/courses/:id', element: <CourseDetailPage /> },
           { path: 'training/courses/:id/edit', element: <EditCoursePage /> },
+        ],
+      },
+      {
+        path: '/platform',
+        element: <PlatformLayout />,
+        errorElement: <RouteError />,
+        children: [
+          { index: true, element: <PlatformDashboardPage /> },
+          { path: 'organizations', element: <OrganizationsPage /> },
+          { path: 'organizations/trash', element: <OrganizationsTrashPage /> },
+          { path: 'organizations/:id', element: <OrganizationDetailPage /> },
+          { path: 'organization-users', element: <OrganizationUsersPage /> },
+          { path: 'platform-users', element: <PlatformUsersPage /> },
+          { path: 'subscriptions', element: <SubscriptionsPage /> },
+          { path: 'billing', element: <BillingPage /> },
+          { path: 'revenue-analytics', element: <RevenueAnalyticsPage /> },
+          { path: 'platform-analytics', element: <PlatformAnalyticsPage /> },
+          { path: 'audit-logs', element: <AuditLogsPage /> },
+          { path: 'system-health', element: <SystemHealthPage /> },
+          { path: 'support-tickets', element: <SupportTicketsPage /> },
+          { path: 'plans-pricing', element: <PlansPricingPage /> },
+          { path: 'settings', element: <PlatformSettingsPage /> },
         ],
       },
     ],

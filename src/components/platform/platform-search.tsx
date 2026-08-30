@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Search, Building2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import {
@@ -23,7 +23,7 @@ import type { Organization } from '@/types';
  * lets a platform_admin see every org.
  */
 export function PlatformSearch() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Organization[]>([]);
@@ -85,9 +85,9 @@ export function PlatformSearch() {
   const go = useCallback(
     (id: string) => {
       setOpen(false);
-      router.push(`/platform/organizations/${id}`);
+      navigate(`/platform/organizations/${id}`);
     },
-    [router]
+    [navigate]
   );
 
   return (
