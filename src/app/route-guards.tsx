@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/auth-context';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/shared/contexts/auth-context';
+import { Skeleton } from '@/shared/components/ui/skeleton';
 
 /**
  * Replaces lib/supabase/middleware.ts's redirect logic — that ran on

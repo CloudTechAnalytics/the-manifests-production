@@ -18,10 +18,10 @@ import '@fontsource/playfair-display/700.css';
 import '@fontsource/playfair-display/800.css';
 import './globals.css';
 
-import { AuthProvider } from '@/contexts/auth-context';
-import { ThemeProvider } from '@/contexts/theme-context';
-import { Toaster } from '@/components/ui/sonner';
-import { RootErrorBoundary } from '@/components/root-error-boundary';
+import { AuthProvider } from '@/shared/contexts/auth-context';
+import { ThemeProvider } from '@/shared/contexts/theme-context';
+import { Toaster } from '@/shared/components/ui/sonner';
+import { RootErrorBoundary } from '@/shared/components/root-error-boundary';
 import { router } from './app/router';
 
 createRoot(document.getElementById('root')!).render(

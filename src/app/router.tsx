@@ -1,113 +1,109 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { RequireAuth, RedirectIfAuthenticated } from './route-guards';
-import { RouteError } from '@/components/route-error';
+import { RouteError } from '@/shared/components/route-error';
 
-// Pilot batch (Phase 1 of the migration plan): landing + login + the
-// full HR Workspace route group, converted and wired end-to-end to
-// prove the whole mechanism — Vite build, React Router nesting, auth
-// guards, layouts-as-<Outlet/> — before the remaining ~70 pages
-// (platform/, the main (app) group, the standalone top-level routes)
-// get batched through the same process. Only pages actually converted
-// get imported here; everything else still under src/pages is
-// unconverted and deliberately not wired in yet, so it can't break
-// this build.
-import Home from '@/pages/page';
-import LoginPage from '@/pages/login/page';
+// Every page is grouped by feature folder (Phase 2 of the migration
+// plan — src/features/<domain>/{pages,components}, cross-feature
+// infrastructure in src/shared/), matching the reference's structure.
+// Route paths are unchanged from Phase 1 — this reorg only moved files
+// and updated import paths, no URL or behavior changed.
+import Home from '@/features/landing/pages/page';
+import LoginPage from '@/features/auth/pages/login/page';
+import RegisterPage from '@/features/auth/pages/register/page';
+import AcceptInvitePage from '@/features/auth/pages/accept-invite/page';
+import VerifyEmailPage from '@/features/auth/pages/verify-email/page';
+import ChangePasswordPage from '@/features/auth/pages/change-password/page';
 
-import HrLayout from '@/pages/hr/layout';
-import HrDashboardPage from '@/pages/hr/dashboard/page';
-import EmployeesPage from '@/pages/hr/employees/page';
-import NewEmployeePage from '@/pages/hr/employees/new/page';
-import EmployeeDetailPage from '@/pages/hr/employees/[id]/page';
-import EditEmployeePage from '@/pages/hr/employees/[id]/edit/page';
-import PeopleCapacityPage from '@/pages/hr/capacity/page';
-import DepartmentCapacityPage from '@/pages/hr/capacity/departments/page';
-import BranchCapacityPage from '@/pages/hr/capacity/branches/page';
-import TrainingCatalogPage from '@/pages/hr/training/page';
-import MyLearningPage from '@/pages/hr/training/my/page';
-import NewCoursePage from '@/pages/hr/training/courses/new/page';
-import CourseDetailPage from '@/pages/hr/training/courses/[id]/page';
-import EditCoursePage from '@/pages/hr/training/courses/[id]/edit/page';
+import TrackPage from '@/features/tracking/pages/track/page';
+import TrackingPage from '@/features/tracking/pages/tracking/page';
 
-// Platform Console (2nd batch) — CloudTech's internal admin console.
-import PlatformLayout from '@/pages/platform/layout';
-import PlatformDashboardPage from '@/pages/platform/page';
-import OrganizationsPage from '@/pages/platform/organizations/page';
-import OrganizationDetailPage from '@/pages/platform/organizations/[id]/page';
-import OrganizationsTrashPage from '@/pages/platform/organizations/trash/page';
-import OrganizationUsersPage from '@/pages/platform/organization-users/page';
-import PlatformUsersPage from '@/pages/platform/platform-users/page';
-import SubscriptionsPage from '@/pages/platform/subscriptions/page';
-import BillingPage from '@/pages/platform/billing/page';
-import RevenueAnalyticsPage from '@/pages/platform/revenue-analytics/page';
-import PlatformAnalyticsPage from '@/pages/platform/platform-analytics/page';
-import AuditLogsPage from '@/pages/platform/audit-logs/page';
-import SystemHealthPage from '@/pages/platform/system-health/page';
-import SupportTicketsPage from '@/pages/platform/support-tickets/page';
-import PlansPricingPage from '@/pages/platform/plans-pricing/page';
-import PlatformSettingsPage from '@/pages/platform/settings/page';
+import TermsPage from '@/features/legal/pages/terms/page';
+import PrivacyPage from '@/features/legal/pages/privacy/page';
 
-// Main tenant workspace (3rd batch, the big one) — everything that used
-// to live under the invisible Next route group app/(app)/.
-import AppLayout from '@/pages/app/layout';
-import DashboardPage from '@/pages/app/dashboard/page';
-import CalendarPage from '@/pages/app/calendar/page';
-import ActivityLogPage from '@/pages/app/activity-log/page';
-import ApprovalsPage from '@/pages/app/approvals/page';
-import WorkQueuePage from '@/pages/app/work-queue/page';
-import RatesPage from '@/pages/app/rates/page';
-import ReportsPage from '@/pages/app/reports/page';
-import SalesPage from '@/pages/app/sales/page';
-import TrackingPage from '@/pages/app/tracking/page';
-import CustomersPage from '@/pages/app/customers/page';
-import NewCustomerPage from '@/pages/app/customers/new/page';
-import CustomerDetailPage from '@/pages/app/customers/[id]/page';
-import EditCustomerPage from '@/pages/app/customers/[id]/edit/page';
-import ExpensesPage from '@/pages/app/expenses/page';
-import NewExpensePage from '@/pages/app/expenses/new/page';
-import ExpenseDetailPage from '@/pages/app/expenses/[id]/page';
-import EditExpensePage from '@/pages/app/expenses/[id]/edit/page';
-import InvoicesPage from '@/pages/app/invoices/page';
-import NewInvoicePage from '@/pages/app/invoices/new/page';
-import InvoiceDetailPage from '@/pages/app/invoices/[id]/page';
-import EditInvoicePage from '@/pages/app/invoices/[id]/edit/page';
-import PaymentsPage from '@/pages/app/payments/page';
-import NewPaymentPage from '@/pages/app/payments/new/page';
-import PaymentDetailPage from '@/pages/app/payments/[id]/page';
-import QuotationsPage from '@/pages/app/quotations/page';
-import NewQuotationPage from '@/pages/app/quotations/new/page';
-import QuotationDetailPage from '@/pages/app/quotations/[id]/page';
-import EditQuotationPage from '@/pages/app/quotations/[id]/edit/page';
-import PlanningPage from '@/pages/app/planning/page';
-import PlanningDetailPage from '@/pages/app/planning/[id]/page';
-import ShipmentsPage from '@/pages/app/shipments/page';
-import NewShipmentPage from '@/pages/app/shipments/new/page';
-import ShipmentDetailPage from '@/pages/app/shipments/[id]/page';
-import EditShipmentPage from '@/pages/app/shipments/[id]/edit/page';
-import CustomsPage from '@/pages/app/customs/page';
-import ExaminationPage from '@/pages/app/examination/page';
-import TerminalPage from '@/pages/app/terminal/page';
-import TransportationPage from '@/pages/app/transportation/page';
-import WarehousePage from '@/pages/app/warehouse/page';
-import WarehouseLocationsPage from '@/pages/app/warehouse/locations/page';
-import NewWarehouseItemPage from '@/pages/app/warehouse/items/new/page';
-import WarehouseItemDetailPage from '@/pages/app/warehouse/items/[id]/page';
-import EditWarehouseItemPage from '@/pages/app/warehouse/items/[id]/edit/page';
-import DocumentsPage from '@/pages/app/documents/page';
-import UsersPage from '@/pages/app/users/page';
-import SettingsPage from '@/pages/app/settings/page';
+import OnboardingPage from '@/features/onboarding/pages/onboarding/page';
+import UpgradePage from '@/features/billing/pages/upgrade/page';
+import BillingCallbackPage from '@/features/billing/pages/billing/callback/page';
 
-// Standalone top-level routes — no shared shell, each is its own screen.
-import RegisterPage from '@/pages/register/page';
-import AcceptInvitePage from '@/pages/accept-invite/page';
-import VerifyEmailPage from '@/pages/verify-email/page';
-import TrackPage from '@/pages/track/page';
-import TermsPage from '@/pages/terms/page';
-import PrivacyPage from '@/pages/privacy/page';
-import OnboardingPage from '@/pages/onboarding/page';
-import ChangePasswordPage from '@/pages/change-password/page';
-import UpgradePage from '@/pages/upgrade/page';
-import BillingCallbackPage from '@/pages/billing/callback/page';
+import HrLayout from '@/features/hr/pages/layout';
+import HrDashboardPage from '@/features/hr/pages/dashboard/page';
+import EmployeesPage from '@/features/hr/pages/employees/page';
+import NewEmployeePage from '@/features/hr/pages/employees/new/page';
+import EmployeeDetailPage from '@/features/hr/pages/employees/[id]/page';
+import EditEmployeePage from '@/features/hr/pages/employees/[id]/edit/page';
+import PeopleCapacityPage from '@/features/hr/pages/capacity/page';
+import DepartmentCapacityPage from '@/features/hr/pages/capacity/departments/page';
+import BranchCapacityPage from '@/features/hr/pages/capacity/branches/page';
+import TrainingCatalogPage from '@/features/hr/pages/training/page';
+import MyLearningPage from '@/features/hr/pages/training/my/page';
+import NewCoursePage from '@/features/hr/pages/training/courses/new/page';
+import CourseDetailPage from '@/features/hr/pages/training/courses/[id]/page';
+import EditCoursePage from '@/features/hr/pages/training/courses/[id]/edit/page';
+
+// Platform Console — CloudTech's internal admin console.
+import PlatformLayout from '@/features/platform/pages/layout';
+import PlatformDashboardPage from '@/features/platform/pages/page';
+import OrganizationsPage from '@/features/platform/pages/organizations/page';
+import OrganizationDetailPage from '@/features/platform/pages/organizations/[id]/page';
+import OrganizationsTrashPage from '@/features/platform/pages/organizations/trash/page';
+import OrganizationUsersPage from '@/features/platform/pages/organization-users/page';
+import PlatformUsersPage from '@/features/platform/pages/platform-users/page';
+import SubscriptionsPage from '@/features/platform/pages/subscriptions/page';
+import PlatformBillingPage from '@/features/platform/pages/billing/page';
+import RevenueAnalyticsPage from '@/features/platform/pages/revenue-analytics/page';
+import PlatformAnalyticsPage from '@/features/platform/pages/platform-analytics/page';
+import AuditLogsPage from '@/features/platform/pages/audit-logs/page';
+import SystemHealthPage from '@/features/platform/pages/system-health/page';
+import SupportTicketsPage from '@/features/platform/pages/support-tickets/page';
+import PlansPricingPage from '@/features/platform/pages/plans-pricing/page';
+import PlatformSettingsPage from '@/features/platform/pages/settings/page';
+
+// Main tenant workspace — everything under the shared AppLayout shell.
+import AppLayout from '@/shared/components/layout/app-layout';
+import DashboardPage from '@/features/dashboard/pages/dashboard/page';
+import CalendarPage from '@/features/calendar/pages/calendar/page';
+import ActivityLogPage from '@/features/activity-log/pages/activity-log/page';
+import ApprovalsPage from '@/features/approvals/pages/approvals/page';
+import WorkQueuePage from '@/features/work-queue/pages/work-queue/page';
+import RatesPage from '@/features/rates/pages/rates/page';
+import ReportsPage from '@/features/reports/pages/reports/page';
+import SalesPage from '@/features/sales/pages/sales/page';
+import CustomersPage from '@/features/customers/pages/customers/page';
+import NewCustomerPage from '@/features/customers/pages/customers/new/page';
+import CustomerDetailPage from '@/features/customers/pages/customers/[id]/page';
+import EditCustomerPage from '@/features/customers/pages/customers/[id]/edit/page';
+import ExpensesPage from '@/features/expenses/pages/expenses/page';
+import NewExpensePage from '@/features/expenses/pages/expenses/new/page';
+import ExpenseDetailPage from '@/features/expenses/pages/expenses/[id]/page';
+import EditExpensePage from '@/features/expenses/pages/expenses/[id]/edit/page';
+import InvoicesPage from '@/features/invoices/pages/invoices/page';
+import NewInvoicePage from '@/features/invoices/pages/invoices/new/page';
+import InvoiceDetailPage from '@/features/invoices/pages/invoices/[id]/page';
+import EditInvoicePage from '@/features/invoices/pages/invoices/[id]/edit/page';
+import PaymentsPage from '@/features/payments/pages/payments/page';
+import NewPaymentPage from '@/features/payments/pages/payments/new/page';
+import PaymentDetailPage from '@/features/payments/pages/payments/[id]/page';
+import QuotationsPage from '@/features/quotations/pages/quotations/page';
+import NewQuotationPage from '@/features/quotations/pages/quotations/new/page';
+import QuotationDetailPage from '@/features/quotations/pages/quotations/[id]/page';
+import EditQuotationPage from '@/features/quotations/pages/quotations/[id]/edit/page';
+import PlanningPage from '@/features/planning/pages/planning/page';
+import PlanningDetailPage from '@/features/planning/pages/planning/[id]/page';
+import ShipmentsPage from '@/features/shipments/pages/shipments/page';
+import NewShipmentPage from '@/features/shipments/pages/shipments/new/page';
+import ShipmentDetailPage from '@/features/shipments/pages/shipments/[id]/page';
+import EditShipmentPage from '@/features/shipments/pages/shipments/[id]/edit/page';
+import CustomsPage from '@/features/customs/pages/customs/page';
+import ExaminationPage from '@/features/examination/pages/examination/page';
+import TerminalPage from '@/features/terminal/pages/terminal/page';
+import TransportationPage from '@/features/transportation/pages/transportation/page';
+import WarehousePage from '@/features/warehouse/pages/warehouse/page';
+import WarehouseLocationsPage from '@/features/warehouse/pages/warehouse/locations/page';
+import NewWarehouseItemPage from '@/features/warehouse/pages/warehouse/items/new/page';
+import WarehouseItemDetailPage from '@/features/warehouse/pages/warehouse/items/[id]/page';
+import EditWarehouseItemPage from '@/features/warehouse/pages/warehouse/items/[id]/edit/page';
+import DocumentsPage from '@/features/documents/pages/documents/page';
+import UsersPage from '@/features/administration/pages/users/page';
+import SettingsPage from '@/features/administration/pages/settings/page';
 
 export const router = createBrowserRouter([
   {
@@ -164,7 +160,7 @@ export const router = createBrowserRouter([
           { path: 'organization-users', element: <OrganizationUsersPage /> },
           { path: 'platform-users', element: <PlatformUsersPage /> },
           { path: 'subscriptions', element: <SubscriptionsPage /> },
-          { path: 'billing', element: <BillingPage /> },
+          { path: 'billing', element: <PlatformBillingPage /> },
           { path: 'revenue-analytics', element: <RevenueAnalyticsPage /> },
           { path: 'platform-analytics', element: <PlatformAnalyticsPage /> },
           { path: 'audit-logs', element: <AuditLogsPage /> },
