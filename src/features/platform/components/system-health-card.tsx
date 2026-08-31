@@ -67,20 +67,28 @@ export function useSystemHealth() {
     { name: 'Edge Functions', status: 'checking' },
   ]);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [checking, setChecking] = useState(false);
+  // Bumped by refetch() to re-run the effect below on demand, in addition
+  // to the automatic run on mount.
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
+    setChecking(true);
     runHealthChecks().then((result) => {
       if (!isMounted) return;
       setChecks(result);
       setCheckedAt(new Date());
+      setChecking(false);
     });
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshToken]);
 
-  return { checks, checkedAt };
+  const refetch = () => setRefreshToken((t) => t + 1);
+
+  return { checks, checkedAt, checking, refetch };
 }
 
 export function SystemHealthCard({ compact }: { compact?: boolean }) {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Users as UsersIcon } from 'lucide-react';
+import { Search, Users as UsersIcon, Info } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { ROLE_LABELS } from '@/shared/hooks/use-role';
 import { fetchOrganizationUsers, type OrgUserRow } from '@/features/platform/services/platform-users.service';
@@ -61,6 +61,18 @@ export default function OrganizationUsersPage() {
         <ExportButton data={filtered} columns={ORG_USER_EXPORT_COLUMNS} filename="organization-users" />
       </div>
 
+      <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <p className="text-muted-foreground">
+          This is a platform oversight directory.{' '}
+          <span className="font-medium text-foreground">
+            Tenant users are created by each organization&apos;s own admin
+          </span>{' '}
+          inside their workspace (Users &amp; Roles) — the platform never creates or edits a tenant&apos;s
+          users directly.
+        </p>
+      </div>
+
       <Card>
         <CardContent className="p-4">
           <div className="relative">
@@ -92,8 +104,7 @@ export default function OrganizationUsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Organization</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Branch</TableHead>
@@ -103,8 +114,17 @@ export default function OrganizationUsersPage() {
               <TableBody>
                 {filtered.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.full_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[10px] font-semibold text-primary">
+                          {u.full_name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{u.full_name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                        </div>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-sm">{u.organization?.name ?? '—'}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{ROLE_LABELS[u.role] ?? u.role}</Badge>

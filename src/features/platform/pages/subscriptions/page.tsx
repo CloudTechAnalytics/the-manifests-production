@@ -20,6 +20,7 @@ import { Label } from '@/shared/components/ui/label';
 import { Input } from '@/shared/components/ui/input';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { KpiCard } from '@/shared/components/dashboard/kpi-card';
 import {
   Table,
   TableBody,
@@ -216,46 +217,34 @@ export default function SubscriptionsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">MRR</p>
-              <TrendingUp className="h-4 w-4 text-primary" />
-            </div>
-            <p className="mt-3 text-2xl font-bold">{formatCurrency(stats.mrr)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Monthly recurring revenue</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ARR</p>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <p className="mt-3 text-2xl font-bold">{formatCurrency(stats.arr)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Annualised</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customers</p>
-              <Building2 className="h-4 w-4 text-primary" />
-            </div>
-            <p className="mt-3 font-serif text-2xl font-bold">{stats.customers}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Paying + trial tenants</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trials</p>
-              <Hourglass className="h-4 w-4 text-primary" />
-            </div>
-            <p className="mt-3 font-serif text-2xl font-bold">{stats.trials}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Not yet billing</p>
-          </CardContent>
-        </Card>
+        <KpiCard
+          label="MRR"
+          value={formatCurrency(stats.mrr)}
+          icon={TrendingUp}
+          href="/platform/revenue-analytics"
+          caption="Monthly recurring revenue"
+        />
+        <KpiCard
+          label="ARR"
+          value={formatCurrency(stats.arr)}
+          icon={DollarSign}
+          href="/platform/revenue-analytics"
+          caption="Annualised"
+        />
+        <KpiCard
+          label="Customers"
+          value={stats.customers}
+          icon={Building2}
+          href="/platform/organizations"
+          caption="Paying + trial tenants"
+        />
+        <KpiCard
+          label="Trials"
+          value={stats.trials}
+          icon={Hourglass}
+          href="/platform/organizations"
+          caption="Not yet billing"
+        />
       </div>
 
       <Card>

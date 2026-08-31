@@ -159,8 +159,7 @@ export default function PlatformUsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                 </TableRow>
@@ -168,8 +167,17 @@ export default function PlatformUsersPage() {
               <TableBody>
                 {users.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.full_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[10px] font-semibold text-primary">
+                          {u.full_name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{u.full_name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                        </div>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         className={cn(
