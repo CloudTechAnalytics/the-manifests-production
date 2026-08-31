@@ -7,12 +7,9 @@ import {
   CheckCircle2,
   XCircle,
   Users,
-  Plus,
   TrendingUp,
   DollarSign,
   Hourglass,
-  AlertTriangle,
-  UserCheck,
   ShieldCheck,
   Activity,
   UserPlus,
@@ -73,8 +70,9 @@ export default function PlatformDashboardPage() {
       caption: 'Paused firms',
     },
     {
-      // Compact notation (₦50K, ₦2.5M) so the figure always fits the
-      // tile; the exact amount lives on Subscriptions, one click away.
+      // Compact notation ("NGN 50K", "NGN 2.5M") so the figure always
+      // fits the tile; the exact amount lives on Subscriptions, one
+      // click away.
       label: 'MRR',
       value: formatCompactCurrency(stats.mrr),
       icon: TrendingUp,
@@ -89,13 +87,6 @@ export default function PlatformDashboardPage() {
       href: '/platform/subscriptions',
       caption: 'Annual recurring',
       isCurrency: true,
-    },
-    {
-      label: 'Expired Trials',
-      value: stats.expiredTrialCount,
-      icon: AlertTriangle,
-      href: '/platform/subscriptions',
-      caption: 'Needs follow-up',
     },
   ];
 
@@ -130,13 +121,6 @@ export default function PlatformDashboardPage() {
       caption: 'New signups',
     },
     {
-      label: 'Active Users',
-      value: stats.activeUsers,
-      icon: UserCheck,
-      href: '/platform/organization-users',
-      caption: 'Enabled accounts',
-    },
-    {
       // No ticketing system exists yet (Support Tickets is a coming-soon
       // page) — shown as a dash, not a fabricated 0-that-looks-like-data.
       label: 'Support Tickets',
@@ -154,24 +138,29 @@ export default function PlatformDashboardPage() {
           <h1 className="page-title">Platform Console</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Welcome back, {profile?.full_name?.split(' ')[0] ?? 'there'}. Manage
-            organizations, users, and platform services.
+            organizations, users, security and platform services.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/platform/organizations">
-            <Plus className="mr-1.5 h-4 w-4" />
-            Create Organization
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link to="/platform/audit-logs">Audit Logs</Link>
+          </Button>
+          <Button asChild>
+            <Link to="/platform/organizations">
+              <Building2 className="mr-1.5 h-4 w-4" />
+              Create Organization Manually
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {tenancyKpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading} />
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {activityKpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading} />
         ))}
