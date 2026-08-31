@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Sparkles, CreditCard, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { daysRemaining, formatCurrency } from '@/shared/lib/utils/status';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
-import type { OrgSubscription, Plan } from '@/shared/types';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
+import type { Plan } from '@/shared/types';
 
 /**
  * Onboarding step 5 — spec sections 12/27. Reads org_subscriptions/plans
@@ -28,63 +29,32 @@ import type { OrgSubscription, Plan } from '@/shared/types';
  * already knows what it wants never has to actually wait out the trial.
  */
 export function SubscriptionStep({ organizationId }: { organizationId: string }) {
-  const [subscription, setSubscription] = useState<OrgSubscription | null>(null);
-  const [userCount, setUserCount] = useState<number | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
   const [payingPlanId, setPayingPlanId] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: sub }, { data: count }, { data: publicPlans }] = await Promise.all([
-        supabase
-          .from('org_subscriptions')
-          .select('*, plan:plans(*)')
-          .eq('organization_id', organizationId)
-          .maybeSingle(),
-        supabase.rpc('org_user_count', { p_org_id: organizationId }),
-        supabase
-          .from('plans')
-          .select('*')
-          .eq('is_active', true)
-          .eq('is_public', true)
-          .is('deleted_at', null)
-          .order('sort_order', { ascending: true }),
-      ]);
-      setSubscription(sub as OrgSubscription | null);
-      setUserCount(typeof count === 'number' ? count : null);
-      setPlans((publicPlans ?? []) as Plan[]);
-      setLoading(false);
-    })();
-  }, [organizationId]);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['onboarding-subscription-step', organizationId],
+    queryFn: () => onboardingService.fetchSubscriptionStepData(organizationId),
+  });
+  const subscription = data?.subscription ?? null;
+  const userCount = data?.userCount ?? null;
+  const plans = data?.plans ?? [];
 
-  const handleSubscribe = async (plan: Plan) => {
-    setPayingPlanId(plan.id);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) throw new Error('Your session has expired. Please sign in again.');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/initialize-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ plan_id: plan.id, billing_cycle: 'monthly', return_to: '/onboarding' }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Failed to start checkout');
-
+  const subscribeMutation = useMutation({
+    mutationFn: (plan: Plan) => onboardingService.initializeOnboardingPayment(plan.id, 'monthly'),
+    onSuccess: (result) => {
+      // Full redirect, not a new tab — Paystack's own callback_url brings
+      // the browser straight back to /billing/callback when done.
       window.location.href = result.authorization_url;
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to start checkout'));
       setPayingPlanId(null);
-    }
+    },
+  });
+
+  const handleSubscribe = (plan: Plan) => {
+    setPayingPlanId(plan.id);
+    subscribeMutation.mutate(plan);
   };
 
   if (loading) return <Skeleton className="h-40 w-full" />;

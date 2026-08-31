@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
   Plus,
@@ -31,8 +32,8 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as adminService from '@/features/administration/services/administration.service';
 import {
   Card,
   CardContent,
@@ -142,10 +143,9 @@ function SettingsPageInner() {
     tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'profile'
   );
 
+  const queryClient = useQueryClient();
+
   // Branches state
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(true);
-  const [branchesError, setBranchesError] = useState<string | null>(null);
 
   // Dialog state
   const [createOpen, setCreateOpen] = useState(false);
@@ -188,53 +188,46 @@ function SettingsPageInner() {
   // Pending Approval / Approved before they can be marked Sent, plus the
   // discount-% and amount thresholds that force Branch Manager approval
   // regardless of that toggle.
-  const [approvalRequired, setApprovalRequired] = useState(false);
   const [savingApproval, setSavingApproval] = useState(false);
   const [discountThreshold, setDiscountThreshold] = useState('');
   const [amountThreshold, setAmountThreshold] = useState('');
   const [savingThresholds, setSavingThresholds] = useState(false);
+  // Optimistic local copy of quotation_approval_required — starts out
+  // synced from the query below (via the effect further down) and is
+  // flipped immediately on toggle, reverted on failure.
+  const [approvalRequired, setApprovalRequired] = useState(false);
+
+  const orgQuotationSettingsQuery = useQuery({
+    queryKey: ['org-quotation-settings', profile?.organization_id],
+    queryFn: () => adminService.fetchOrgQuotationSettings(profile!.organization_id!),
+    enabled: !!profile?.organization_id,
+  });
 
   useEffect(() => {
-    if (!profile?.organization_id) return;
-    supabase
-      .from('organizations')
-      .select('quotation_approval_required, quotation_discount_threshold_percent, quotation_amount_threshold')
-      .eq('id', profile.organization_id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setApprovalRequired(data?.quotation_approval_required ?? false);
-        setDiscountThreshold(data?.quotation_discount_threshold_percent?.toString() ?? '');
-        setAmountThreshold(data?.quotation_amount_threshold?.toString() ?? '');
-      });
-  }, [profile?.organization_id]);
+    if (!orgQuotationSettingsQuery.data) return;
+    setApprovalRequired(orgQuotationSettingsQuery.data.approvalRequired);
+    setDiscountThreshold(orgQuotationSettingsQuery.data.discountThreshold);
+    setAmountThreshold(orgQuotationSettingsQuery.data.amountThreshold);
+  }, [orgQuotationSettingsQuery.data]);
+
+  const saveThresholdsMutation = useMutation({
+    mutationFn: (input: { discountThreshold: string; amountThreshold: string }) =>
+      adminService.updateOrgQuotationThresholds(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['org-quotation-settings', profile?.organization_id] }),
+  });
+
+  const toggleApprovalRequiredMutation = useMutation({
+    mutationFn: (checked: boolean) => adminService.updateOrgQuotationApprovalRequired(checked),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['org-quotation-settings', profile?.organization_id] }),
+  });
 
   const handleSaveThresholds = async () => {
     if (!profile?.organization_id) return;
     setSavingThresholds(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) throw new Error('Your session has expired. Please sign in again.');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-org-quotation-settings`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            quotation_discount_threshold_percent: discountThreshold.trim() ? Number(discountThreshold) : null,
-            quotation_amount_threshold: amountThreshold.trim() ? Number(amountThreshold) : null,
-          }),
-        }
-      );
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) {
-        throw new Error(result.error ?? `Request failed (${response.status})`);
-      }
+      await saveThresholdsMutation.mutateAsync({ discountThreshold, amountThreshold });
       toast.success('Approval thresholds updated');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update thresholds'));
@@ -249,27 +242,7 @@ function SettingsPageInner() {
     const previous = approvalRequired;
     setApprovalRequired(checked); // optimistic — reverted on failure below
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) throw new Error('Your session has expired. Please sign in again.');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-org-quotation-settings`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ quotation_approval_required: checked }),
-        }
-      );
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) {
-        throw new Error(result.error ?? `Request failed (${response.status})`);
-      }
-
+      await toggleApprovalRequiredMutation.mutateAsync(checked);
       toast.success(
         checked
           ? 'Quotations now require approval before they can be sent'
@@ -293,63 +266,17 @@ function SettingsPageInner() {
 
   // --- Data loading --------------------------------------------------------
 
-  const loadBranches = useCallback(async () => {
-    setBranchesLoading(true);
-    setBranchesError(null);
-    try {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('*')
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setBranches((data as Branch[]) ?? []);
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to load branches');
-      setBranchesError(message);
-      console.error('Error loading branches:', err);
-    } finally {
-      setBranchesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAdmin) {
-      loadBranches();
-    } else {
-      setBranchesLoading(false);
-    }
-  }, [isAdmin, loadBranches]);
-
-  // --- Activity logging ----------------------------------------------------
-
-  const logActivity = useCallback(
-    async (
-      action: string,
-      entityType: string,
-      entityId: string,
-      description: string,
-      metadata?: Record<string, unknown>,
-      branchId?: string | null
-    ) => {
-      if (!profile) return;
-      const { error } = await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId ?? profile.branch_id ?? null,
-        action,
-        entity_type: entityType,
-        entity_id: entityId,
-        description,
-        metadata: metadata ?? null,
-      });
-      if (error) {
-        console.error('Activity log error:', error);
-      }
-    },
-    [profile]
-  );
+  const branchesQuery = useQuery({
+    queryKey: ['branches', 'all'],
+    queryFn: adminService.fetchAllBranches,
+    enabled: isAdmin,
+  });
+  const branches = branchesQuery.data ?? [];
+  const branchesLoading = isAdmin ? branchesQuery.isLoading : false;
+  const branchesError = branchesQuery.isError
+    ? getErrorMessage(branchesQuery.error, 'Failed to load branches')
+    : null;
+  const loadBranches = () => queryClient.invalidateQueries({ queryKey: ['branches'] });
 
   // --- Validation helpers --------------------------------------------------
 
@@ -378,42 +305,10 @@ function SettingsPageInner() {
 
     setCreating(true);
     try {
-      const { data, error } = await supabase
-        .from('branches')
-        .insert({
-          name: createForm.name.trim(),
-          code: createForm.code.trim().toUpperCase(),
-          address: createForm.address.trim() || null,
-          phone: createForm.phone.trim() || null,
-          email: createForm.email.trim() || null,
-          bank_name: createForm.bank_name.trim() || null,
-          bank_account_name: createForm.bank_account_name.trim() || null,
-          bank_account_number: createForm.bank_account_number.trim() || null,
-          bank_swift_code: createForm.bank_swift_code.trim() || null,
-          organization_id: profile.organization_id,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newBranch = data as Branch;
-
-      await logActivity(
-        'branch.created',
-        'branches',
-        newBranch.id,
-        `Created branch "${newBranch.name}" (${newBranch.code})`,
-        {
-          name: newBranch.name,
-          code: newBranch.code,
-          address: newBranch.address,
-          phone: newBranch.phone,
-          email: newBranch.email,
-        },
-        newBranch.id
-      );
+      const newBranch = await adminService.createBranch(createForm, {
+        id: profile.id,
+        organization_id: profile.organization_id!,
+      });
 
       toast.success(`Branch "${newBranch.name}" created successfully`);
       setCreateOpen(false);
@@ -455,38 +350,7 @@ function SettingsPageInner() {
 
     setEditing(true);
     try {
-      const { error } = await supabase
-        .from('branches')
-        .update({
-          name: editForm.name.trim(),
-          code: editForm.code.trim().toUpperCase(),
-          address: editForm.address.trim() || null,
-          phone: editForm.phone.trim() || null,
-          email: editForm.email.trim() || null,
-          bank_name: editForm.bank_name.trim() || null,
-          bank_account_name: editForm.bank_account_name.trim() || null,
-          bank_account_number: editForm.bank_account_number.trim() || null,
-          bank_swift_code: editForm.bank_swift_code.trim() || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editTarget.id);
-
-      if (error) throw error;
-
-      await logActivity(
-        'branch.updated',
-        'branches',
-        editTarget.id,
-        `Updated branch "${editTarget.name}" (${editTarget.code})`,
-        {
-          name: editForm.name.trim(),
-          code: editForm.code.trim().toUpperCase(),
-          address: editForm.address.trim(),
-          phone: editForm.phone.trim(),
-          email: editForm.email.trim(),
-        },
-        editTarget.id
-      );
+      await adminService.editBranch(editTarget, editForm, { id: profile.id });
 
       toast.success('Branch updated successfully');
       setEditTarget(null);
@@ -508,25 +372,7 @@ function SettingsPageInner() {
     setToggling(true);
     try {
       const newState = !toggleTarget.is_active;
-
-      const { error } = await supabase
-        .from('branches')
-        .update({
-          is_active: newState,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', toggleTarget.id);
-
-      if (error) throw error;
-
-      await logActivity(
-        newState ? 'branch.enabled' : 'branch.disabled',
-        'branches',
-        toggleTarget.id,
-        `${newState ? 'Enabled' : 'Disabled'} branch "${toggleTarget.name}" (${toggleTarget.code})`,
-        { is_active: newState },
-        toggleTarget.id
-      );
+      await adminService.toggleBranchActive(toggleTarget, { id: profile.id });
 
       toast.success(`Branch ${newState ? 'enabled' : 'disabled'} successfully`);
       setToggleTarget(null);
@@ -542,77 +388,12 @@ function SettingsPageInner() {
 
   // --- Delete branch ---------------------------------------------------------
 
-  // Every table with a NOT NULL branch_id ON DELETE RESTRICT — a real
-  // DELETE on branches fails the moment any of these still has a row
-  // pointing at it, so counts are checked up front for a clear message
-  // instead of a raw foreign-key-violation error.
-  const BRANCH_DEPENDENT_TABLES: { table: string; label: string }[] = [
-    { table: 'shipments', label: 'shipment' },
-    { table: 'customers', label: 'customer' },
-    { table: 'quotations', label: 'quotation' },
-    { table: 'invoices', label: 'invoice' },
-    { table: 'payments', label: 'payment' },
-    { table: 'expenses', label: 'expense' },
-    { table: 'documents', label: 'document' },
-    { table: 'shipment_plans', label: 'shipment plan' },
-    { table: 'plan_tasks', label: 'plan task' },
-    { table: 'warehouses', label: 'warehouse' },
-    { table: 'stock_items', label: 'stock item' },
-    { table: 'warehouse_stock', label: 'warehouse stock record' },
-    { table: 'stock_movements', label: 'stock movement' },
-  ];
-
   const handleDeleteBranch = async () => {
     if (!deleteTarget || !profile) return;
 
     setDeleting(true);
     try {
-      const [dependentResults, staffResult] = await Promise.all([
-        Promise.all(
-          BRANCH_DEPENDENT_TABLES.map(({ table }) =>
-            supabase
-              .from(table)
-              .select('id', { count: 'exact', head: true })
-              .eq('branch_id', deleteTarget.id)
-          )
-        ),
-        supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .eq('branch_id', deleteTarget.id)
-          .is('deleted_at', null),
-      ]);
-
-      const blockers = dependentResults
-        .map((res, i) => ({ label: BRANCH_DEPENDENT_TABLES[i].label, count: res.count ?? 0 }))
-        .filter((b) => b.count > 0);
-
-      const staffCount = staffResult.count ?? 0;
-      if (staffCount > 0) blockers.push({ label: 'staff member', count: staffCount });
-
-      if (blockers.length > 0) {
-        const summary = blockers
-          .map((b) => `${b.count} ${b.label}${b.count === 1 ? '' : 's'}`)
-          .join(', ');
-        toast.error(
-          `Can't delete "${deleteTarget.name}": it still has ${summary}. Remove or reassign those first, or use Disable if you just want it out of active use.`
-        );
-        return;
-      }
-
-      // Logged before the delete — activities.branch_id would fail its
-      // own foreign key the moment the branch it points at is gone.
-      await logActivity(
-        'branch.deleted',
-        'branches',
-        deleteTarget.id,
-        `Deleted branch "${deleteTarget.name}" (${deleteTarget.code})`,
-        undefined,
-        deleteTarget.id
-      );
-
-      const { error } = await supabase.from('branches').delete().eq('id', deleteTarget.id);
-      if (error) throw error;
+      await adminService.deleteBranchWithDependencyCheck(deleteTarget, { id: profile.id });
 
       toast.success('Branch permanently deleted');
       setDeleteTarget(null);
@@ -641,25 +422,7 @@ function SettingsPageInner() {
 
     setSavingProfile(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: trimmed,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
-
-      if (error) throw error;
-
-      await logActivity(
-        'profile.updated',
-        'profiles',
-        profile.id,
-        `Updated own profile name to "${trimmed}"`,
-        { full_name: trimmed },
-        profile.branch_id
-      );
+      await adminService.updateOwnProfileName({ id: profile.id, branch_id: profile.branch_id }, trimmed);
 
       setProfileNameOriginal(trimmed);
       await refreshProfile();
@@ -699,34 +462,15 @@ function SettingsPageInner() {
 
     setChangingPassword(true);
     try {
-      // The "Current Password" field was only ever checked for presence,
-      // never verified — any non-empty string would pass, which is a
-      // false assurance UX bug (not a privilege-escalation one, since a
-      // valid session is already required to reach this page). Verify it
-      // by attempting a real sign-in before applying the change.
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: profile.email,
-        password: currentPassword,
-      });
-      if (verifyError) {
+      const result = await adminService.changeOwnPassword(
+        { id: profile.id, email: profile.email, branch_id: profile.branch_id },
+        currentPassword,
+        newPassword
+      );
+      if (result.currentPasswordIncorrect) {
         setPasswordErrors({ current: 'Current password is incorrect' });
         return;
       }
-
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
-      await logActivity(
-        'profile.password_changed',
-        'profiles',
-        profile.id,
-        'Changed own account password',
-        {},
-        profile.branch_id
-      );
 
       toast.success('Password changed successfully');
       setCurrentPassword('');

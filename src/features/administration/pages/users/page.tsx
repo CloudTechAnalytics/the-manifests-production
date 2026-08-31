@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Plus,
   Search,
@@ -18,10 +18,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as adminService from '@/features/administration/services/administration.service';
 import {
   Card,
   CardContent,
@@ -201,12 +202,7 @@ export default function UsersPage() {
   const canManageUser = (target: Profile) =>
     !isBranchAdmin || target.branch_id === profile?.branch_id;
 
-  const [users, setUsers] = useState<Profile[]>([]);
-  // Additional roles beyond each user's primary profiles.role — a user
-  // can hold several departments at once. Keyed by user id.
-  const [additionalRolesByUser, setAdditionalRolesByUser] = useState<Record<string, UserRole[]>>({});
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
@@ -243,8 +239,6 @@ export default function UsersPage() {
   const [toggling, setToggling] = useState(false);
 
   // Invitations state
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [invitationsLoading, setInvitationsLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState<InviteForm>({
     email: '',
@@ -258,15 +252,6 @@ export default function UsersPage() {
   const [revokeInviteTarget, setRevokeInviteTarget] = useState<Invitation | null>(null);
   const [revokingInvite, setRevokingInvite] = useState(false);
 
-  // Plan-based seat usage (migration 064's org_user_count/org_user_limit —
-  // the same rule create-user/invite-user/accept-invite enforce
-  // server-side; null limit means unlimited). Purely informational here —
-  // the edge functions are the actual gate.
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [userCount, setUserCount] = useState<number | null>(null);
-  const [userLimit, setUserLimit] = useState<number | null>(null);
-  const atUserLimit = userLimit !== null && userCount !== null && userCount >= userLimit;
-
   const isAdmin = hasRole('admin');
 
   // Debounced search
@@ -275,12 +260,6 @@ export default function UsersPage() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
-
-  // Only branches a branch admin is allowed to assign into. A general admin
-  // or platform_admin sees them all; a branch admin sees only their own.
-  const assignableBranches = lockedBranchId
-    ? branches.filter((b) => b.id === lockedBranchId)
-    : branches;
 
   // When a branch admin opens the create/invite dialog, pin the branch to
   // theirs so the (locked) picker isn't left empty.
@@ -297,132 +276,60 @@ export default function UsersPage() {
 
   // --- Data loading --------------------------------------------------------
 
-  const loadBranches = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('branches')
-      .select('*')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
+  const branchesQuery = useQuery({
+    queryKey: ['branches', 'active'],
+    queryFn: adminService.fetchActiveBranches,
+    enabled: isAdmin,
+  });
+  const branches = branchesQuery.data ?? [];
 
-    if (error) {
-      console.error('Error loading branches:', error);
-      return;
-    }
-    setBranches((data as Branch[]) ?? []);
-  }, []);
+  // Only branches a branch admin is allowed to assign into. A general admin
+  // or platform_admin sees them all; a branch admin sees only their own.
+  const assignableBranches = lockedBranchId
+    ? branches.filter((b) => b.id === lockedBranchId)
+    : branches;
 
-  const loadUsers = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('profiles')
-        .select('*, branch:branches(*)')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+  const usersQuery = useQuery({
+    queryKey: ['users', roleFilter, debouncedSearch],
+    queryFn: () => adminService.fetchUsers({ roleFilter, search: debouncedSearch }),
+    enabled: isAdmin && !!profile,
+  });
+  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
+  const loading = isAdmin ? usersQuery.isLoading : false;
 
-      if (roleFilter !== 'all') {
-        query = query.eq('role', roleFilter);
-      }
+  const userIds = useMemo(() => users.map((u) => u.id), [users]);
+  const additionalRolesQuery = useQuery({
+    queryKey: ['user-roles', userIds],
+    queryFn: () => adminService.fetchAdditionalRolesByUser(userIds),
+    enabled: isAdmin && userIds.length > 0,
+  });
+  const additionalRolesByUser = additionalRolesQuery.data ?? {};
 
-      if (debouncedSearch) {
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`
-        );
-      }
+  const invitationsQuery = useQuery({
+    queryKey: ['invitations', profile?.organization_id],
+    queryFn: () => adminService.fetchInvitations(profile!.organization_id!),
+    enabled: isAdmin && !!profile?.organization_id,
+  });
+  const invitations = invitationsQuery.data ?? [];
+  const invitationsLoading = isAdmin ? invitationsQuery.isLoading : false;
 
-      const { data, error } = await query;
-      if (error) {
-        console.error('Error loading users:', error);
-        setUsers([]);
-        setAdditionalRolesByUser({});
-        return;
-      }
-      const loadedUsers = (data as Profile[]) ?? [];
-      setUsers(loadedUsers);
+  // Plan-based seat usage (migration 064's org_user_count/org_user_limit —
+  // the same rule create-user/invite-user/accept-invite enforce
+  // server-side; null limit means unlimited). Purely informational here —
+  // the edge functions are the actual gate.
+  const orgUsageQuery = useQuery({
+    queryKey: ['org-usage', profile?.organization_id],
+    queryFn: () => adminService.fetchOrgUsageAndDepartments(profile!.organization_id!),
+    enabled: isAdmin && !!profile?.organization_id,
+  });
+  const departments = orgUsageQuery.data?.departments ?? [];
+  const userCount = orgUsageQuery.data?.userCount ?? null;
+  const userLimit = orgUsageQuery.data?.userLimit ?? null;
+  const atUserLimit = userLimit !== null && userCount !== null && userCount >= userLimit;
 
-      const userIds = loadedUsers.map((u) => u.id);
-      if (userIds.length > 0) {
-        const { data: roleRows } = await supabase
-          .from('user_roles')
-          .select('user_id, role')
-          .in('user_id', userIds);
-        const map: Record<string, UserRole[]> = {};
-        (roleRows ?? []).forEach((r) => {
-          map[r.user_id] = [...(map[r.user_id] ?? []), r.role as UserRole];
-        });
-        setAdditionalRolesByUser(map);
-      } else {
-        setAdditionalRolesByUser({});
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, roleFilter, debouncedSearch]);
-
-  const loadInvitations = useCallback(async () => {
-    if (!profile) return;
-    setInvitationsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('invitations')
-        .select('*')
-        .eq('organization_id', profile.organization_id)
-        .is('accepted_at', null)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setInvitations((data as Invitation[]) ?? []);
-    } catch (err) {
-      console.error('Error loading invitations:', err);
-    } finally {
-      setInvitationsLoading(false);
-    }
-  }, [profile]);
-
-  const loadUsageAndDepartments = useCallback(async () => {
-    if (!profile?.organization_id) return;
-    const [{ data: deptRows }, { data: limit }, { data: count }] = await Promise.all([
-      supabase
-        .from('departments')
-        .select('id, name')
-        .eq('organization_id', profile.organization_id)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('sort_order', { ascending: true }),
-      supabase.rpc('org_user_limit', { p_org_id: profile.organization_id }),
-      supabase.rpc('org_user_count', { p_org_id: profile.organization_id }),
-    ]);
-    setDepartments((deptRows ?? []) as { id: string; name: string }[]);
-    setUserLimit(typeof limit === 'number' ? limit : null);
-    setUserCount(typeof count === 'number' ? count : null);
-  }, [profile?.organization_id]);
-
-  useEffect(() => {
-    if (isAdmin) {
-      loadBranches();
-      loadUsageAndDepartments();
-    }
-  }, [isAdmin, loadBranches, loadUsageAndDepartments]);
-
-  useEffect(() => {
-    if (isAdmin) {
-      loadUsers();
-    } else {
-      setLoading(false);
-    }
-  }, [isAdmin, loadUsers]);
-
-  useEffect(() => {
-    if (isAdmin) {
-      loadInvitations();
-    } else {
-      setInvitationsLoading(false);
-    }
-  }, [isAdmin, loadInvitations]);
+  const loadUsers = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+  const loadInvitations = () => queryClient.invalidateQueries({ queryKey: ['invitations'] });
+  const loadUsageAndDepartments = () => queryClient.invalidateQueries({ queryKey: ['org-usage'] });
 
   const roleFilterOptions = useMemo(
     () => [
@@ -432,33 +339,53 @@ export default function UsersPage() {
     []
   );
 
-  // --- Activity logging ----------------------------------------------------
+  // --- Mutations -------------------------------------------------------------
 
-  const logActivity = useCallback(
-    async (
-      action: string,
-      entityType: string,
-      entityId: string,
-      description: string,
-      metadata?: Record<string, unknown>,
-      branchId?: string | null
-    ) => {
-      if (!profile) return;
-      const { error } = await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId ?? profile.branch_id ?? null,
-        action,
-        entity_type: entityType,
-        entity_id: entityId,
-        description,
-        metadata: metadata ?? null,
-      });
-      if (error) {
-        console.error('Activity log error:', error);
-      }
+  const createUserMutation = useMutation({
+    mutationFn: (form: CreateForm) => adminService.createUser(form, profile!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['org-usage'] });
     },
-    [profile]
-  );
+  });
+
+  const inviteMemberMutation = useMutation({
+    mutationFn: (form: InviteForm) => adminService.inviteMember(form),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['org-usage'] });
+    },
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (invitation: Invitation) => adminService.revokeInvitation(invitation, profile),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invitations'] }),
+  });
+
+  const editUserMutation = useMutation({
+    mutationFn: ({ target, form, isEditingSelf }: { target: Profile; form: EditForm; isEditingSelf: boolean }) =>
+      adminService.editUser(target, form, profile!, isEditingSelf),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ target, newPassword }: { target: Profile; newPassword: string }) =>
+      adminService.resetUserPassword(target, newPassword, profile!),
+  });
+
+  const toggleUserMutation = useMutation({
+    mutationFn: (target: Profile) => adminService.toggleUserActive(target, profile!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const result = await adminForceDelete('user', userId);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
 
   // --- Create user ---------------------------------------------------------
 
@@ -487,65 +414,7 @@ export default function UsersPage() {
 
     setCreating(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: createForm.email.trim(),
-            full_name: createForm.full_name.trim(),
-            roles: createForm.roles,
-            branch_id: createForm.branch_id,
-            password: createForm.password,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        if (result.code === 'user_limit_reached') {
-          toast.error(result.error, {
-            action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
-          });
-        } else {
-          toast.error(result.error ?? `Request failed (${response.status})`);
-        }
-        return;
-      }
-      loadUsageAndDepartments();
-
-      // Log activity client-side (edge function also logs, but we log for the
-      // admin's own audit trail with richer metadata)
-      const newUserId = result.user_id as string;
-      const roleLabels = createForm.roles
-        .map((r) => ROLE_META[r as keyof typeof ROLE_META]?.label ?? r)
-        .join(', ');
-      await logActivity(
-        'user.created',
-        'profiles',
-        newUserId,
-        `Created user "${createForm.email.trim()}" (${roleLabels})`,
-        {
-          email: createForm.email.trim(),
-          full_name: createForm.full_name.trim(),
-          roles: createForm.roles,
-          branch_id: createForm.branch_id,
-        },
-        createForm.branch_id
-      );
+      await createUserMutation.mutateAsync(createForm);
 
       toast.success('User created successfully');
       setCreateOpen(false);
@@ -557,11 +426,14 @@ export default function UsersPage() {
         password: '',
       });
       setCreateFormErrors({});
-      loadUsers();
     } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to create user');
-      toast.error(message);
+      if (err instanceof adminService.EdgeFunctionError && err.code === 'user_limit_reached') {
+        toast.error(err.message, {
+          action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
+        });
+      } else {
+        toast.error(getErrorMessage(err, 'Failed to create user'));
+      }
     } finally {
       setCreating(false);
     }
@@ -588,44 +460,7 @@ export default function UsersPage() {
 
     setInviting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: inviteForm.email.trim(),
-            full_name: inviteForm.full_name.trim() || undefined,
-            role: inviteForm.role,
-            branch_id: inviteForm.branch_id,
-            department_id: inviteForm.department_id || null,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        if (result.code === 'user_limit_reached') {
-          toast.error(result.error, {
-            action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
-          });
-        } else {
-          toast.error(result.error ?? `Request failed (${response.status})`);
-        }
-        return;
-      }
+      const result = await inviteMemberMutation.mutateAsync(inviteForm);
 
       toast.success(
         result.emailed
@@ -635,10 +470,14 @@ export default function UsersPage() {
       setInviteOpen(false);
       setInviteForm({ email: '', full_name: '', role: 'operations', branch_id: '', department_id: '' });
       setInviteFormErrors({});
-      loadInvitations();
-      loadUsageAndDepartments();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to send invitation'));
+      if (err instanceof adminService.EdgeFunctionError && err.code === 'user_limit_reached') {
+        toast.error(err.message, {
+          action: { label: 'Upgrade Plan', onClick: () => window.location.assign('/upgrade') },
+        });
+      } else {
+        toast.error(getErrorMessage(err, 'Failed to send invitation'));
+      }
     } finally {
       setInviting(false);
     }
@@ -648,26 +487,9 @@ export default function UsersPage() {
     if (!revokeInviteTarget) return;
     setRevokingInvite(true);
     try {
-      const { error } = await supabase
-        .from('invitations')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', revokeInviteTarget.id);
-      if (error) throw error;
-
-      if (profile) {
-        await supabase.from('activities').insert({
-          user_id: profile.id,
-          branch_id: revokeInviteTarget.branch_id,
-          action: 'invitation.revoked',
-          entity_type: 'invitation',
-          entity_id: revokeInviteTarget.id,
-          description: `Revoked invitation for ${revokeInviteTarget.email}`,
-        });
-      }
-
+      await revokeInviteMutation.mutateAsync(revokeInviteTarget);
       toast.success('Invitation revoked');
       setRevokeInviteTarget(null);
-      loadInvitations();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to revoke invitation'));
     } finally {
@@ -697,32 +519,6 @@ export default function UsersPage() {
     return Object.keys(errs).length === 0;
   };
 
-  /** Replaces a user's additional roles (beyond their primary
-   *  profiles.role) via the admin-only update-user-roles edge function —
-   *  user_roles has no client write policy, this is the only path in. */
-  const callUpdateUserRoles = async (userId: string, roles: UserRole[]) => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const session = sessionData?.session;
-    if (!session) throw new Error('Your session has expired. Please sign in again.');
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-roles`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ user_id: userId, roles }),
-      }
-    );
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.success) {
-      throw new Error(result.error ?? `Request failed (${response.status})`);
-    }
-  };
-
   const handleEditUser = async () => {
     if (!editTarget || !profile) return;
     if (!validateEditForm()) return;
@@ -734,48 +530,12 @@ export default function UsersPage() {
     // here too, not just by disabling the fields below, in case of any UI
     // bypass.
     const isEditingSelf = editTarget.id === profile.id;
-    const primaryRole = editForm.roles[0];
-    const additionalRoles = editForm.roles.slice(1);
 
     setEditing(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: editForm.full_name.trim(),
-          role: isEditingSelf ? editTarget.role : primaryRole,
-          branch_id: editForm.branch_id,
-          is_active: isEditingSelf ? editTarget.is_active : editForm.is_active,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editTarget.id);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (!isEditingSelf) {
-        await callUpdateUserRoles(editTarget.id, additionalRoles);
-      }
-
-      await logActivity(
-        'user.updated',
-        'profiles',
-        editTarget.id,
-        `Updated user "${editTarget.email}" — name, roles, branch, or status changed`,
-        {
-          full_name: editForm.full_name.trim(),
-          roles: editForm.roles,
-          branch_id: editForm.branch_id,
-          is_active: editForm.is_active,
-        },
-        editForm.branch_id
-      );
-
+      await editUserMutation.mutateAsync({ target: editTarget, form: editForm, isEditingSelf });
       toast.success('User updated successfully');
       setEditTarget(null);
-      loadUsers();
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to update user');
@@ -801,46 +561,7 @@ export default function UsersPage() {
 
     setResetting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            user_id: resetTarget.id,
-            new_password: resetPassword,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        const message = result.error ?? `Request failed (${response.status})`;
-        toast.error(message);
-        return;
-      }
-
-      await logActivity(
-        'user.password_reset',
-        'profiles',
-        resetTarget.id,
-        `Reset password for user "${resetTarget.email}"`,
-        { email: resetTarget.email },
-        resetTarget.branch_id
-      );
-
+      await resetPasswordMutation.mutateAsync({ target: resetTarget, newPassword: resetPassword });
       toast.success('Password reset successfully');
       setResetTarget(null);
       setResetPassword('');
@@ -862,32 +583,9 @@ export default function UsersPage() {
     setToggling(true);
     try {
       const newState = !toggleTarget.is_active;
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          is_active: newState,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', toggleTarget.id);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      await logActivity(
-        newState ? 'user.enabled' : 'user.disabled',
-        'profiles',
-        toggleTarget.id,
-        `${newState ? 'Enabled' : 'Disabled'} user "${toggleTarget.email}"`,
-        { email: toggleTarget.email, is_active: newState },
-        toggleTarget.branch_id
-      );
-
+      await toggleUserMutation.mutateAsync(toggleTarget);
       toast.success(`User ${newState ? 'enabled' : 'disabled'} successfully`);
       setToggleTarget(null);
-      loadUsers();
     } catch (err) {
       const message =
         getErrorMessage(err, 'Failed to update user status');
@@ -906,11 +604,9 @@ export default function UsersPage() {
     if (!deleteTarget) return;
     setDeletingUser(true);
     try {
-      const result = await adminForceDelete('user', deleteTarget.id);
-      if (!result.success) throw new Error(result.error);
+      await deleteUserMutation.mutateAsync(deleteTarget.id);
       toast.success(`"${deleteTarget.full_name}" was permanently deleted`);
       setDeleteTarget(null);
-      loadUsers();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete user'));
     } finally {

@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Receipt, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as invoicesService from '@/features/invoices/services/invoices.service';
 import {
   Card,
   CardContent,
@@ -39,7 +40,6 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { formatCurrency } from '@/shared/lib/utils/status';
-import type { Invoice } from '@/shared/types';
 
 const CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
 
@@ -60,12 +60,7 @@ export default function EditInvoicePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const invoiceId = params.id!;
-
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [invoiceBranchId, setInvoiceBranchId] = useState<string | null>(null);
-  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const {
     control,
@@ -91,89 +86,63 @@ export default function EditInvoicePage() {
   const currency = watch('currency');
   const total = (Number(subtotal) || 0) + (Number(taxAmount) || 0);
 
+  const { data: invoice, isLoading: loading, isError } = useQuery({
+    queryKey: ['invoice', invoiceId],
+    queryFn: () => invoicesService.fetchInvoiceForEdit(invoiceId),
+    enabled: !!invoiceId,
+  });
+  const notFound = !loading && (isError || !invoice);
+
   useEffect(() => {
-    if (!invoiceId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('id', invoiceId)
-          .is('deleted_at', null)
-          .maybeSingle();
+    if (!invoice) return;
+    reset({
+      issue_date: invoice.issue_date,
+      due_date: invoice.due_date ?? '',
+      currency: invoice.currency,
+      subtotal: Number(invoice.subtotal),
+      tax_amount: Number(invoice.tax_amount),
+      notes: invoice.notes ?? '',
+      terms: invoice.terms ?? '',
+    });
+  }, [invoice, reset]);
 
-        if (cancelled) return;
-        if (error || !data) {
-          setNotFound(true);
-          return;
-        }
-
-        const invoice = data as Invoice;
-        setInvoiceBranchId(invoice.branch_id);
-        setInvoiceNumber(invoice.invoice_number);
-
-        reset({
-          issue_date: invoice.issue_date,
-          due_date: invoice.due_date ?? '',
-          currency: invoice.currency,
-          subtotal: Number(invoice.subtotal),
-          tax_amount: Number(invoice.tax_amount),
-          notes: invoice.notes ?? '',
-          terms: invoice.terms ?? '',
-        });
-      } finally {
-        if (!cancelled) setLoading(false);
+  const updateMutation = useMutation({
+    mutationFn: (values: InvoiceFormValues) => {
+      if (!profile?.id || !invoice) {
+        throw new Error('Unable to determine invoice branch.');
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [invoiceId, reset]);
+      return invoicesService.updateInvoice(invoiceId, {
+        issue_date: values.issue_date,
+        due_date: values.due_date || null,
+        currency: values.currency,
+        subtotal: values.subtotal,
+        tax_amount: values.tax_amount,
+        total,
+        notes: values.notes || null,
+        terms: values.terms || null,
+        updated_by: profile.id,
+        branch_id: invoice.branch_id,
+        invoice_number: invoice.invoice_number,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      toast.success('Invoice updated successfully');
+      navigate(`/invoices/${invoiceId}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to update invoice');
+      toast.error(message);
+    },
+  });
 
-  const onSubmit = async (values: InvoiceFormValues) => {
-    if (!profile?.id || !invoiceBranchId) {
+  const onSubmit = (values: InvoiceFormValues) => {
+    if (!profile?.id || !invoice?.branch_id) {
       toast.error('Unable to determine invoice branch.');
       return;
     }
-    setSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({
-          issue_date: values.issue_date,
-          due_date: values.due_date || null,
-          currency: values.currency,
-          subtotal: values.subtotal,
-          tax_amount: values.tax_amount,
-          total,
-          notes: values.notes || null,
-          terms: values.terms || null,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', invoiceId);
-
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: invoiceBranchId,
-        action: 'invoice.updated',
-        entity_type: 'invoice',
-        entity_id: invoiceId,
-        description: `Updated invoice ${invoiceNumber ?? ''}`,
-        metadata: { total, currency: values.currency },
-      });
-
-      toast.success('Invoice updated successfully');
-      navigate(`/invoices/${invoiceId}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to update invoice');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    updateMutation.mutate(values);
   };
 
   if (loading) {
@@ -207,6 +176,8 @@ export default function EditInvoicePage() {
       </div>
     );
   }
+
+  const invoiceNumber = invoice?.invoice_number ?? null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 lg:p-8">
@@ -351,8 +322,8 @@ export default function EditInvoicePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={updateMutation.isPending} className="w-full sm:w-auto">
+            {updateMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </div>

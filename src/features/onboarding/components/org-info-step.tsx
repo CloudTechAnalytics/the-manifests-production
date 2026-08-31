@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
 import type { Organization } from '@/shared/types';
 
 /** Onboarding step 1 — spec section 9. Mostly a review; the identity fields (name/registration number) stay platform-admin-only, as documented in update-organization-profile. */
@@ -15,34 +16,21 @@ export function OrgInfoStep({ organization, onUpdated }: { organization: Organiz
   const [address, setAddress] = useState(organization.address ?? '');
   const [phone, setPhone] = useState(organization.phone ?? '');
   const [website, setWebsite] = useState(organization.website ?? '');
-  const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { toast.error('Your session has expired. Please sign in again.'); return; }
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-organization-profile`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ address, phone, website }),
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error ?? 'Failed to save');
+  const saveMutation = useMutation({
+    mutationFn: () => onboardingService.updateOrganizationProfile({ address, phone, website }),
+    onSuccess: () => {
       toast.success('Organization details saved');
       onUpdated();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save organization details'));
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+  const saving = saveMutation.isPending;
+
+  const handleSave = () => {
+    saveMutation.mutate();
   };
 
   return (

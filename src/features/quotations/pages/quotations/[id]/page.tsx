@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -104,16 +105,18 @@ import { resolveScopeOfServiceLabel } from '@/shared/lib/quotation-rules';
 import { ConvertToShipmentDialog } from '@/features/quotations/components/convert-to-shipment-dialog';
 import { QuotationAttachmentsPanel } from '@/features/quotations/components/quotation-attachments-panel';
 import { VersionHistoryCard } from '@/features/quotations/components/version-history-card';
-import type {
-  Quotation,
-  QuotationItem,
-  QuotationStatus,
-  ShipmentType,
-  Customer,
-  Branch,
-  Profile,
-  Organization,
-} from '@/shared/types';
+import {
+  fetchQuotationDetail,
+  fetchQuotationOrgSettings,
+  logQuotationViewed,
+  updateQuotationStatus,
+  softDeleteQuotation,
+  duplicateQuotation,
+  createQuotationVersion,
+  logQuotationPdfDownloaded,
+  type QuotationDetail,
+} from '@/features/quotations/services/quotations.service';
+import type { QuotationStatus, ShipmentType } from '@/shared/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
   air: 'Air',
@@ -136,15 +139,6 @@ const CARGO_TYPE_LABELS: Record<string, string> = {
   lcl: 'LCL',
   roro: 'RoRo',
   break_bulk: 'Break Bulk',
-};
-
-type QuotationDetail = Quotation & {
-  customer: Customer | null;
-  branch: Branch | null;
-  items: QuotationItem[];
-  sales_rep: Profile | null;
-  requested_by_user: Profile | null;
-  approved_by_user: Profile | null;
 };
 
 interface StatusAction {
@@ -209,17 +203,7 @@ export default function QuotationDetailPage() {
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
 
-  const [quotation, setQuotation] = useState<QuotationDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
-  const [creatingVersion, setCreatingVersion] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [organization, setOrganization] = useState<Pick<
-    Organization,
-    'name' | 'logo_url' | 'quotation_approval_required' | 'quotation_discount_threshold_percent' | 'quotation_amount_threshold'
-  > | null>(null);
   const [convertOpen, setConvertOpen] = useState(false);
   // Reject and Cancel share one dialog — both are "terminal-ish" actions
   // that ask for an optional reason before applying.
@@ -230,10 +214,27 @@ export default function QuotationDetailPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [archiving, setArchiving] = useState(false);
 
   const quotationId = params.id!;
   const isAdmin = profile?.role === 'admin';
+  const queryClient = useQueryClient();
+
+  const { data: quotation, isLoading: loading } = useQuery({
+    queryKey: ['quotation', quotationId],
+    queryFn: () => fetchQuotationDetail(quotationId),
+    enabled: !!quotationId,
+  });
+
+  // Section 9 gating: whether Draft can go straight to Sent, or must pass
+  // through Pending Approval / Approved first — plus the discount/amount
+  // thresholds that force Branch Manager approval regardless, and the
+  // org name/logo the PDF needs.
+  const { data: organization = null } = useQuery({
+    queryKey: ['quotation-org-settings', profile?.organization_id],
+    queryFn: () => fetchQuotationOrgSettings(profile!.organization_id!),
+    enabled: !!profile?.organization_id,
+  });
+
   const canDelete =
     !!quotation && !quotation.converted_shipment_id && canDeleteOwnRecord({ hasRole });
   const approvalRequired = organization?.quotation_approval_required ?? false;
@@ -251,110 +252,38 @@ export default function QuotationDetailPage() {
   const approvalReason = organization ? computeApprovalReason(totals, organization) : null;
   const canApprove = hasRole('branch_manager') || (hasRole('admin') && !approvalReason);
 
-  const loadData = useCallback(async () => {
-    if (!quotationId) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('quotations')
-        .select(
-          `*, customer:customers(*), branch:branches(*), items:quotation_items(*),
-           sales_rep:profiles!quotations_sales_rep_id_fkey(id, full_name),
-           requested_by_user:profiles!quotations_requested_by_fkey(id, full_name),
-           approved_by_user:profiles!quotations_approved_by_fkey(id, full_name),
-           sent_by_user:profiles!quotations_sent_by_fkey(id, full_name)`
-        )
-        .eq('id', quotationId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error loading quotation:', error);
-        setQuotation(null);
-        return;
-      }
-      if (!data) {
-        setQuotation(null);
-        return;
-      }
-
-      const q = data as QuotationDetail;
-      q.items = (q.items ?? []).filter((i) => !i.deleted_at).sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      setQuotation(q);
-    } finally {
-      setLoading(false);
-    }
-  }, [quotationId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Section 9 gating: whether Draft can go straight to Sent, or must pass
-  // through Pending Approval / Approved first — plus the discount/amount
-  // thresholds that force Branch Manager approval regardless, and the
-  // org name/logo the PDF needs.
-  useEffect(() => {
-    if (!profile?.organization_id) return;
-    supabase
-      .from('organizations')
-      .select('name, logo_url, quotation_approval_required, quotation_discount_threshold_percent, quotation_amount_threshold')
-      .eq('id', profile.organization_id)
-      .maybeSingle()
-      .then(({ data }) => setOrganization(data ?? null));
-  }, [profile?.organization_id]);
-
   // Log a view once per browser session per quotation — not every render.
   useEffect(() => {
     if (!quotation || !profile) return;
     const key = `quotation-viewed-${quotation.id}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    supabase.from('activities').insert({
-      user_id: profile.id,
-      branch_id: quotation.branch_id,
-      action: 'quotation.viewed',
-      entity_type: 'quotation',
-      entity_id: quotation.id,
-      description: `Viewed quotation ${quotation.quotation_number ?? ''}`,
+    logQuotationViewed({
+      userId: profile.id,
+      branchId: quotation.branch_id,
+      quotationId: quotation.id,
+      quotationNumber: quotation.quotation_number,
     });
   }, [quotation, profile]);
 
-  const handleStatusChange = async (target: QuotationStatus, notes?: string) => {
-    if (!quotation || !profile) return;
-    setUpdatingStatus(true);
-    try {
-      const updatePayload: Record<string, unknown> = {
-        status: target,
-        updated_by: profile.id,
-        updated_at: new Date().toISOString(),
-      };
-      if (target === 'approved') {
-        updatePayload.approved_by = profile.id;
-        updatePayload.approval_date = new Date().toISOString();
-        if (notes) updatePayload.approval_notes = notes;
-      }
-      if (target === 'sent') {
-        updatePayload.sent_by = profile.id;
-        updatePayload.sent_at = new Date().toISOString();
-      }
-      if ((target === 'rejected' || target === 'cancelled') && notes) {
-        updatePayload.approval_notes = notes;
-      }
+  const invalidateQuotation = () => {
+    queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] });
+  };
 
-      const { error } = await supabase.from('quotations').update(updatePayload).eq('id', quotationId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.status_changed',
-        entity_type: 'quotation',
-        entity_id: quotationId,
-        description: `Quotation ${quotation.quotation_number ?? ''} status changed from "${QUOTATION_STATUS_META[quotation.status]?.label ?? quotation.status}" to "${QUOTATION_STATUS_META[target]?.label ?? target}"`,
-        metadata: { from: quotation.status, to: target, quotation_number: quotation.quotation_number },
+  const statusMutation = useMutation({
+    mutationFn: async ({ target, notes }: { target: QuotationStatus; notes?: string }) => {
+      if (!quotation || !profile) throw new Error('Not ready');
+      await updateQuotationStatus({
+        quotationId,
+        profileId: profile.id,
+        branchId: quotation.branch_id,
+        target,
+        notes,
+        currentStatus: quotation.status,
+        currentStatusLabel: QUOTATION_STATUS_META[quotation.status]?.label ?? quotation.status,
+        targetStatusLabel: QUOTATION_STATUS_META[target]?.label ?? target,
+        quotationNumber: quotation.quotation_number,
       });
 
       // Email the customer about the status change (best-effort — don't
@@ -402,171 +331,78 @@ export default function QuotationDetailPage() {
         console.warn('Quotation email request failed:', emailErr);
       }
 
+      return target;
+    },
+    onSuccess: (target) => {
+      invalidateQuotation();
       toast.success(`Quotation marked as ${QUOTATION_STATUS_META[target]?.label ?? target}`);
       setTerminalActionTarget(null);
       setApprovalNotes('');
-      loadData();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update status'));
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
+    },
+  });
 
-  const handleDelete = async () => {
-    if (!quotation || !profile) return;
-    setDeleting(true);
-    try {
+  const updatingStatus = statusMutation.isPending;
+  const handleStatusChange = (target: QuotationStatus, notes?: string) =>
+    statusMutation.mutate({ target, notes });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!quotation || !profile) throw new Error('Not ready');
       if (hasRole('admin')) {
         const result = await adminForceDelete('quotation', quotationId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Quotation permanently deleted');
-        navigate('/quotations');
-        return;
+        return { permanent: true };
       }
 
-      const { error } = await supabase
-        .from('quotations')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', quotationId);
-
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.deleted',
-        entity_type: 'quotation',
-        entity_id: quotationId,
-        description: `Deleted quotation ${quotation.quotation_number ?? ''}`,
-        metadata: { quotation_number: quotation.quotation_number, customer_id: quotation.customer_id },
+      await softDeleteQuotation({
+        quotationId,
+        profileId: profile.id,
+        branchId: quotation.branch_id,
+        quotationNumber: quotation.quotation_number,
+        customerId: quotation.customer_id,
       });
-
-      toast.success('Quotation deleted');
+      return { permanent: false };
+    },
+    onSuccess: (result) => {
+      invalidateQuotation();
+      toast.success(result.permanent ? 'Quotation permanently deleted' : 'Quotation deleted');
       navigate('/quotations');
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to delete quotation'));
-    } finally {
-      setDeleting(false);
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
 
-  const handleDuplicate = async () => {
-    if (!quotation || !profile?.id) return;
-    setDuplicating(true);
-    try {
-      const { data: newQuotation, error: quoteError } = await supabase
-        .from('quotations')
-        .insert({
-          customer_id: quotation.customer_id,
-          branch_id: quotation.branch_id,
-          status: 'draft',
-          contact_person: quotation.contact_person,
-          contact_email: quotation.contact_email,
-          contact_phone: quotation.contact_phone,
-          sales_rep_id: quotation.sales_rep_id,
-          shipment_direction: quotation.shipment_direction,
-          shipment_type: quotation.shipment_type,
-          cargo_type: quotation.cargo_type,
-          incoterm: quotation.incoterm,
-          origin: quotation.origin,
-          destination: quotation.destination,
-          origin_country: quotation.origin_country,
-          origin_port: quotation.origin_port,
-          destination_country: quotation.destination_country,
-          destination_port: quotation.destination_port,
-          expected_shipping_date: quotation.expected_shipping_date,
-          expected_arrival_date: quotation.expected_arrival_date,
-          commodity_description: quotation.commodity_description,
-          hs_code: quotation.hs_code,
-          container_count: quotation.container_count,
-          container_size: quotation.container_size,
-          weight: quotation.weight,
-          weight_unit: quotation.weight_unit,
-          cbm: quotation.cbm,
-          packages_count: quotation.packages_count,
-          package_type: quotation.package_type,
-          dangerous_cargo: quotation.dangerous_cargo,
-          temperature_controlled: quotation.temperature_controlled,
-          insurance_required: quotation.insurance_required,
-          cargo_value: quotation.cargo_value,
-          services: quotation.services,
-          excluded_services: quotation.excluded_services,
-          payment_terms: quotation.payment_terms,
-          payment_method: quotation.payment_method,
-          required_documents: quotation.required_documents,
-          priority: quotation.priority,
-          valid_until: quotation.valid_until,
-          subtotal: quotation.subtotal,
-          tax_amount: quotation.tax_amount,
-          total: quotation.total,
-          currency: quotation.currency,
-          notes: quotation.notes,
-          customer_notes: quotation.customer_notes,
-          terms: quotation.terms,
-          requested_by: profile.id,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id')
-        .single();
+  const deleting = deleteMutation.isPending;
+  const handleDelete = () => deleteMutation.mutate();
 
-      if (quoteError || !newQuotation) {
-        throw new Error(quoteError?.message ?? 'Failed to duplicate quotation');
+  const duplicateMutation = useMutation({
+    mutationFn: () => {
+      if (!quotation || !profile?.id) throw new Error('Not ready');
+      return duplicateQuotation({ quotation, profileId: profile.id });
+    },
+    onSuccess: ({ newId, itemsFailed }) => {
+      invalidateQuotation();
+      if (itemsFailed) {
+        toast.warning('Quotation duplicated, but some charges failed to copy.');
+      } else {
+        toast.success('Quotation duplicated');
       }
-
-      const newId = newQuotation.id;
-
-      if (quotation.items && quotation.items.length > 0) {
-        const itemsPayload = quotation.items.map((item, index) => ({
-          quotation_id: newId,
-          service_key: item.service_key,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          discount_rate: item.discount_rate,
-          tax_rate: item.tax_rate,
-          unit: item.unit,
-          notes: item.notes,
-          billing_basis: item.billing_basis,
-          cost_centre: item.cost_centre,
-          gl_account: item.gl_account,
-          internal_reference: item.internal_reference,
-          tax_code: item.tax_code,
-          sort_order: index,
-          total: item.total,
-        }));
-
-        const { error: itemsError } = await supabase.from('quotation_items').insert(itemsPayload);
-        if (itemsError) {
-          console.error('Items clone error:', itemsError);
-          toast.warning('Quotation duplicated, but some charges failed to copy.');
-        }
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.duplicated',
-        entity_type: 'quotation',
-        entity_id: newId,
-        description: `Duplicated quotation ${quotation.quotation_number ?? ''}`,
-        metadata: {
-          source_quotation_id: quotationId,
-          source_quotation_number: quotation.quotation_number,
-          new_quotation_id: newId,
-        },
-      });
-
-      toast.success('Quotation duplicated');
       navigate(`/quotations/${newId}`);
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to duplicate quotation'));
-    } finally {
-      setDuplicating(false);
-    }
-  };
+    },
+  });
+
+  const duplicating = duplicateMutation.isPending;
+  const handleDuplicate = () => duplicateMutation.mutate();
 
   /**
    * "Create New Version" — an edited revision of THIS deal, not a fresh
@@ -575,128 +411,27 @@ export default function QuotationDetailPage() {
    * flips the source row to no-longer-latest, then goes straight to the
    * new version's edit form since the whole point is to change something.
    */
-  const handleCreateVersion = async () => {
-    if (!quotation || !profile?.id) return;
-    setCreatingVersion(true);
-    try {
-      const rootId = quotation.root_quotation_id ?? quotation.id;
-
-      const { data: newQuotation, error: quoteError } = await supabase
-        .from('quotations')
-        .insert({
-          customer_id: quotation.customer_id,
-          branch_id: quotation.branch_id,
-          status: 'draft',
-          parent_quotation_id: quotation.id,
-          root_quotation_id: rootId,
-          version: quotation.version + 1,
-          is_latest_version: true,
-          contact_person: quotation.contact_person,
-          contact_email: quotation.contact_email,
-          contact_phone: quotation.contact_phone,
-          sales_rep_id: quotation.sales_rep_id,
-          shipment_direction: quotation.shipment_direction,
-          shipment_type: quotation.shipment_type,
-          cargo_type: quotation.cargo_type,
-          incoterm: quotation.incoterm,
-          origin: quotation.origin,
-          destination: quotation.destination,
-          origin_country: quotation.origin_country,
-          origin_port: quotation.origin_port,
-          destination_country: quotation.destination_country,
-          destination_port: quotation.destination_port,
-          expected_shipping_date: quotation.expected_shipping_date,
-          expected_arrival_date: quotation.expected_arrival_date,
-          commodity_description: quotation.commodity_description,
-          hs_code: quotation.hs_code,
-          container_count: quotation.container_count,
-          container_size: quotation.container_size,
-          weight: quotation.weight,
-          weight_unit: quotation.weight_unit,
-          cbm: quotation.cbm,
-          packages_count: quotation.packages_count,
-          package_type: quotation.package_type,
-          dangerous_cargo: quotation.dangerous_cargo,
-          temperature_controlled: quotation.temperature_controlled,
-          insurance_required: quotation.insurance_required,
-          cargo_value: quotation.cargo_value,
-          services: quotation.services,
-          excluded_services: quotation.excluded_services,
-          payment_terms: quotation.payment_terms,
-          payment_method: quotation.payment_method,
-          required_documents: quotation.required_documents,
-          priority: quotation.priority,
-          valid_until: quotation.valid_until,
-          subtotal: quotation.subtotal,
-          tax_amount: quotation.tax_amount,
-          total: quotation.total,
-          currency: quotation.currency,
-          notes: quotation.notes,
-          customer_notes: quotation.customer_notes,
-          terms: quotation.terms,
-          requested_by: profile.id,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id')
-        .single();
-
-      if (quoteError || !newQuotation) {
-        throw new Error(quoteError?.message ?? 'Failed to create new version');
+  const createVersionMutation = useMutation({
+    mutationFn: () => {
+      if (!quotation || !profile?.id) throw new Error('Not ready');
+      return createQuotationVersion({ quotation, profileId: profile.id });
+    },
+    onSuccess: ({ newId, itemsFailed }) => {
+      invalidateQuotation();
+      if (itemsFailed) {
+        toast.warning('New version created, but some charges failed to copy.');
+      } else {
+        toast.success(`Version ${(quotation?.version ?? 0) + 1} created`);
       }
-
-      const newId = newQuotation.id;
-
-      if (quotation.items && quotation.items.length > 0) {
-        const itemsPayload = quotation.items.map((item, index) => ({
-          quotation_id: newId,
-          service_key: item.service_key,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          discount_rate: item.discount_rate,
-          tax_rate: item.tax_rate,
-          unit: item.unit,
-          notes: item.notes,
-          billing_basis: item.billing_basis,
-          cost_centre: item.cost_centre,
-          gl_account: item.gl_account,
-          internal_reference: item.internal_reference,
-          tax_code: item.tax_code,
-          sort_order: index,
-          total: item.total,
-        }));
-        const { error: itemsError } = await supabase.from('quotation_items').insert(itemsPayload);
-        if (itemsError) {
-          console.error('Items clone error:', itemsError);
-          toast.warning('New version created, but some charges failed to copy.');
-        }
-      }
-
-      const { error: flipError } = await supabase
-        .from('quotations')
-        .update({ is_latest_version: false, updated_by: profile.id })
-        .eq('id', quotation.id);
-      if (flipError) console.error('Failed to flip previous version:', flipError);
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.version_created',
-        entity_type: 'quotation',
-        entity_id: newId,
-        description: `Created version ${quotation.version + 1} of quotation ${quotation.quotation_number ?? ''}`,
-        metadata: { source_quotation_id: quotationId, new_quotation_id: newId, version: quotation.version + 1 },
-      });
-
-      toast.success(`Version ${quotation.version + 1} created`);
       navigate(`/quotations/${newId}/edit`);
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to create new version'));
-    } finally {
-      setCreatingVersion(false);
-    }
-  };
+    },
+  });
+
+  const creatingVersion = createVersionMutation.isPending;
+  const handleCreateVersion = () => createVersionMutation.mutate();
 
   const handlePrint = () => window.print();
 
@@ -735,13 +470,11 @@ export default function QuotationDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
 
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: quotation.branch_id,
-        action: 'quotation.pdf_downloaded',
-        entity_type: 'quotation',
-        entity_id: quotation.id,
-        description: `Downloaded PDF for quotation ${quotation.quotation_number ?? ''}`,
+      await logQuotationPdfDownloaded({
+        userId: profile.id,
+        branchId: quotation.branch_id,
+        quotationId: quotation.id,
+        quotationNumber: quotation.quotation_number,
       });
     } finally {
       setDownloadingPdf(false);
@@ -794,14 +527,7 @@ export default function QuotationDetailPage() {
     }
   };
 
-  const handleArchive = async () => {
-    setArchiving(true);
-    try {
-      await handleStatusChange('archived');
-    } finally {
-      setArchiving(false);
-    }
-  };
+  const handleArchive = () => handleStatusChange('archived');
 
   if (loading) {
     return (
@@ -1017,8 +743,8 @@ export default function QuotationDetailPage() {
           )}
 
           {canArchive && (
-            <Button variant="outline" size="sm" onClick={handleArchive} disabled={archiving}>
-              {archiving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Archive className="mr-1.5 h-4 w-4" />}
+            <Button variant="outline" size="sm" onClick={handleArchive} disabled={updatingStatus}>
+              {updatingStatus ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Archive className="mr-1.5 h-4 w-4" />}
               Archive
             </Button>
           )}
@@ -1422,7 +1148,7 @@ export default function QuotationDetailPage() {
         quotation={quotation}
         open={convertOpen}
         onOpenChange={setConvertOpen}
-        onConverted={loadData}
+        onConverted={invalidateQuotation}
       />
 
       {/* Reject / Cancel reason dialog — same shape, different target status. */}

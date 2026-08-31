@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
   Users,
@@ -21,7 +22,6 @@ import {
   Waypoints,
   Filter,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
   Card,
@@ -65,49 +65,29 @@ import {
   formatDateTime,
   formatCurrency,
 } from '@/shared/lib/utils/status';
+import {
+  fetchActivitiesReport,
+  fetchBranchesForReports,
+  fetchCustomersReport,
+  fetchProfitabilityReport,
+  fetchQuotationsReport,
+  fetchShipmentsReport,
+  type ActivityReportRow,
+  type CustomerReportRow,
+  type ProfitabilityRow,
+  type QuotationReportRow,
+  type ShipmentReportRow,
+} from '@/features/reports/services/reports.service';
 import type {
-  Customer,
   CustomerStatus,
-  Quotation,
   QuotationStatus,
-  Shipment,
   ShipmentStatus,
   ShipmentType,
-  Activity,
-  Branch,
 } from '@/shared/types';
 
 // ---------------------------------------------------------------------------
 // Types for report rows (joined with related data)
 // ---------------------------------------------------------------------------
-
-type CustomerReportRow = Customer & {
-  shipment_count?: number;
-  quotation_count?: number;
-};
-
-type ShipmentReportRow = Shipment & {
-  customer?: { id: string; company_name: string } | null;
-};
-
-type QuotationReportRow = Quotation & {
-  customer?: { id: string; company_name: string } | null;
-};
-
-type ActivityReportRow = Activity & {
-  userName: string;
-};
-
-type ProfitabilityRow = {
-  id: string;
-  reference_number: string | null;
-  status: ShipmentStatus;
-  customer_name: string;
-  currency: string;
-  revenue: number;
-  cost: number;
-  margin: number;
-};
 
 type ReportTab = 'customers' | 'shipments' | 'quotations' | 'operations' | 'profitability';
 
@@ -264,31 +244,11 @@ export default function ReportsPage() {
   const userBranchId = profile?.branch_id ?? null;
 
   const [activeTab, setActiveTab] = useState<ReportTab>('customers');
-  const [loading, setLoading] = useState(true);
 
   // Filters
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [branchIdFilter, setBranchIdFilter] = useState<string>('all');
-  const [branches, setBranches] = useState<Branch[]>([]);
-
-  // Report data
-  const [customers, setCustomers] = useState<CustomerReportRow[]>([]);
-  const [shipments, setShipments] = useState<ShipmentReportRow[]>([]);
-  const [quotations, setQuotations] = useState<QuotationReportRow[]>([]);
-  const [activities, setActivities] = useState<ActivityReportRow[]>([]);
-  const [profitability, setProfitability] = useState<ProfitabilityRow[]>([]);
-
-  // Load branches for admin filter
-  useEffect(() => {
-    if (!isAdmin) return;
-    supabase
-      .from('branches')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true })
-      .then(({ data }) => setBranches((data as Branch[]) ?? []));
-  }, [isAdmin]);
 
   // Determine effective branch filter
   const effectiveBranchId = useMemo(() => {
@@ -297,258 +257,60 @@ export default function ReportsPage() {
     return null; // admin with "all branches" selected
   }, [isAdmin, userBranchId, branchIdFilter]);
 
-  // Apply date range filter to a query
-  const applyDateRange = useCallback(
-    <Q extends { gte: (col: string, val: string) => Q; lte: (col: string, val: string) => Q }>(
-      query: Q,
-      column: string
-    ): Q => {
-      let q = query;
-      if (fromDate) {
-        q = q.gte(column, fromDate);
-      }
-      if (toDate) {
-        // Add one day to make the "to" date inclusive (end of day)
-        const endOfDay = new Date(toDate);
-        endOfDay.setDate(endOfDay.getDate() + 1);
-        q = q.lte(column, endOfDay.toISOString().split('T')[0]);
-      }
-      return q;
-    },
-    [fromDate, toDate]
+  const filters = useMemo(
+    () => ({ branchId: effectiveBranchId, fromDate, toDate }),
+    [effectiveBranchId, fromDate, toDate]
   );
 
-  // -------------------------------------------------------------------------
-  // Data fetching
-  // -------------------------------------------------------------------------
+  const { data: branches = [] } = useQuery({
+    queryKey: ['report-branches'],
+    queryFn: fetchBranchesForReports,
+    enabled: isAdmin,
+  });
 
-  const loadCustomersReport = useCallback(async () => {
-    let query = supabase
-      .from('customers')
-      .select('*, branch:branches(*)')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+  // Each report is fetched only while its own tab is the active one, not
+  // all five unconditionally on every mount/filter change — `enabled`
+  // reproduces the previous "load just the visible tab" behavior, and a
+  // filter change while sitting on a tab still refetches it (filters are
+  // part of the query key).
+  const customersQuery = useQuery({
+    queryKey: ['reports', 'customers', filters],
+    queryFn: () => fetchCustomersReport(filters),
+    enabled: !!profile && activeTab === 'customers',
+  });
+  const shipmentsQuery = useQuery({
+    queryKey: ['reports', 'shipments', filters],
+    queryFn: () => fetchShipmentsReport(filters),
+    enabled: !!profile && activeTab === 'shipments',
+  });
+  const quotationsQuery = useQuery({
+    queryKey: ['reports', 'quotations', filters],
+    queryFn: () => fetchQuotationsReport(filters),
+    enabled: !!profile && activeTab === 'quotations',
+  });
+  const activitiesQuery = useQuery({
+    queryKey: ['reports', 'activities', filters],
+    queryFn: () => fetchActivitiesReport(filters),
+    enabled: !!profile && activeTab === 'operations',
+  });
+  const profitabilityQuery = useQuery({
+    queryKey: ['reports', 'profitability', filters],
+    queryFn: () => fetchProfitabilityReport(filters),
+    enabled: !!profile && activeTab === 'profitability',
+  });
 
-    if (effectiveBranchId) {
-      query = query.eq('branch_id', effectiveBranchId);
-    }
-    query = applyDateRange(query, 'created_at');
+  const customers = customersQuery.data ?? [];
+  const shipments = shipmentsQuery.data ?? [];
+  const quotations = quotationsQuery.data ?? [];
+  const activities = activitiesQuery.data ?? [];
+  const profitability = profitabilityQuery.data ?? [];
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading customers report:', error);
-      return [];
-    }
-    const customerRows = (data as CustomerReportRow[]) ?? [];
-
-    // Per-customer shipment/quotation counts via one grouped SQL query
-    // (migration 070) instead of fetching every matching shipment/
-    // quotation row unbounded just to .length them in JS.
-    if (customerRows.length > 0) {
-      const customerIds = customerRows.map((c) => c.id);
-      const { data: counts, error: countsError } = await supabase.rpc(
-        'customer_shipment_quotation_counts',
-        { p_customer_ids: customerIds }
-      );
-      if (countsError) {
-        console.error('Error loading customer report counts:', countsError);
-      } else {
-        const countMap = new Map(
-          (counts as { customer_id: string; shipment_count: number; quotation_count: number }[]).map(
-            (row) => [row.customer_id, row]
-          )
-        );
-        customerRows.forEach((c) => {
-          const row = countMap.get(c.id);
-          c.shipment_count = row?.shipment_count ?? 0;
-          c.quotation_count = row?.quotation_count ?? 0;
-        });
-      }
-    }
-
-    return customerRows;
-  }, [effectiveBranchId, applyDateRange]);
-
-  const loadShipmentsReport = useCallback(async () => {
-    let query = supabase
-      .from('shipments')
-      .select(
-        '*, customer:customers(id, company_name), branch:branches(id, name)'
-      )
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-
-    if (effectiveBranchId) {
-      query = query.eq('branch_id', effectiveBranchId);
-    }
-    query = applyDateRange(query, 'booking_date');
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading shipments report:', error);
-      return [];
-    }
-    return (data as ShipmentReportRow[]) ?? [];
-  }, [effectiveBranchId, applyDateRange]);
-
-  const loadQuotationsReport = useCallback(async () => {
-    let query = supabase
-      .from('quotations')
-      .select(
-        '*, customer:customers(id, company_name), branch:branches(id, name)'
-      )
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-
-    if (effectiveBranchId) {
-      query = query.eq('branch_id', effectiveBranchId);
-    }
-    query = applyDateRange(query, 'created_at');
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading quotations report:', error);
-      return [];
-    }
-    return (data as QuotationReportRow[]) ?? [];
-  }, [effectiveBranchId, applyDateRange]);
-
-  const loadActivitiesReport = useCallback(async () => {
-    let query = supabase
-      .from('activities')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (effectiveBranchId) {
-      query = query.eq('branch_id', effectiveBranchId);
-    }
-    query = applyDateRange(query, 'created_at');
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading activities report:', error);
-      return [];
-    }
-    const rows = (data as Activity[]) ?? [];
-
-    // activities.user_id is a FK to auth.users, not profiles — no PostgREST
-    // embed exists for it, so actor names are batch-fetched separately and
-    // mapped in memory (same pattern used in activity-log and audit-logs).
-    const actorIds = Array.from(new Set(rows.map((a) => a.user_id).filter(Boolean))) as string[];
-    const actorNames = new Map<string, string>();
-    if (actorIds.length > 0) {
-      const { data: actorRows } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', actorIds);
-      (actorRows ?? []).forEach((p) => actorNames.set(p.id, p.full_name));
-    }
-
-    return rows.map((a) => ({
-      ...a,
-      userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
-    }));
-  }, [effectiveBranchId, applyDateRange]);
-
-  // Revenue = billed invoice totals per shipment. Cost = approved expenses
-  // plus customs duty — the two real out-of-pocket costs already tracked
-  // elsewhere in the app. Computed from an already-loaded shipment list
-  // rather than its own filtered query, so it stays in sync with whatever
-  // date/branch filter produced that list.
-  const computeProfitability = useCallback(
-    async (shipmentRows: ShipmentReportRow[]): Promise<ProfitabilityRow[]> => {
-      if (shipmentRows.length === 0) return [];
-      const ids = shipmentRows.map((s) => s.id);
-
-      const [{ data: invoiceRows }, { data: expenseRows }, { data: customsRows }] = await Promise.all([
-        supabase.from('invoices').select('shipment_id, total, currency').in('shipment_id', ids).is('deleted_at', null),
-        supabase
-          .from('expenses')
-          .select('shipment_id, amount')
-          .in('shipment_id', ids)
-          .eq('status', 'approved')
-          .is('deleted_at', null),
-        supabase.from('shipment_customs').select('shipment_id, duty_amount').in('shipment_id', ids).is('deleted_at', null),
-      ]);
-
-      const revenueByShipment = new Map<string, number>();
-      const currencyByShipment = new Map<string, string>();
-      (invoiceRows ?? []).forEach((row: { shipment_id: string | null; total: number; currency: string }) => {
-        if (!row.shipment_id) return;
-        revenueByShipment.set(row.shipment_id, (revenueByShipment.get(row.shipment_id) ?? 0) + Number(row.total));
-        if (!currencyByShipment.has(row.shipment_id)) currencyByShipment.set(row.shipment_id, row.currency);
-      });
-
-      const costByShipment = new Map<string, number>();
-      (expenseRows ?? []).forEach((row: { shipment_id: string | null; amount: number }) => {
-        if (!row.shipment_id) return;
-        costByShipment.set(row.shipment_id, (costByShipment.get(row.shipment_id) ?? 0) + Number(row.amount));
-      });
-      (customsRows ?? []).forEach((row: { shipment_id: string; duty_amount: number }) => {
-        costByShipment.set(row.shipment_id, (costByShipment.get(row.shipment_id) ?? 0) + Number(row.duty_amount));
-      });
-
-      return shipmentRows
-        .filter((s) => revenueByShipment.has(s.id) || costByShipment.has(s.id))
-        .map((s) => {
-          const revenue = revenueByShipment.get(s.id) ?? 0;
-          const cost = costByShipment.get(s.id) ?? 0;
-          return {
-            id: s.id,
-            reference_number: s.reference_number,
-            status: s.status,
-            customer_name: s.customer?.company_name ?? '—',
-            currency: currencyByShipment.get(s.id) ?? 'NGN',
-            revenue,
-            cost,
-            margin: revenue - cost,
-          };
-        });
-    },
-    []
-  );
-
-  // Loads only the ACTIVE tab's report, not all five — the previous
-  // version loaded customers + shipments + quotations + activities +
-  // profitability unconditionally on every mount and every filter
-  // change, regardless of which single tab was actually visible. Each
-  // loadXReport callback already depends on effectiveBranchId/
-  // applyDateRange, so a filter change while sitting on one tab still
-  // correctly refetches; switching tabs fetches that tab fresh with
-  // whatever filters are current, rather than trusting a possibly-stale
-  // earlier load.
-  const loadActiveTabData = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      if (activeTab === 'customers') {
-        setCustomers(await loadCustomersReport());
-      } else if (activeTab === 'shipments') {
-        setShipments(await loadShipmentsReport());
-      } else if (activeTab === 'quotations') {
-        setQuotations(await loadQuotationsReport());
-      } else if (activeTab === 'operations') {
-        setActivities(await loadActivitiesReport());
-      } else if (activeTab === 'profitability') {
-        const shipData = await loadShipmentsReport();
-        setProfitability(await computeProfitability(shipData));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    profile,
-    activeTab,
-    loadCustomersReport,
-    loadShipmentsReport,
-    loadQuotationsReport,
-    loadActivitiesReport,
-    computeProfitability,
-  ]);
-
-  useEffect(() => {
-    loadActiveTabData();
-  }, [loadActiveTabData]);
+  const loading =
+    (activeTab === 'customers' && customersQuery.isLoading) ||
+    (activeTab === 'shipments' && shipmentsQuery.isLoading) ||
+    (activeTab === 'quotations' && quotationsQuery.isLoading) ||
+    (activeTab === 'operations' && activitiesQuery.isLoading) ||
+    (activeTab === 'profitability' && profitabilityQuery.isLoading);
 
   // -------------------------------------------------------------------------
   // Derived / computed values for summaries

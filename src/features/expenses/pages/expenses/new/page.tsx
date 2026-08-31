@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
 import { BranchSelectField } from '@/shared/components/branch-select-field';
+import * as expensesService from '@/features/expenses/services/expenses.service';
 import {
   Card,
   CardContent,
@@ -39,7 +40,7 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { EXPENSE_CATEGORY_META } from '@/shared/lib/utils/status';
-import type { ExpenseCategory, Shipment } from '@/shared/types';
+import type { ExpenseCategory } from '@/shared/types';
 
 const expenseSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -69,8 +70,7 @@ const CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
 export default function NewExpensePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === 'admin';
   const myBranchId = profile?.branch_id ?? null;
@@ -101,71 +101,48 @@ export default function NewExpensePage() {
     },
   });
 
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('shipments')
-      .select('*')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading shipments:', error);
-      setShipments((data as Shipment[]) ?? []);
-    });
-  }, [profile, isAdmin, myBranchId]);
+  const { data: shipments = [] } = useQuery({
+    queryKey: ['expenses', 'form-shipments', isAdmin, myBranchId],
+    queryFn: () => expensesService.fetchShipmentsForExpenseForm(isAdmin, myBranchId),
+    enabled: !!profile,
+  });
 
-  const onSubmit = async (values: ExpenseFormValues) => {
+  const createMutation = useMutation({
+    mutationFn: (values: ExpenseFormValues) => {
+      if (!profile?.id || !branchId) {
+        throw new Error('Please select a branch');
+      }
+      return expensesService.createExpense({
+        description: values.description,
+        category: values.category,
+        shipment_id: values.shipment_id || null,
+        branch_id: branchId,
+        amount: values.amount,
+        currency: values.currency,
+        expense_date: values.expense_date,
+        notes: values.notes || null,
+        created_by: profile.id,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast.success('Expense logged successfully');
+      navigate(`/expenses/${data.id}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to create expense');
+      toast.error(message);
+    },
+  });
+
+  const onSubmit = (values: ExpenseFormValues) => {
     if (!profile?.id) return;
     if (!branchId) {
       setBranchError('Please select a branch');
       return;
     }
     setBranchError('');
-    setSubmitting(true);
-    try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert({
-          description: values.description,
-          category: values.category,
-          shipment_id: values.shipment_id || null,
-          branch_id: branchId,
-          amount: values.amount,
-          currency: values.currency,
-          expense_date: values.expense_date,
-          status: 'pending',
-          paid_by: profile.id,
-          notes: values.notes || null,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id, expense_number')
-        .single();
-
-      if (error || !data) {
-        throw new Error(error?.message ?? 'Failed to create expense');
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'expense.created',
-        entity_type: 'expense',
-        entity_id: data.id,
-        description: `Logged expense ${data.expense_number ?? ''}: "${values.description}"`,
-        metadata: { category: values.category, amount: values.amount },
-      });
-
-      toast.success('Expense logged successfully');
-      navigate(`/expenses/${data.id}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to create expense');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(values);
   };
 
   return (
@@ -342,8 +319,8 @@ export default function NewExpensePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto">
+            {createMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Add Expense
           </Button>
         </div>

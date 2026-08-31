@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Search, Users as UsersIcon } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
-import { getErrorMessage, cn } from '@/shared/lib/utils';
+import { cn } from '@/shared/lib/utils';
 import { ROLE_LABELS } from '@/shared/hooks/use-role';
+import { fetchOrganizationUsers, type OrgUserRow } from '@/features/platform/services/platform-users.service';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
@@ -20,7 +20,6 @@ import {
 } from '@/shared/components/ui/table';
 import { ExportButton } from '@/shared/components/ui/export-button';
 import type { ExportColumn } from '@/shared/lib/export';
-import type { UserRole } from '@/shared/types';
 
 const ORG_USER_EXPORT_COLUMNS: ExportColumn<OrgUserRow>[] = [
   { header: 'Full Name', value: (u) => u.full_name },
@@ -31,50 +30,13 @@ const ORG_USER_EXPORT_COLUMNS: ExportColumn<OrgUserRow>[] = [
   { header: 'Status', value: (u) => (u.is_active ? 'Active' : 'Inactive') },
 ];
 
-interface OrgUserRow {
-  id: string;
-  full_name: string;
-  email: string;
-  role: UserRole;
-  is_active: boolean;
-  organization: { name: string } | null;
-  branch: { name: string } | null;
-}
-
 export default function OrganizationUsersPage() {
-  const [users, setUsers] = useState<OrgUserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['organization-users'],
+    queryFn: fetchOrganizationUsers,
+  });
+  const users = data ?? [];
   const [search, setSearch] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(
-          // organizations!profiles_organization_id_fkey disambiguates the embed:
-          // profiles.organization_id -> organizations.id AND
-          // organizations.created_by -> profiles.id both link these two
-          // tables, so PostgREST can't infer direction from the table name
-          // alone and refuses to embed without an explicit FK hint.
-          'id, full_name, email, role, is_active, organization:organizations!profiles_organization_id_fkey(name), branch:branches(name)'
-        )
-        .neq('role', 'platform_admin')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers((data as unknown as OrgUserRow[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load organization users'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

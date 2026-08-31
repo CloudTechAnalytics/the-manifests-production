@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import {
@@ -15,11 +16,14 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
 import { BranchSelectField } from '@/shared/components/branch-select-field';
+import {
+  createCustomer,
+  findDuplicateCompanyName,
+} from '@/features/customers/services/customers.service';
 import {
   Card,
   CardContent,
@@ -103,7 +107,7 @@ type CustomerFormValues = z.infer<typeof customerSchema>;
 export default function NewCustomerPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
+  const queryClient = useQueryClient();
   const [branchError, setBranchError] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const {
@@ -157,23 +161,53 @@ export default function NewCustomerPage() {
   // which is correct. This warns, it never blocks: duplicates can be
   // legitimate (a sister company, a branch office under the same name).
   const checkDuplicateCompanyName = async (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setDuplicateWarning(null);
-      return;
-    }
-    const { data } = await supabase
-      .from('customers')
-      .select('company_name')
-      .ilike('company_name', trimmed)
-      .is('deleted_at', null)
-      .limit(1);
+    const match = await findDuplicateCompanyName(name);
     setDuplicateWarning(
-      data && data.length > 0
-        ? `A customer named "${data[0].company_name}" already exists.`
-        : null
+      match ? `A customer named "${match}" already exists.` : null
     );
   };
+
+  const createMutation = useMutation({
+    mutationFn: (params: { values: CustomerFormValues; branchId: string }) =>
+      createCustomer({
+        // zod's .optional().or(z.literal('')) types these as possibly
+        // undefined, but every field has a '' defaultValue and is a
+        // controlled input, so it's always a real string at submit time —
+        // `?? ''` just satisfies the service's stricter (all-required) shape.
+        values: {
+          ...params.values,
+          email: params.values.email ?? '',
+          phone: params.values.phone ?? '',
+          address: params.values.address ?? '',
+          city: params.values.city ?? '',
+          website: params.values.website ?? '',
+          notes: params.values.notes ?? '',
+          contacts: params.values.contacts.map((c) => ({
+            ...c,
+            email: c.email ?? '',
+            title: c.title ?? '',
+            phone: c.phone ?? '',
+          })),
+        },
+        branchId: params.branchId,
+        createdBy: profile!.id,
+      }),
+    onSuccess: ({ customerId, contactsFailed }) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      if (contactsFailed) {
+        toast.warning('Customer created, but some contacts failed to save.');
+      } else {
+        toast.success('Customer created successfully');
+      }
+      navigate(`/customers/${customerId}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to create customer');
+      toast.error(message);
+    },
+  });
+
+  const submitting = createMutation.isPending;
 
   const onSubmit = async (values: CustomerFormValues) => {
     if (!profile) return;
@@ -182,86 +216,7 @@ export default function NewCustomerPage() {
       return;
     }
     setBranchError('');
-    setSubmitting(true);
-    try {
-      // 1. Insert customer
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .insert({
-          company_name: values.company_name,
-          type: values.type,
-          email: values.email || null,
-          phone: values.phone || null,
-          address: values.address || null,
-          city: values.city || null,
-          country: values.country,
-          website: values.website || null,
-          notes: values.notes || null,
-          status: values.status,
-          branch_id: branchId,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id')
-        .single();
-
-      if (customerError || !customerData) {
-        throw new Error(customerError?.message ?? 'Failed to create customer');
-      }
-
-      const customerId = customerData.id;
-
-      // 2. Insert contacts (if any)
-      if (values.contacts.length > 0) {
-        // Ensure at most one primary contact: the first marked primary wins
-        let primaryAssigned = false;
-        const contactsPayload = values.contacts.map((c) => {
-          const isPrimary = c.is_primary && !primaryAssigned;
-          if (isPrimary) primaryAssigned = true;
-          return {
-            customer_id: customerId,
-            name: c.name,
-            title: c.title || null,
-            email: c.email || null,
-            phone: c.phone || null,
-            is_primary: isPrimary,
-          };
-        });
-
-        const { error: contactsError } = await supabase
-          .from('customer_contacts')
-          .insert(contactsPayload);
-
-        if (contactsError) {
-          console.error('Contacts insert error:', contactsError);
-          toast.warning('Customer created, but some contacts failed to save.');
-        }
-      }
-
-      // 3. Log activity
-      const { error: activityError } = await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'customer.created',
-        entity_type: 'customer',
-        entity_id: customerId,
-        description: `Created customer "${values.company_name}"`,
-        metadata: { company_name: values.company_name, type: values.type },
-      });
-
-      if (activityError) {
-        console.error('Activity log error:', activityError);
-      }
-
-      toast.success('Customer created successfully');
-      navigate(`/customers/${customerId}`);
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to create customer');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate({ values, branchId });
   };
 
   return (

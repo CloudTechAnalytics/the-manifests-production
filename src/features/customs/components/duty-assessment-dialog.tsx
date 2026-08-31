@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Upload } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { uploadDocumentFile } from '@/shared/lib/utils/document-upload';
 import { DUTY_STATUS_META } from '@/shared/lib/utils/status';
@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { fetchCustomsDocument, logCustomsActivity, updateDutyAssessment } from '@/features/customs/services/customs.service';
 import type { DutyStatus, ShipmentCustoms } from '@/shared/types';
 
 const DUTY_STATUS_OPTIONS = (Object.keys(DUTY_STATUS_META) as DutyStatus[]).map((value) => ({
@@ -54,6 +55,7 @@ export function DutyAssessmentDialog({
   onSaved,
 }: DutyAssessmentDialogProps) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [dutyAmount, setDutyAmount] = useState('0');
@@ -67,7 +69,6 @@ export function DutyAssessmentDialog({
   const [receiptDocumentId, setReceiptDocumentId] = useState<string | null>(null);
   const [receiptFileName, setReceiptFileName] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -89,22 +90,16 @@ export function DutyAssessmentDialog({
 
   // The receipt link only shows a filename once we know it — resolve it
   // lazily rather than joining `documents` into every shipment_customs
-  // fetch elsewhere in the app.
-  useEffect(() => {
-    if (!open || !receiptDocumentId) return;
-    let cancelled = false;
-    supabase
-      .from('documents')
-      .select('name')
-      .eq('id', receiptDocumentId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setReceiptFileName(data?.name ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, receiptDocumentId]);
+  // fetch elsewhere in the app. A freshly-uploaded receipt already has
+  // its filename set locally (handleReceiptSelect via receiptFileName);
+  // this query fills it in for a receipt that was already on file when
+  // the dialog opened.
+  const { data: receiptDoc } = useQuery({
+    queryKey: ['customs-document', receiptDocumentId],
+    queryFn: () => fetchCustomsDocument(receiptDocumentId!),
+    enabled: open && !!receiptDocumentId,
+  });
+  const displayedReceiptName = receiptFileName ?? receiptDoc?.name ?? null;
 
   const totalDuty =
     (Number(dutyAmount) || 0) + (Number(vat) || 0) + (Number(levy) || 0) + (Number(ciss) || 0) + (Number(etls) || 0);
@@ -142,10 +137,8 @@ export function DutyAssessmentDialog({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         duty_amount: Number(dutyAmount) || 0,
         duty_vat: Number(vat) || 0,
@@ -157,14 +150,13 @@ export function DutyAssessmentDialog({
         duty_status: dutyStatus,
         duty_paid: dutyStatus === 'paid' || dutyStatus === 'verified',
         duty_receipt_document_id: receiptDocumentId,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
-      const { error } = await supabase.from('shipment_customs').update(payload).eq('id', existing.id);
-      if (error) throw error;
+      await updateDutyAssessment(existing.id, payload);
 
-      await supabase.from('activities').insert({
-        user_id: profile.id,
+      await logCustomsActivity({
+        user_id: profile!.id,
         branch_id: branchId,
         action: 'customs.duty_assessment_updated',
         entity_type: 'shipment_customs',
@@ -172,16 +164,24 @@ export function DutyAssessmentDialog({
         description: `Duty assessment updated (status: ${DUTY_STATUS_META[dutyStatus]?.label ?? dutyStatus}, total: ${totalDuty})`,
         metadata: { duty_status: dutyStatus, duty_total: totalDuty },
       });
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customs-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['customs-document', receiptDocumentId] });
       toast.success('Duty assessment saved');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save duty assessment'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -315,7 +315,7 @@ export function DutyAssessmentDialog({
             </Button>
             {receiptDocumentId && (
               <p className="truncate text-xs text-muted-foreground">
-                {receiptFileName ?? 'Receipt on file'}
+                {displayedReceiptName ?? 'Receipt on file'}
               </p>
             )}
           </div>

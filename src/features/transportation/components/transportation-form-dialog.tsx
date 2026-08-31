@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertTriangle, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -29,6 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  createTransportationRecord,
+  logTransportationActivity,
+  updateTransportationRecord,
+} from '@/features/transportation/services/transportation.service';
 import type { ShipmentTransportation, TransportationStatus } from '@/shared/types';
 
 const STATUS_OPTIONS: { value: TransportationStatus; label: string }[] = [
@@ -57,6 +62,7 @@ export function TransportationFormDialog({
   onSaved,
 }: TransportationFormDialogProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const [truckNumber, setTruckNumber] = useState('');
   const [trailerNumber, setTrailerNumber] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -80,7 +86,6 @@ export function TransportationFormDialog({
   const [estimatedTransportCost, setEstimatedTransportCost] = useState('');
   const [deliveryContactName, setDeliveryContactName] = useState('');
   const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [blockers, setBlockers] = useState<string[]>([]);
 
@@ -114,23 +119,10 @@ export function TransportationFormDialog({
     setBlockers([]);
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    setBlockers([]);
-    try {
-      // Before a shipment moves past "assigned" — i.e. actually starts
-      // moving — Customs release, duty payment, gate pass/exit note, and
-      // a Bill of Lading must all be in place.
-      if (status !== 'assigned') {
-        const readiness = await checkReleaseReadiness(shipmentId);
-        if (!readiness.ready) {
-          setBlockers(readiness.blockers);
-          setSubmitting(false);
-          return;
-        }
-      }
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
 
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         truck_number: truckNumber.trim() || null,
         trailer_number: trailerNumber.trim() || null,
@@ -155,18 +147,13 @@ export function TransportationFormDialog({
         estimated_transport_cost: estimatedTransportCost ? Number(estimatedTransportCost) : null,
         delivery_contact_name: deliveryContactName.trim() || null,
         delivery_contact_phone: deliveryContactPhone.trim() || null,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase
-          .from('shipment_transportation')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        await updateTransportationRecord(existing.id, payload);
+        await logTransportationActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'transportation.updated',
           entity_type: 'shipment_transportation',
@@ -174,17 +161,15 @@ export function TransportationFormDialog({
           description: `Updated transportation leg (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Transportation leg updated');
       } else {
-        const { data: created, error } = await supabase
-          .from('shipment_transportation')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        const created = await createTransportationRecord({
+          ...payload,
+          shipment_id: shipmentId,
+          branch_id: branchId,
+          created_by: profile!.id,
+        });
+        await logTransportationActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'transportation.created',
           entity_type: 'shipment_transportation',
@@ -192,17 +177,37 @@ export function TransportationFormDialog({
           description: `Created transportation leg (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Transportation leg created');
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transportation-queue'] });
+      toast.success(existing ? 'Transportation leg updated' : 'Transportation leg created');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save transportation leg'));
-    } finally {
-      setSubmitting(false);
+    },
+  });
+
+  const handleSubmit = async () => {
+    if (!profile) return;
+    setBlockers([]);
+    // Before a shipment moves past "assigned" — i.e. actually starts
+    // moving — Customs release, duty payment, gate pass/exit note, and
+    // a Bill of Lading must all be in place.
+    if (status !== 'assigned') {
+      setCheckingReadiness(true);
+      const readiness = await checkReleaseReadiness(shipmentId);
+      setCheckingReadiness(false);
+      if (!readiness.ready) {
+        setBlockers(readiness.blockers);
+        return;
+      }
     }
+    saveMutation.mutate();
   };
+  const submitting = checkingReadiness || saveMutation.isPending;
 
   const handleDelete = async () => {
     if (!existing) return;

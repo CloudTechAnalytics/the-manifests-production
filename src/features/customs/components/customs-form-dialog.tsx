@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -28,6 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  createCustomsRecord,
+  logCustomsActivity,
+  updateCustomsRecord,
+} from '@/features/customs/services/customs.service';
 import type { CustomsInspectionChannel, CustomsStatus, ShipmentCustoms } from '@/shared/types';
 
 const STATUS_OPTIONS: { value: CustomsStatus; label: string }[] = [
@@ -64,6 +69,7 @@ export function CustomsFormDialog({
   onSaved,
 }: CustomsFormDialogProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const [declarationNumber, setDeclarationNumber] = useState('');
   const [hsCode, setHsCode] = useState('');
   const [dutyAmount, setDutyAmount] = useState('0');
@@ -91,7 +97,6 @@ export function CustomsFormDialog({
   const [sonRequired, setSonRequired] = useState(false);
   const [nafdacRequired, setNafdacRequired] = useState(false);
   const [nesreaRequired, setNesreaRequired] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -125,10 +130,8 @@ export function CustomsFormDialog({
     setNesreaRequired(existing?.nesrea_required ?? false);
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         declaration_number: declarationNumber.trim() || null,
         hs_code: hsCode.trim() || null,
@@ -157,18 +160,13 @@ export function CustomsFormDialog({
         son_required: sonRequired,
         nafdac_required: nafdacRequired,
         nesrea_required: nesreaRequired,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase
-          .from('shipment_customs')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        await updateCustomsRecord(existing.id, payload);
+        await logCustomsActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'customs.updated',
           entity_type: 'shipment_customs',
@@ -176,17 +174,15 @@ export function CustomsFormDialog({
           description: `Updated customs record (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Customs record updated');
       } else {
-        const { data: created, error } = await supabase
-          .from('shipment_customs')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        const created = await createCustomsRecord({
+          ...payload,
+          shipment_id: shipmentId,
+          branch_id: branchId,
+          created_by: profile!.id,
+        });
+        await logCustomsActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'customs.created',
           entity_type: 'shipment_customs',
@@ -194,17 +190,24 @@ export function CustomsFormDialog({
           description: `Created customs record (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Customs record created');
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customs-queue'] });
+      toast.success(existing ? 'Customs record updated' : 'Customs record created');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save customs record'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   const handleDelete = async () => {
     if (!existing) return;

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -14,10 +14,14 @@ import {
   Loader2,
   UserPlus,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { getCourseMaterialSignedUrl } from '@/shared/lib/utils/course-material-upload';
+import {
+  enrollInCourse,
+  fetchCourseDetail,
+  fetchCourseManageOptions,
+} from '@/features/hr/services/training.service';
 import { AssignTrainingDialog } from '@/features/hr/components/training/assign-training-dialog';
 import { TrainingStatusBadge } from '@/features/hr/components/training/training-status-badge';
 import { Button } from '@/shared/components/ui/button';
@@ -32,112 +36,57 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
-import type { AssignTrainingResult, Branch, Course, CourseMaterial, Department, EmployeeTraining } from '@/shared/types';
+import type { AssignTrainingResult, CourseMaterial } from '@/shared/types';
 
 export default function CourseDetailPage() {
   const params = useParams<{ id: string }>();
+  const courseId = params.id as string;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile, hasRole } = useAuth();
   const canManage = hasRole('admin') || hasRole('hr_manager') || hasRole('hr_officer');
 
-  const [course, setCourse] = useState<Course | null>(null);
-  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
-  const [roster, setRoster] = useState<EmployeeTraining[]>([]);
-  const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
-  const [myEnrollment, setMyEnrollment] = useState<EmployeeTraining | null>(null);
-  const [employeeOptions, setEmployeeOptions] = useState<{ id: string; full_name: string }[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [enrolling, setEnrolling] = useState(false);
+  const detailQuery = useQuery({
+    queryKey: ['training-courses', courseId, 'detail'],
+    queryFn: () => fetchCourseDetail(courseId, profile?.id),
+    enabled: !!courseId,
+  });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const courseId = params.id;
-    const [courseRes, materialsRes, myEmpRes] = await Promise.all([
-      supabase.from('courses').select('*').eq('id', courseId).maybeSingle(),
-      supabase.from('course_materials').select('*').eq('course_id', courseId).order('sort_order'),
-      profile ? supabase.from('employees').select('id').eq('profile_id', profile.id).maybeSingle() : Promise.resolve({ data: null }),
-    ]);
+  const manageOptionsQuery = useQuery({
+    queryKey: ['training-courses', courseId, 'manage-options'],
+    queryFn: fetchCourseManageOptions,
+    enabled: canManage,
+  });
 
-    setCourse((courseRes.data as Course | null) ?? null);
-    setMaterials((materialsRes.data as CourseMaterial[]) ?? []);
-    const empId = (myEmpRes.data as { id: string } | null)?.id ?? null;
-    setMyEmployeeId(empId);
+  const course = detailQuery.data?.course ?? null;
+  const materials = detailQuery.data?.materials ?? [];
+  const roster = detailQuery.data?.roster ?? [];
+  const myEmployeeId = detailQuery.data?.myEmployeeId ?? null;
+  const myEnrollment = detailQuery.data?.myEnrollment ?? null;
+  const employeeOptions = manageOptionsQuery.data?.employeeOptions ?? [];
+  const departments = manageOptionsQuery.data?.departments ?? [];
+  const branches = manageOptionsQuery.data?.branches ?? [];
+  const loading = detailQuery.isLoading;
 
-    if (empId) {
-      const { data: myRows } = await supabase
-        .from('employee_training')
-        .select('*')
-        .eq('employee_id', empId)
-        .eq('course_id', courseId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      setMyEnrollment(((myRows as EmployeeTraining[]) ?? [])[0] ?? null);
-    }
-
-    const canManageNow = true; // roster fetch is safe either way — RLS scopes it
-    if (canManageNow) {
-      const { data: rosterRows } = await supabase
-        .from('employee_training')
-        .select('*, employee:employees(id, first_name, last_name, job_title)')
-        .eq('course_id', courseId)
-        .order('created_at', { ascending: false });
-      setRoster((rosterRows as EmployeeTraining[]) ?? []);
-    }
-
-    setLoading(false);
-  }, [params.id, profile]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!canManage) return;
-    (async () => {
-      const [empRes, deptRes, branchRes] = await Promise.all([
-        supabase.from('employees').select('id, first_name, last_name').is('deleted_at', null).eq('employment_status', 'active'),
-        supabase.from('departments').select('*').eq('is_active', true).is('deleted_at', null),
-        supabase.from('branches').select('*').eq('is_active', true).is('deleted_at', null),
-      ]);
-      setEmployeeOptions(
-        ((empRes.data as { id: string; first_name: string; last_name: string }[]) ?? []).map((e) => ({
-          id: e.id,
-          full_name: `${e.first_name} ${e.last_name}`,
-        }))
-      );
-      setDepartments((deptRes.data as Department[]) ?? []);
-      setBranches((branchRes.data as Branch[]) ?? []);
-    })();
-  }, [canManage]);
-
-  const handleEnroll = async () => {
-    if (!myEmployeeId || !course) {
-      toast.error('You need an Employee record linked to your account to enroll.');
-      return;
-    }
-    setEnrolling(true);
-    try {
-      const { error } = await supabase.from('employee_training').insert({
-        employee_id: myEmployeeId,
-        course_id: course.id,
-        assigned_by: null,
-        status: 'not_started',
-      });
-      if (error) throw new Error(error.message);
+  const enrollMutation = useMutation({
+    mutationFn: () => {
+      if (!myEmployeeId || !course) {
+        throw new Error('You need an Employee record linked to your account to enroll.');
+      }
+      return enrollInCourse(myEmployeeId, course.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-courses', courseId] });
       toast.success('Enrolled — find it under My Learning.');
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to enroll'));
-    } finally {
-      setEnrolling(false);
-    }
-  };
+    },
+  });
 
   const handleAssigned = (result: AssignTrainingResult) => {
     void result;
-    load();
+    queryClient.invalidateQueries({ queryKey: ['training-courses', courseId] });
   };
 
   const openMaterial = async (material: CourseMaterial) => {
@@ -215,8 +164,8 @@ export default function CourseDetailPage() {
           {myEnrollment ? (
             <TrainingStatusBadge status={myEnrollment.status} dueDate={myEnrollment.due_date} />
           ) : (
-            <Button size="sm" variant="outline" onClick={handleEnroll} disabled={enrolling || !myEmployeeId}>
-              {enrolling && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            <Button size="sm" variant="outline" onClick={() => enrollMutation.mutate()} disabled={enrollMutation.isPending || !myEmployeeId}>
+              {enrollMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Enroll
             </Button>
           )}

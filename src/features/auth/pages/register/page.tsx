@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FormProvider, useForm } from 'react-hook-form';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft, ArrowRight, ChevronLeft, Loader2, MailCheck, ShieldCheck,
@@ -16,6 +17,7 @@ import { useRegisterWizard } from '@/shared/lib/register-wizard';
 import { RegisterProgress } from '@/features/auth/components/register-progress';
 import { BusinessStep } from '@/features/auth/components/business-step';
 import { AccountStep } from '@/features/auth/components/account-step';
+import * as authService from '@/features/auth/services/auth.service';
 
 interface RegisterResult {
   emailed: boolean;
@@ -34,9 +36,7 @@ interface RegisterResult {
  * server-side — see migration 064's provision_organization().
  */
 export default function RegisterPage() {
-  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<RegisterResult | null>(null);
-  const [resending, setResending] = useState(false);
 
   const methods = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -45,67 +45,41 @@ export default function RegisterPage() {
   });
   const wizard = useRegisterWizard(methods.trigger);
 
-  const onSubmit = async (values: RegisterFormValues) => {
-    setSubmitting(true);
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/register-organization`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify(values),
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok || !data.success) {
-        toast.error(data.error ?? `Registration failed (${response.status})`);
-        return;
-      }
-
+  const registerMutation = useMutation({
+    mutationFn: (values: RegisterFormValues) => authService.registerOrganization(values),
+    onSuccess: (data, values) => {
       setResult({
         emailed: !!data.emailed,
         link: data.link,
         ownerEmail: values.owner_email,
         similarNameWarning: !!data.similar_name_warning,
       });
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to submit registration'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+  const submitting = registerMutation.isPending;
+
+  const onSubmit = (values: RegisterFormValues) => {
+    registerMutation.mutate(values);
   };
 
-  const handleResend = async () => {
-    if (!result) return;
-    setResending(true);
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-verification`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ email: result.ownerEmail }),
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast.error(data.error ?? 'Failed to resend verification email');
-        return;
-      }
+  const resendMutation = useMutation({
+    mutationFn: (email: string) => authService.resendVerificationEmail(email),
+    onSuccess: (data) => {
       toast.success('Verification email sent (if the address needs one).');
       if (data.link) setResult((r) => (r ? { ...r, link: data.link, emailed: !!data.emailed } : r));
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to resend verification email'));
-    } finally {
-      setResending(false);
-    }
+    },
+  });
+  const resending = resendMutation.isPending;
+
+  const handleResend = () => {
+    if (!result) return;
+    resendMutation.mutate(result.ownerEmail);
   };
 
   if (result) {

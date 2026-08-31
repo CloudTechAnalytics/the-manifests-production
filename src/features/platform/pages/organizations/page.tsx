@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Building2,
@@ -13,10 +14,17 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate, formatCurrency, ORGANIZATION_STATUS_META } from '@/shared/lib/utils/status';
+import {
+  fetchOrganizationsListData,
+  createOrganization,
+  editOrganization,
+  toggleOrganizationActive,
+  softDeleteOrganization,
+  type OrgFormValues,
+} from '@/features/platform/services/organizations.service';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -54,7 +62,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import type { Organization, OrganizationOrigin, OrgSubscription, Plan, BillingCycle, PlatformSettings } from '@/shared/types';
+import type { Organization, OrganizationOrigin, BillingCycle } from '@/shared/types';
 
 // Fallback only, used for the instant before platform_settings loads (or if
 // it somehow fails to) — the real value always comes from
@@ -69,14 +77,7 @@ const DEFAULT_TRIAL_DAYS = 30;
 // written at all — a plan gets assigned later on Subscriptions).
 const TRIAL_ONLY = 'trial';
 
-interface OrgForm {
-  name: string;
-  slug: string;
-  city: string;
-  country: string;
-  phone: string;
-  email: string;
-}
+type OrgForm = OrgFormValues;
 
 const EMPTY_FORM: OrgForm = { name: '', slug: '', city: '', country: '', phone: '', email: '' };
 const DELETE_CONFIRM_PHRASE = 'DELETE ORGANIZATION';
@@ -91,27 +92,21 @@ function slugify(value: string): string {
 
 export default function PlatformOrganizationsPage() {
   const { profile } = useAuth();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [trashedCount, setTrashedCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const [plans, setPlans] = useState<Plan[]>([]);
-  // Keyed by organization_id — the table's Owner/Plan/Users/Renewal
-  // columns (matching the reference layout) read from these instead of
-  // adding per-row queries. Owner = the org-wide admin (branch_id IS
-  // NULL), same "Organization Owner" convention used everywhere else
-  // in this app. Storage is deliberately NOT included here — per-org
-  // storage metering isn't reliably attributable today (storage.objects
-  // has no organization_id), so the table shows an honest "—" for it
-  // rather than a fabricated number.
-  const [subsByOrg, setSubsByOrg] = useState<Map<string, OrgSubscription>>(new Map());
-  const [ownerByOrg, setOwnerByOrg] = useState<Map<string, { full_name: string; email: string }>>(new Map());
-  const [userCountByOrg, setUserCountByOrg] = useState<Map<string, number>>(new Map());
-  const [trialDays, setTrialDays] = useState(DEFAULT_TRIAL_DAYS);
-  // The internal Trial plan (migration 065) — kept out of `plans` (filtered
-  // by is_public below) but still needed to actually assign a subscription
-  // when "Free trial" is chosen, and to show its real max_users in the caption.
-  const [trialPlan, setTrialPlan] = useState<{ id: string; max_users: number | null } | null>(null);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['organizations', 'admin-list'],
+    queryFn: fetchOrganizationsListData,
+  });
+
+  const orgs = data?.orgs ?? [];
+  const trashedCount = data?.trashedCount ?? 0;
+  const plans = data?.plans ?? [];
+  const trialDays = data?.trialDays ?? DEFAULT_TRIAL_DAYS;
+  const trialPlan = data?.trialPlan ?? null;
+  const subsByOrg = data?.subsByOrg ?? new Map();
+  const ownerByOrg = data?.ownerByOrg ?? new Map();
+  const userCountByOrg = data?.userCountByOrg ?? new Map();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
@@ -124,101 +119,19 @@ export default function PlatformOrganizationsPage() {
   // /register. Demo/Internal keep those workspaces clearly distinguished
   // from real customers on this table (spec section 25).
   const [createOrigin, setCreateOrigin] = useState<Exclude<OrganizationOrigin, 'self_service'>>('platform_admin');
-  const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<Organization | null>(null);
   const [editForm, setEditForm] = useState<OrgForm>(EMPTY_FORM);
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof OrgForm, string>>>({});
-  const [editing, setEditing] = useState(false);
 
   const [toggleTarget, setToggleTarget] = useState<Organization | null>(null);
-  const [toggling, setToggling] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [activeRes, trashedRes, plansRes, settingsRes, trialPlanRes, subsRes, ownersRes, profilesRes] =
-        await Promise.all([
-          supabase
-            .from('organizations')
-            .select('*')
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('organizations')
-            .select('id', { count: 'exact', head: true })
-            .not('deleted_at', 'is', null),
-          supabase
-            .from('plans')
-            .select('*')
-            .is('deleted_at', null)
-            .eq('is_active', true)
-            // is_public excludes the internal "Trial" plan (migration 065) —
-            // it's auto-assigned by self-service registration via
-            // platform_settings.default_trial_plan_id, not something to pick
-            // from this list. Without this filter it showed up as a real,
-            // separately-selectable "Trial — ₦0.00/mo" tier right next to
-            // the "Free trial — N days" sentinel above, which is a different,
-            // no-plan-assigned option — two confusingly similar "trial"
-            // choices that did different things.
-            .eq('is_public', true)
-            .order('sort_order', { ascending: true }),
-          supabase
-            .from('platform_settings')
-            .select('trial_duration_days')
-            .eq('id', true)
-            .maybeSingle(),
-          supabase.from('plans').select('id, max_users').eq('slug', 'trial').maybeSingle(),
-          supabase.from('org_subscriptions').select('*, plan:plans(*)'),
-          supabase
-            .from('profiles')
-            .select('organization_id, full_name, email')
-            .eq('role', 'admin')
-            .is('branch_id', null)
-            .is('deleted_at', null),
-          supabase.from('profiles').select('organization_id').is('deleted_at', null),
-        ]);
-      if (activeRes.error) throw activeRes.error;
-      if (plansRes.error) throw plansRes.error;
-      setOrgs((activeRes.data as Organization[]) ?? []);
-      setTrashedCount(trashedRes.count ?? 0);
-      setPlans((plansRes.data as Plan[]) ?? []);
-      const settings = settingsRes.data as Pick<PlatformSettings, 'trial_duration_days'> | null;
-      if (settings?.trial_duration_days) setTrialDays(settings.trial_duration_days);
-      setTrialPlan((trialPlanRes.data as { id: string; max_users: number | null } | null) ?? null);
-
-      const subsMap = new Map<string, OrgSubscription>();
-      for (const s of (subsRes.data as OrgSubscription[]) ?? []) subsMap.set(s.organization_id, s);
-      setSubsByOrg(subsMap);
-
-      const ownerMap = new Map<string, { full_name: string; email: string }>();
-      for (const o of (ownersRes.data as { organization_id: string | null; full_name: string; email: string }[]) ?? []) {
-        if (o.organization_id && !ownerMap.has(o.organization_id)) {
-          ownerMap.set(o.organization_id, { full_name: o.full_name, email: o.email });
-        }
-      }
-      setOwnerByOrg(ownerMap);
-
-      const countMap = new Map<string, number>();
-      for (const p of (profilesRes.data as { organization_id: string | null }[]) ?? []) {
-        if (!p.organization_id) continue;
-        countMap.set(p.organization_id, (countMap.get(p.organization_id) ?? 0) + 1);
-      }
-      setUserCountByOrg(countMap);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load organizations'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const invalidateOrganizations = () => {
+    queryClient.invalidateQueries({ queryKey: ['organizations'] });
+  };
 
   const validate = (f: OrgForm): Partial<Record<keyof OrgForm, string>> => {
     const errs: Partial<Record<keyof OrgForm, string>> = {};
@@ -234,122 +147,48 @@ export default function PlatformOrganizationsPage() {
     return errs;
   };
 
-  const handleCreate = async () => {
-    if (!profile) return;
-    const errs = validate(form);
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    setCreating(true);
-    try {
-      const { data, error } = await supabase
-        .from('organizations')
-        .insert({
-          name: form.name.trim(),
-          slug: form.slug.trim(),
-          city: form.city.trim() || null,
-          country: form.country.trim() || null,
-          phone: form.phone.trim() || null,
-          email: form.email.trim() || null,
-          created_by: profile.id,
-          is_active: true,
-          status: 'active_trial',
-          origin: createOrigin,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      const newOrg = data as Organization;
-
-      // Auto-provision the Head Office branch + default departments —
-      // closes the gap where an admin-created org previously had neither
-      // (migration 064's provision_branch_and_departments). Not fatal if
-      // it fails; the org still exists and this is retryable/idempotent.
-      const { error: provisionError } = await supabase.rpc('provision_branch_and_departments', {
-        p_org_id: newOrg.id,
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile) throw new Error('Not signed in');
+      const planName = plans.find((p) => p.id === createPlanId)?.name;
+      return createOrganization({
+        form,
+        origin: createOrigin,
+        createdBy: profile.id,
+        planId: createPlanId,
+        billingCycle: createCycle,
+        trialDays,
+        trialPlanId: trialPlan?.id ?? null,
+        planName,
       });
-      if (provisionError) {
-        console.error('provision_branch_and_departments error:', provisionError.message);
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: newOrg.id,
-        action: 'organization.created',
-        entity_type: 'organization',
-        entity_id: newOrg.id,
-        description: `Created organization "${newOrg.name}" (${createOrigin})`,
-      });
-
-      if (createPlanId === TRIAL_ONLY) {
-        // "Free trial, no paid plan chosen yet" still needs a real
-        // org_subscriptions row — pointing at the internal Trial plan,
-        // same as self-service registration already does (migration 064's
-        // provision_organization) — so feature gating and org_user_limit
-        // have something to resolve against. Previously this skipped
-        // writing a subscription row at all, which left the org with an
-        // unresolvable plan until an admin manually assigned one later.
-        const trialEnds = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
-
-        if (trialPlan) {
-          const { error: subError } = await supabase.from('org_subscriptions').insert({
-            organization_id: newOrg.id,
-            plan_id: trialPlan.id,
-            status: 'trial',
-            billing_cycle: 'monthly',
-            seats: 1,
-            trial_ends_at: trialEnds,
-            updated_by: profile.id,
-          });
-          if (subError) console.error('Trial subscription insert error:', subError.message);
-        }
-
-        toast.success(`${newOrg.name} created on a ${trialDays}-day free trial`);
+    },
+    onSuccess: (result) => {
+      invalidateOrganizations();
+      if (result.kind === 'trial') {
+        toast.success(`${result.org.name} created on a ${trialDays}-day free trial`);
+      } else if (result.assigned) {
+        toast.success(`${result.org.name} created on the ${result.planName} plan (trial)`);
       } else {
-        // Put the org on its chosen plan as a trial straight away. If this
-        // fails the org still exists, so report it as a partial result and
-        // point at where to finish — don't pretend the whole thing failed.
-        const trialEnds = new Date(
-          Date.now() + trialDays * 24 * 60 * 60 * 1000
-        ).toISOString();
-        const { error: subError } = await supabase.from('org_subscriptions').insert({
-          organization_id: newOrg.id,
-          plan_id: createPlanId,
-          status: 'trial',
-          billing_cycle: createCycle,
-          seats: 1,
-          trial_ends_at: trialEnds,
-          updated_by: profile.id,
-        });
-
-        if (subError) {
-          toast.warning(
-            `${newOrg.name} created, but assigning the plan failed. Set it on Subscriptions.`
-          );
-        } else {
-          const planName = plans.find((p) => p.id === createPlanId)?.name ?? 'plan';
-          await supabase.from('activities').insert({
-            user_id: profile.id,
-            organization_id: newOrg.id,
-            action: 'subscription.assigned',
-            entity_type: 'org_subscription',
-            description: `Assigned "${newOrg.name}" to the ${planName} plan (trial)`,
-          });
-          toast.success(`${newOrg.name} created on the ${planName} plan (trial)`);
-        }
+        toast.warning(
+          `${result.org.name} created, but assigning the plan failed. Set it on Subscriptions.`
+        );
       }
-
       setCreateOpen(false);
       setForm(EMPTY_FORM);
       setSlugTouched(false);
       setErrors({});
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to create organization'));
-    } finally {
-      setCreating(false);
-    }
+    },
+  });
+
+  const handleCreate = () => {
+    if (!profile) return;
+    const errs = validate(form);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    createMutation.mutate();
   };
 
   const openEdit = (org: Organization) => {
@@ -365,121 +204,76 @@ export default function PlatformOrganizationsPage() {
     setEditErrors({});
   };
 
-  const handleEdit = async () => {
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editTarget || !profile) throw new Error('Not ready');
+      await editOrganization({ orgId: editTarget.id, form: editForm, updatedBy: profile.id });
+    },
+    onSuccess: () => {
+      invalidateOrganizations();
+      if (editTarget) queryClient.invalidateQueries({ queryKey: ['organization', editTarget.id] });
+      toast.success('Organization updated');
+      setEditTarget(null);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update organization'));
+    },
+  });
+
+  const handleEdit = () => {
     if (!editTarget || !profile) return;
     const errs = validate(editForm);
     setEditErrors(errs);
     if (Object.keys(errs).length > 0) return;
-
-    setEditing(true);
-    try {
-      const { error } = await supabase
-        .from('organizations')
-        .update({
-          name: editForm.name.trim(),
-          slug: editForm.slug.trim(),
-          city: editForm.city.trim() || null,
-          country: editForm.country.trim() || null,
-          phone: editForm.phone.trim() || null,
-          email: editForm.email.trim() || null,
-        })
-        .eq('id', editTarget.id);
-
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: editTarget.id,
-        action: 'organization.updated',
-        entity_type: 'organization',
-        entity_id: editTarget.id,
-        description: `Updated organization "${editForm.name.trim()}"`,
-      });
-
-      toast.success('Organization updated');
-      setEditTarget(null);
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update organization'));
-    } finally {
-      setEditing(false);
-    }
+    editMutation.mutate();
   };
 
-  const handleToggleActive = async () => {
-    if (!toggleTarget || !profile) return;
-    setToggling(true);
-    try {
-      const newState = !toggleTarget.is_active;
-      let newStatus: Organization['status'] = 'suspended';
-      if (newState) {
-        // Reactivating: recompute status from the subscription, rather
-        // than guessing — a suspended trial should come back as a trial,
-        // not silently become a paid "active" org.
-        const { data: sub } = await supabase
-          .from('org_subscriptions')
-          .select('status')
-          .eq('organization_id', toggleTarget.id)
-          .maybeSingle();
-        newStatus =
-          sub?.status === 'trial' ? 'active_trial' :
-          sub?.status === 'cancelled' ? 'cancelled' :
-          'active_subscription';
-      }
-      const { error } = await supabase
-        .from('organizations')
-        .update({ is_active: newState, status: newStatus })
-        .eq('id', toggleTarget.id);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: toggleTarget.id,
-        action: newState ? 'organization.activated' : 'organization.suspended',
-        entity_type: 'organization',
-        entity_id: toggleTarget.id,
-        description: `${newState ? 'Activated' : 'Suspended'} organization "${toggleTarget.name}"`,
+  const toggleMutation = useMutation({
+    mutationFn: async () => {
+      if (!toggleTarget || !profile) throw new Error('Not ready');
+      return toggleOrganizationActive({
+        orgId: toggleTarget.id,
+        orgName: toggleTarget.name,
+        currentlyActive: toggleTarget.is_active,
+        updatedBy: profile.id,
       });
-
-      toast.success(`${toggleTarget.name} ${newState ? 'activated' : 'suspended'}`);
+    },
+    onSuccess: (result) => {
+      invalidateOrganizations();
+      if (toggleTarget) queryClient.invalidateQueries({ queryKey: ['organization', toggleTarget.id] });
+      toast.success(`${toggleTarget?.name} ${result.newState ? 'activated' : 'suspended'}`);
       setToggleTarget(null);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update organization status'));
-    } finally {
-      setToggling(false);
-    }
-  };
+    },
+  });
 
-  const handleDelete = async () => {
-    if (!deleteTarget || !profile) return;
-    setDeleting(true);
-    try {
-      const { error } = await supabase
-        .from('organizations')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', deleteTarget.id);
-      if (error) throw error;
+  const handleToggleActive = () => toggleMutation.mutate();
 
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: deleteTarget.id,
-        action: 'organization.deleted',
-        entity_type: 'organization',
-        entity_id: deleteTarget.id,
-        description: `Moved organization "${deleteTarget.name}" to Trash`,
-      });
-
-      toast.success(`${deleteTarget.name} moved to Trash`);
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteTarget || !profile) throw new Error('Not ready');
+      await softDeleteOrganization({ orgId: deleteTarget.id, orgName: deleteTarget.name, deletedBy: profile.id });
+    },
+    onSuccess: () => {
+      invalidateOrganizations();
+      if (deleteTarget) queryClient.invalidateQueries({ queryKey: ['organization', deleteTarget.id] });
+      toast.success(`${deleteTarget?.name} moved to Trash`);
       setDeleteTarget(null);
       setDeleteConfirmText('');
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to delete organization'));
-    } finally {
-      setDeleting(false);
-    }
-  };
+    },
+  });
+
+  const handleDelete = () => deleteMutation.mutate();
+
+  const creating = createMutation.isPending;
+  const editing = editMutation.isPending;
+  const toggling = toggleMutation.isPending;
+  const deleting = deleteMutation.isPending;
 
   return (
     <div className="space-y-6">

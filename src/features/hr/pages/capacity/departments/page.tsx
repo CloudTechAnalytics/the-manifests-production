@@ -1,31 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Boxes, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { thinDataMessage } from '@/shared/lib/hr/capacity-insights';
+import { fetchDepartmentCapacity } from '@/features/hr/services/hr.service';
 import { CapacityStatusBadge } from '@/features/hr/components/capacity-status-badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
-import type { DepartmentCapacity } from '@/shared/types';
 
 export default function DepartmentCapacityPage() {
-  const [rows, setRows] = useState<DepartmentCapacity[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    supabase.rpc('hr_department_capacity').then(({ data }) => {
-      if (!isMounted) return;
-      setRows((data as DepartmentCapacity[]) ?? []);
-      setLoading(false);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['hr-department-capacity'],
+    queryFn: fetchDepartmentCapacity,
+  });
+  const rows = data ?? [];
 
   return (
     <div className="space-y-6 p-6 lg:p-8">

@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Trash2, Wallet, User, Loader2, PlusCircle } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as paymentsService from '@/features/payments/services/payments.service';
 import {
   Card,
   CardContent,
@@ -49,102 +50,54 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { PAYMENT_METHOD_META, formatCurrency, formatDate } from '@/shared/lib/utils/status';
-import type { Payment, Customer, PaymentAllocation, Invoice } from '@/shared/types';
-
-type PaymentDetail = Payment & { customer: Customer | null };
-type AllocationRow = PaymentAllocation & {
-  invoice: { id: string; invoice_number: string | null; total: number; currency: string } | null;
-};
+import type { Invoice } from '@/shared/types';
 
 export default function PaymentDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
   const paymentId = params.id!;
+  const queryClient = useQueryClient();
 
-  const [payment, setPayment] = useState<PaymentDetail | null>(null);
-  const [allocations, setAllocations] = useState<AllocationRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const canDelete =
-    !!payment &&
-    canDeleteOwnRecord({ hasRole });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['payment', paymentId],
+    queryFn: () => paymentsService.fetchPaymentDetail(paymentId),
+    enabled: !!paymentId,
+  });
+  const payment = data?.payment ?? null;
+  const allocations = data?.allocations ?? [];
+  const loading = isLoading;
+
+  const canDelete = !!payment && canDeleteOwnRecord({ hasRole });
 
   const [allocateOpen, setAllocateOpen] = useState(false);
-  const [loadingInvoices, setLoadingInvoices] = useState(false);
-  const [outstandingInvoices, setOutstandingInvoices] = useState<Invoice[]>([]);
   const [newAllocations, setNewAllocations] = useState<Record<string, number>>({});
-  const [allocating, setAllocating] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!paymentId) return;
-    setLoading(true);
-    try {
-      const { data: p, error: pErr } = await supabase
-        .from('payments')
-        .select('*, customer:customers(*)')
-        .eq('id', paymentId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (pErr || !p) {
-        setPayment(null);
-        return;
-      }
-      setPayment(p as PaymentDetail);
-
-      const { data: allocs } = await supabase
-        .from('payment_allocations')
-        .select('*, invoice:invoices(id, invoice_number, total, currency)')
-        .eq('payment_id', paymentId)
-        .order('created_at', { ascending: false });
-      setAllocations((allocs as AllocationRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [paymentId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const unallocated = payment
-    ? Number(payment.amount) - Number(payment.allocated_amount)
-    : 0;
-
-  const loadOutstandingInvoices = useCallback(async () => {
-    if (!payment) return;
-    setLoadingInvoices(true);
-    try {
+  const { data: outstandingInvoices = [], isFetching: loadingInvoices } = useQuery({
+    queryKey: ['payment', paymentId, 'outstanding-invoices', payment?.customer_id],
+    queryFn: () => paymentsService.fetchOutstandingInvoicesForCustomer(payment!.customer_id),
+    enabled: allocateOpen && !!payment,
+    select: (invoices) => {
       const alreadyAppliedInvoiceIds = new Set(allocations.map((a) => a.invoice_id));
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('customer_id', payment.customer_id)
-        .in('status', ['sent', 'partial'])
-        .is('deleted_at', null)
-        .order('due_date', { ascending: true });
-
-      if (error) {
-        console.error('Error loading outstanding invoices:', error);
-        setOutstandingInvoices([]);
-        return;
-      }
-      const invoices = ((data as Invoice[]) ?? []).filter(
-        (inv) => !alreadyAppliedInvoiceIds.has(inv.id)
-      );
-      setOutstandingInvoices(invoices);
-    } finally {
-      setLoadingInvoices(false);
-    }
-  }, [payment, allocations]);
+      return invoices.filter((inv) => !alreadyAppliedInvoiceIds.has(inv.id));
+    },
+  });
 
   const openAllocateDialog = () => {
     setNewAllocations({});
     setAllocateOpen(true);
-    loadOutstandingInvoices();
   };
+
+  const invalidatePayment = () => {
+    queryClient.invalidateQueries({ queryKey: ['payments'] });
+    queryClient.invalidateQueries({ queryKey: ['payment', paymentId] });
+  };
+
+  const unallocated = payment
+    ? Number(payment.amount) - Number(payment.allocated_amount)
+    : 0;
 
   const totalNewAllocated = useMemo(
     () => Object.values(newAllocations).reduce((sum, v) => sum + (Number(v) || 0), 0),
@@ -190,98 +143,70 @@ export default function PaymentDetailPage() {
     setNewAllocations((prev) => ({ ...prev, [invoiceId]: value }));
   };
 
-  const handleAllocate = async () => {
+  const allocateMutation = useMutation({
+    mutationFn: (entries: [string, number][]) => {
+      if (!payment || !profile) throw new Error('Not ready');
+      return paymentsService.allocatePayment(
+        paymentId,
+        payment.branch_id,
+        payment.payment_number,
+        profile.id,
+        entries
+      );
+    },
+    onSuccess: () => {
+      invalidatePayment();
+      toast.success('Payment allocated successfully');
+      setAllocateOpen(false);
+      setNewAllocations({});
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to allocate payment');
+      toast.error(message);
+    },
+  });
+
+  const handleAllocate = () => {
     if (!payment || !profile) return;
-    const entries = Object.entries(newAllocations).filter(([, amt]) => amt > 0);
+    const entries = Object.entries(newAllocations).filter(([, amt]) => amt > 0) as [string, number][];
     if (entries.length === 0) return;
     if (totalNewAllocated > unallocated + 0.01) {
       toast.error('Allocated amount cannot exceed the unallocated balance.');
       return;
     }
-    setAllocating(true);
-    try {
-      const { error } = await supabase.from('payment_allocations').insert(
-        entries.map(([invoiceId, amt]) => ({
-          payment_id: paymentId,
-          invoice_id: invoiceId,
-          amount: amt,
-          created_by: profile.id,
-        }))
-      );
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: payment.branch_id,
-        action: 'payment.allocated',
-        entity_type: 'payment',
-        entity_id: paymentId,
-        description: `Applied ${payment.payment_number ?? ''} to ${entries.length} invoice${entries.length === 1 ? '' : 's'}`,
-        metadata: { total_allocated: totalNewAllocated },
-      });
-
-      toast.success('Payment allocated successfully');
-      setAllocateOpen(false);
-      setNewAllocations({});
-      loadData();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to allocate payment');
-      toast.error(message);
-    } finally {
-      setAllocating(false);
-    }
+    allocateMutation.mutate(entries);
   };
 
-  const handleDelete = async () => {
-    if (!payment || !profile) return;
-    setDeleting(true);
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!payment || !profile) return;
       if (hasRole('admin')) {
         const result = await adminForceDelete('payment', paymentId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Payment permanently deleted');
-        navigate('/payments');
         return;
       }
-
-      // Remove allocations first so the sync trigger recalculates the
-      // affected invoices' amount_paid/status back down before we soft
-      // delete the payment itself — otherwise those invoices would stay
-      // "paid" against a payment that no longer counts.
-      if (allocations.length > 0) {
-        const { error: allocDeleteError } = await supabase
-          .from('payment_allocations')
-          .delete()
-          .eq('payment_id', paymentId);
-        if (allocDeleteError) throw allocDeleteError;
-      }
-
-      const { error } = await supabase
-        .from('payments')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', paymentId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: payment.branch_id,
-        action: 'payment.deleted',
-        entity_type: 'payment',
-        entity_id: paymentId,
-        description: `Deleted payment ${payment.payment_number ?? ''}`,
-        metadata: { payment_number: payment.payment_number, amount: payment.amount },
-      });
-
-      toast.success('Payment deleted');
+      await paymentsService.deletePaymentWithAllocations(
+        paymentId,
+        profile.id,
+        payment.branch_id,
+        payment.payment_number,
+        payment.amount,
+        allocations.length > 0
+      );
+    },
+    onSuccess: () => {
+      invalidatePayment();
+      toast.success(hasRole('admin') ? 'Payment permanently deleted' : 'Payment deleted');
       navigate('/payments');
-    } catch (err) {
+    },
+    onError: (err) => {
       const message = getErrorMessage(err, 'Failed to delete payment');
       toast.error(message);
-    } finally {
-      setDeleting(false);
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
 
   if (loading) {
     return (
@@ -448,9 +373,9 @@ export default function PaymentDetailPage() {
                   </DialogClose>
                   <Button
                     onClick={handleAllocate}
-                    disabled={allocating || totalNewAllocated <= 0 || remainingAfterNew < -0.01}
+                    disabled={allocateMutation.isPending || totalNewAllocated <= 0 || remainingAfterNew < -0.01}
                   >
-                    {allocating && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    {allocateMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                     Apply Allocation
                   </Button>
                 </DialogFooter>
@@ -492,8 +417,8 @@ export default function PaymentDetailPage() {
                   <DialogClose asChild>
                     <Button variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  <Button variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                    {deleteMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                     Delete
                   </Button>
                 </DialogFooter>

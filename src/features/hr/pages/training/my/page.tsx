@@ -1,14 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ListChecks, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
+import { fetchMyLearning } from '@/features/hr/services/training.service';
 import { MyLearningRow } from '@/features/hr/components/training/my-learning-row';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import type { EmployeeTraining } from '@/shared/types';
 
 /** The signed-in employee's own current-per-course training rows —
  *  self-enrolled and HR-assigned together. "Current" per course is
@@ -16,47 +15,18 @@ import type { EmployeeTraining } from '@/shared/types';
  *  recertification, see migration 089's design note). */
 export default function MyLearningPage() {
   const { profile } = useAuth();
-  const [records, setRecords] = useState<EmployeeTraining[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasEmployeeRecord, setHasEmployeeRecord] = useState(true);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    const { data: emp } = await supabase.from('employees').select('id').eq('profile_id', profile.id).maybeSingle();
-    if (!emp) {
-      setHasEmployeeRecord(false);
-      setLoading(false);
-      return;
-    }
-    setHasEmployeeRecord(true);
-    const { data, error } = await supabase
-      .from('employee_training')
-      .select('*, course:courses(*)')
-      .eq('employee_id', emp.id)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading my learning:', error);
-      setRecords([]);
-      setLoading(false);
-      return;
-    }
-    // Current-per-course: since rows are already ordered by created_at
-    // desc, the first occurrence of each course_id is the current one.
-    const seen = new Set<string>();
-    const current: EmployeeTraining[] = [];
-    for (const row of (data as EmployeeTraining[]) ?? []) {
-      if (seen.has(row.course_id)) continue;
-      seen.add(row.course_id);
-      current.push(row);
-    }
-    setRecords(current);
-    setLoading(false);
-  }, [profile]);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['my-learning', profile?.id],
+    queryFn: () => fetchMyLearning(profile!.id),
+    enabled: !!profile,
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const records = data?.records ?? [];
+  const hasEmployeeRecord = data?.hasEmployeeRecord ?? true;
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['my-learning', profile?.id] });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
@@ -99,7 +69,7 @@ export default function MyLearningPage() {
       ) : (
         <div className="space-y-2">
           {records.map((r) => (
-            <MyLearningRow key={r.id} record={r} onChanged={load} />
+            <MyLearningRow key={r.id} record={r} onChanged={refresh} />
           ))}
         </div>
       )}

@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -19,11 +20,11 @@ import {
   StickyNote,
   Loader2,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { useAuth } from '@/shared/contexts/auth-context';
+import { fetchCustomerDetail, softDeleteCustomer } from '@/features/customers/services/customers.service';
 import {
   Card,
   CardContent,
@@ -74,105 +75,38 @@ import {
   formatDate,
   formatCurrency,
 } from '@/shared/lib/utils/status';
-import type {
-  Customer,
-  CustomerContact,
-  Shipment,
-  Quotation,
-  DocumentRecord,
-} from '@/shared/types';
-
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [contacts, setContacts] = useState<CustomerContact[]>([]);
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const customerId = params.id!;
-  const isAdmin = profile?.role === 'admin';
+
+  const {
+    data: detail,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: ['customer', customerId],
+    queryFn: () => fetchCustomerDetail(customerId),
+    enabled: !!customerId,
+  });
+
+  const customer = detail?.customer ?? null;
+  const contacts = detail?.contacts ?? [];
+  const shipments = detail?.shipments ?? [];
+  const quotations = detail?.quotations ?? [];
+  const documents = detail?.documents ?? [];
+
   const canDelete =
     !!customer &&
     canDeleteOwnRecord({ hasRole });
 
-  const loadData = useCallback(async () => {
-    if (!customerId) return;
-    setLoading(true);
-    try {
-      // Contacts/shipments/quotations/documents only depend on
-      // customerId, not on the customer row itself resolving first, so
-      // all five queries go out as one concurrent batch instead of five
-      // sequential round trips. The (rare) case where customerId turns
-      // out not to exist just means the other four resolve to empty
-      // arrays that are never rendered — a discarded response, not a
-      // wrong one.
-      const [custRes, ctctsRes, shipsRes, quotsRes, docsRes] = await Promise.all([
-        supabase
-          .from('customers')
-          .select('*, branch:branches(*)')
-          .eq('id', customerId)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('customer_contacts')
-          .select('*')
-          .eq('customer_id', customerId)
-          .is('deleted_at', null)
-          .order('is_primary', { ascending: false }),
-        supabase
-          .from('shipments')
-          .select('*')
-          .eq('customer_id', customerId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('quotations')
-          .select('*')
-          .eq('customer_id', customerId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('documents')
-          .select('*')
-          .eq('customer_id', customerId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-      ]);
-
-      if (custRes.error) {
-        console.error('Error loading customer:', custRes.error);
-        setCustomer(null);
-        return;
-      }
-      if (!custRes.data) {
-        setCustomer(null);
-        return;
-      }
-      setCustomer(custRes.data as Customer);
-      setContacts((ctctsRes.data as CustomerContact[]) ?? []);
-      setShipments((shipsRes.data as Shipment[]) ?? []);
-      setQuotations((quotsRes.data as Quotation[]) ?? []);
-      setDocuments((docsRes.data as DocumentRecord[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [customerId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleDelete = async () => {
-    if (!customer || !profile) return;
-    setDeleting(true);
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!customer || !profile) throw new Error('Not ready');
       // Admins get a true permanent delete that cascades through
       // whatever's linked to this customer (quotations, shipments,
       // invoices, payments, shipment plans) — everyone else keeps the
@@ -180,43 +114,36 @@ export default function CustomerDetailPage() {
       if (hasRole('admin')) {
         const result = await adminForceDelete('customer', customerId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Customer permanently deleted');
-        navigate('/customers');
-        return;
+        return { permanent: true };
       }
 
-      const { error } = await supabase
-        .from('customers')
-        .update({
-          deleted_at: new Date().toISOString(),
-          updated_by: profile.id,
-        })
-        .eq('id', customerId);
-
-      if (error) throw error;
-
-      // Log activity
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: customer.branch_id,
-        action: 'customer.deleted',
-        entity_type: 'customer',
-        entity_id: customerId,
-        description: `Deleted customer "${customer.company_name}"`,
-        metadata: { company_name: customer.company_name },
+      await softDeleteCustomer({
+        customerId,
+        updatedBy: profile.id,
+        branchId: customer.branch_id,
+        companyName: customer.company_name,
       });
-
-      toast.success('Customer deleted');
+      return { permanent: false };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] });
+      toast.success(
+        result.permanent ? 'Customer permanently deleted' : 'Customer deleted'
+      );
       navigate('/customers');
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to delete customer');
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to delete customer');
       toast.error(message);
-    } finally {
-      setDeleting(false);
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
+
+  const deleting = deleteMutation.isPending;
+  const handleDelete = () => deleteMutation.mutate();
 
   // Loading state
   if (loading) {

@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, GraduationCap, Loader2, Trash2, Upload, Link as LinkIcon } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { COURSE_FORM_DEFAULTS, courseSchema, type CourseFormValues } from '@/shared/lib/course-schema';
-import { uploadCourseMaterialFile } from '@/shared/lib/utils/course-material-upload';
+import { fetchCourseEditData, updateCourse } from '@/features/hr/services/training.service';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -27,7 +27,6 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Switch } from '@/shared/components/ui/switch';
 import { Separator } from '@/shared/components/ui/separator';
 import { Checkbox } from '@/shared/components/ui/checkbox';
-import type { Course, CourseMaterial } from '@/shared/types';
 
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'operations', label: 'Operations' },
@@ -44,10 +43,10 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
 
 export default function EditCoursePage() {
   const params = useParams<{ id: string }>();
+  const courseId = params.id as string;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [materialFiles, setMaterialFiles] = useState<Record<number, File | undefined>>({});
   const [existingMaterialIds, setExistingMaterialIds] = useState<string[]>([]);
 
@@ -71,116 +70,67 @@ export default function EditCoursePage() {
     onChange(checked ? [...targetRoles, role] : targetRoles.filter((r) => r !== role));
   };
 
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['training-courses', courseId, 'edit-form'],
+    queryFn: () => fetchCourseEditData(courseId),
+    enabled: !!courseId,
+  });
+
   useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      setLoading(true);
-      const [courseRes, materialsRes] = await Promise.all([
-        supabase.from('courses').select('*').eq('id', params.id).maybeSingle(),
-        supabase.from('course_materials').select('*').eq('course_id', params.id).order('sort_order'),
-      ]);
-      if (!isMounted) return;
-      const course = courseRes.data as Course | null;
-      if (!course) {
-        toast.error('Course not found.');
-        setLoading(false);
-        return;
-      }
-      const materials = (materialsRes.data as CourseMaterial[]) ?? [];
-      setExistingMaterialIds(materials.map((m) => m.id));
-      reset({
-        title: course.title,
-        description: course.description ?? '',
-        category: course.category ?? '',
-        target_roles: course.target_roles,
-        provider: course.provider ?? '',
-        estimated_duration_minutes: course.estimated_duration_minutes ?? undefined,
-        is_certification: course.is_certification,
-        certification_validity_months: course.certification_validity_months ?? undefined,
-        is_active: course.is_active,
-        materials: materials.map((m) => ({
-          id: m.id,
-          material_type: m.material_type,
-          title: m.title,
-          external_url: m.external_url ?? '',
-        })),
-      });
-      setLoading(false);
-    })();
-    return () => {
-      isMounted = false;
-    };
+    if (!data) return;
+    const { course, materials } = data;
+    if (!course) {
+      toast.error('Course not found.');
+      return;
+    }
+    setExistingMaterialIds(materials.map((m) => m.id));
+    reset({
+      title: course.title,
+      description: course.description ?? '',
+      category: course.category ?? '',
+      target_roles: course.target_roles,
+      provider: course.provider ?? '',
+      estimated_duration_minutes: course.estimated_duration_minutes ?? undefined,
+      is_certification: course.is_certification,
+      certification_validity_months: course.certification_validity_months ?? undefined,
+      is_active: course.is_active,
+      materials: materials.map((m) => ({
+        id: m.id,
+        material_type: m.material_type,
+        title: m.title,
+        external_url: m.external_url ?? '',
+      })),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
+  }, [data]);
+
+  const updateMutation = useMutation({
+    mutationFn: (values: CourseFormValues) => {
+      if (!profile?.organization_id) throw new Error('No organization found for your account.');
+      return updateCourse({
+        courseId,
+        values,
+        organizationId: profile.organization_id,
+        updatedBy: profile.id,
+        branchId: profile.branch_id,
+        materialFiles,
+        existingMaterialIds,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-courses', courseId] });
+      queryClient.invalidateQueries({ queryKey: ['training-courses'] });
+      toast.success('Course updated');
+      navigate(`/hr/training/courses/${courseId}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update course'));
+    },
+  });
 
   const onSubmit = async (values: CourseFormValues) => {
     if (!profile?.organization_id) return;
-    setSubmitting(true);
-    try {
-      const { error: courseError } = await supabase
-        .from('courses')
-        .update({
-          title: values.title,
-          description: values.description || null,
-          category: values.category || null,
-          target_roles: values.target_roles,
-          provider: values.provider || null,
-          estimated_duration_minutes: values.estimated_duration_minutes ?? null,
-          is_certification: values.is_certification,
-          certification_validity_months: values.is_certification ? values.certification_validity_months ?? null : null,
-          is_active: values.is_active,
-          updated_by: profile.id,
-        })
-        .eq('id', params.id);
-      if (courseError) throw new Error(courseError.message);
-
-      // Materials: remove any that were dropped, add any new rows.
-      const keptIds = new Set(values.materials.map((m) => m.id).filter(Boolean));
-      const removedIds = existingMaterialIds.filter((id) => !keptIds.has(id));
-      if (removedIds.length > 0) {
-        await supabase.from('course_materials').delete().in('id', removedIds);
-      }
-      for (let i = 0; i < values.materials.length; i += 1) {
-        const material = values.materials[i];
-        if (material.id) continue; // already exists, nothing to change here
-        if (material.material_type === 'file') {
-          const file = materialFiles[i];
-          if (!file) continue;
-          await uploadCourseMaterialFile({
-            file,
-            organizationId: profile.organization_id,
-            courseId: params.id!,
-            title: material.title,
-            createdBy: profile.id,
-          });
-        } else {
-          await supabase.from('course_materials').insert({
-            course_id: params.id,
-            material_type: 'link',
-            title: material.title,
-            external_url: material.external_url,
-            created_by: profile.id,
-          });
-        }
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: profile.branch_id,
-        action: 'course.updated',
-        entity_type: 'course',
-        entity_id: params.id,
-        description: `Updated course "${values.title}"`,
-        metadata: {},
-      });
-
-      toast.success('Course updated');
-      navigate(`/hr/training/courses/${params.id}`);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update course'));
-    } finally {
-      setSubmitting(false);
-    }
+    updateMutation.mutate(values);
   };
 
   if (loading) {
@@ -394,8 +344,8 @@ export default function EditCoursePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={updateMutation.isPending} className="w-full sm:w-auto">
+            {updateMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </div>

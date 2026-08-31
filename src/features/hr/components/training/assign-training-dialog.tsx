@@ -3,15 +3,16 @@
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Send } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import {
   ASSIGN_TRAINING_DEFAULTS,
   assignTrainingSchema,
   type AssignTrainingFormValues,
 } from '@/shared/lib/training-assignment-schema';
+import { assignTraining, resolveTrainingTargetEmployeeIds } from '@/features/hr/services/training.service';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -54,7 +55,6 @@ interface AssignTrainingDialogProps {
  */
 export function AssignTrainingDialog({ courseId, employees, departments, branches, onAssigned }: AssignTrainingDialogProps) {
   const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const {
     control,
@@ -70,59 +70,19 @@ export function AssignTrainingDialog({ courseId, employees, departments, branche
 
   const targetMode = watch('target_mode');
 
-  const resolveEmployeeIds = async (values: AssignTrainingFormValues): Promise<string[]> => {
-    switch (values.target_mode) {
-      case 'employee':
-        return values.employee_id ? [values.employee_id] : [];
-      case 'role': {
-        const { data, error } = await supabase
-          .from('employee_responsibilities')
-          .select('employee_id')
-          .eq('linked_role', values.role)
-          .is('deleted_at', null)
-          .is('end_date', null);
-        if (error) throw new Error(error.message);
-        return Array.from(new Set((data ?? []).map((r: { employee_id: string }) => r.employee_id)));
-      }
-      case 'department': {
-        const { data, error } = await supabase
-          .from('employees')
-          .select('id')
-          .eq('department_id', values.department_id)
-          .is('deleted_at', null);
-        if (error) throw new Error(error.message);
-        return (data ?? []).map((e: { id: string }) => e.id);
-      }
-      case 'branch': {
-        const { data, error } = await supabase
-          .from('employees')
-          .select('id')
-          .eq('branch_id', values.branch_id)
-          .is('deleted_at', null);
-        if (error) throw new Error(error.message);
-        return (data ?? []).map((e: { id: string }) => e.id);
-      }
-      default:
-        return [];
-    }
-  };
-
-  const onSubmit = async (values: AssignTrainingFormValues) => {
-    setSubmitting(true);
-    try {
-      const employeeIds = await resolveEmployeeIds(values);
+  const assignMutation = useMutation({
+    mutationFn: async (values: AssignTrainingFormValues) => {
+      const employeeIds = await resolveTrainingTargetEmployeeIds(values);
       if (employeeIds.length === 0) {
+        return null;
+      }
+      return assignTraining({ courseId, employeeIds, dueDate: values.due_date || null });
+    },
+    onSuccess: (result) => {
+      if (!result) {
         toast.warning('No employees match that target.');
         return;
       }
-      const { data, error } = await supabase.rpc('assign_training', {
-        p_course_id: courseId,
-        p_employee_ids: employeeIds,
-        p_due_date: values.due_date || null,
-      });
-      if (error) throw new Error(error.message);
-
-      const result = data as AssignTrainingResult;
       const parts = [`${result.assigned_count} assigned`];
       if (result.already_assigned_count > 0) parts.push(`${result.already_assigned_count} already assigned`);
       if (result.denied_count > 0) parts.push(`${result.denied_count} outside your branch`);
@@ -132,11 +92,14 @@ export function AssignTrainingDialog({ courseId, employees, departments, branche
       onAssigned(result);
       setOpen(false);
       reset(ASSIGN_TRAINING_DEFAULTS);
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to assign training'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const onSubmit = async (values: AssignTrainingFormValues) => {
+    assignMutation.mutate(values);
   };
 
   return (
@@ -278,8 +241,8 @@ export function AssignTrainingDialog({ courseId, employees, departments, branche
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            <Button type="submit" disabled={assignMutation.isPending}>
+              {assignMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Assign
             </Button>
           </DialogFooter>

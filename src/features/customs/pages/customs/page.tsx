@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, Search, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { formatCurrency } from '@/shared/lib/utils/status';
 import { Card, CardContent } from '@/shared/components/ui/card';
@@ -20,7 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { CustomsInspectionChannel, CustomsStatus, ShipmentCustoms } from '@/shared/types';
+import { fetchCustomsQueue } from '@/features/customs/services/customs.service';
+import type { CustomsInspectionChannel, CustomsStatus } from '@/shared/types';
 
 /*
  * Customs queue — every department works from the shipment record
@@ -28,13 +29,6 @@ import type { CustomsInspectionChannel, CustomsStatus, ShipmentCustoms } from '@
  * is a filtered work list for Customs, not a second place to edit
  * customs data. Every row opens the shipment's Customs tab directly.
  */
-
-interface Row {
-  id: string;
-  reference_number: string | null;
-  customer: { company_name: string } | null;
-  customs: ShipmentCustoms | null;
-}
 
 const STATUS_META: Record<CustomsStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
@@ -58,49 +52,13 @@ export default function CustomsQueuePage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select('id, reference_number, branch_id, customer:customers(company_name)')
-        .is('deleted_at', null)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-
-      const { data: shipmentRows, error } = await query;
-      if (error) throw error;
-
-      const shipments = (shipmentRows as unknown as (Omit<Row, 'customs'> & { branch_id: string })[]) ?? [];
-      const shipmentIds = shipments.map((s) => s.id);
-
-      const { data: customsRows } = shipmentIds.length
-        ? await supabase.from('shipment_customs').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
-        : { data: [] };
-
-      const customsByShipment = new Map<string, ShipmentCustoms>();
-      (customsRows as ShipmentCustoms[] | null)?.forEach((c) => customsByShipment.set(c.shipment_id, c));
-
-      // Outstanding work: no customs record yet, or not released.
-      const outstanding = shipments
-        .map((s) => ({ ...s, customs: customsByShipment.get(s.id) ?? null }))
-        .filter((s) => !s.customs || s.customs.status !== 'released');
-
-      setRows(outstanding);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, branchId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['customs-queue', isAdmin, branchId],
+    queryFn: () => fetchCustomsQueue(isAdmin, branchId),
+    enabled: !!profile,
+  });
 
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;

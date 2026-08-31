@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Briefcase,
@@ -14,8 +13,8 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
+import { fetchEmployeeDetail } from '@/features/hr/services/employees.service';
 import { TrainingStatusBadge } from '@/features/hr/components/training/training-status-badge';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -29,8 +28,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
-import type { Employee, EmployeeResponsibility, EmployeeSensitiveInfo, EmployeeTraining, Profile } from '@/shared/types';
-
 const KNOWN_TABS = new Set(['personal', 'employment', 'responsibilities', 'access', 'training']);
 
 export default function EmployeeDetailPage() {
@@ -44,77 +41,18 @@ export default function EmployeeDetailPage() {
   const requestedTab = searchParams.get('tab');
   const initialTab = requestedTab && KNOWN_TABS.has(requestedTab) ? requestedTab : 'personal';
 
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [sensitive, setSensitive] = useState<EmployeeSensitiveInfo | null>(null);
-  const [responsibilities, setResponsibilities] = useState<EmployeeResponsibility[]>([]);
-  const [linkedProfile, setLinkedProfile] = useState<Profile | null>(null);
-  const [training, setTraining] = useState<EmployeeTraining[]>([]);
-  const [loading, setLoading] = useState(true);
+  const employeeId = params.id as string;
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['employees', employeeId, 'detail'],
+    queryFn: () => fetchEmployeeDetail(employeeId),
+    enabled: !!employeeId,
+  });
 
-  useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      setLoading(true);
-      const employeeId = params.id;
-      const { data: employeeData, error } = await supabase
-        .from('employees')
-        .select('*, branch:branches(*), department:departments(*), manager:employees!employees_manager_id_fkey(id, first_name, last_name, job_title)')
-        .eq('id', employeeId)
-        .maybeSingle();
-
-      if (!isMounted) return;
-      if (error || !employeeData) {
-        console.error('Error loading employee:', error);
-        toast.error('Employee not found, or you do not have access to it.');
-        setLoading(false);
-        return;
-      }
-      const emp = employeeData as Employee;
-      setEmployee(emp);
-
-      const [sensitiveRes, respRes, profileRes, trainingRes] = await Promise.all([
-        supabase.from('employee_sensitive_info').select('*').eq('employee_id', employeeId).maybeSingle(),
-        supabase
-          .from('employee_responsibilities')
-          .select('*, department:departments(*)')
-          .eq('employee_id', employeeId)
-          .is('deleted_at', null)
-          .order('is_primary', { ascending: false }),
-        emp.profile_id
-          ? supabase.from('profiles').select('*, branch:branches(*)').eq('id', emp.profile_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase
-          .from('employee_training')
-          .select('*, course:courses(*)')
-          .eq('employee_id', employeeId)
-          .order('created_at', { ascending: false }),
-      ]);
-
-      if (!isMounted) return;
-      // A null row here (rather than an error) is exactly what RLS
-      // produces for hr_officer — masked, not broken. The Sensitive
-      // Info tab shows a "Restricted" state for that case, not blank.
-      setSensitive((sensitiveRes.data as EmployeeSensitiveInfo | null) ?? null);
-      setResponsibilities((respRes.data as EmployeeResponsibility[]) ?? []);
-      setLinkedProfile((profileRes.data as Profile | null) ?? null);
-      // Current-per-course: rows are already ordered by created_at
-      // desc, so the first occurrence of each course_id is current —
-      // history (prior recert cycles) stays queryable but isn't shown
-      // here, same convention as the My Learning page.
-      const seenCourses = new Set<string>();
-      const currentTraining: EmployeeTraining[] = [];
-      for (const row of (trainingRes.data as EmployeeTraining[]) ?? []) {
-        if (seenCourses.has(row.course_id)) continue;
-        seenCourses.add(row.course_id);
-        currentTraining.push(row);
-      }
-      setTraining(currentTraining);
-      setLoading(false);
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, [params.id]);
+  const employee = data?.employee ?? null;
+  const sensitive = data?.sensitive ?? null;
+  const responsibilities = data?.responsibilities ?? [];
+  const linkedProfile = data?.linkedProfile ?? null;
+  const training = data?.training ?? [];
 
   if (loading) {
     return (

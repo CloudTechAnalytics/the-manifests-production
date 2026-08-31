@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Ship, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { getErrorMessage } from '@/shared/lib/utils';
+import * as authService from '@/features/auth/services/auth.service';
 
 type State = 'verifying' | 'success' | 'error';
 
@@ -20,54 +22,25 @@ function VerifyEmailContent() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
 
-  const [state, setState] = useState<State>('verifying');
-  const [message, setMessage] = useState('');
+  const { data, isError, error, isSuccess } = useQuery({
+    queryKey: ['verify-email', token],
+    queryFn: () => authService.verifyEmail(token),
+    enabled: !!token,
+    retry: false,
+  });
+
+  const state: State = !token ? 'error' : isError ? 'error' : isSuccess ? 'success' : 'verifying';
+  const message = !token
+    ? 'This verification link is missing its token.'
+    : getErrorMessage(error, 'Something went wrong verifying your email.');
 
   useEffect(() => {
-    if (!token) {
-      setState('error');
-      setMessage('This verification link is missing its token.');
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-email`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({ token }),
-          }
-        );
-        const data = await response.json().catch(() => ({}));
-        if (cancelled) return;
-
-        if (!response.ok || !data.success) {
-          setState('error');
-          setMessage(data.error ?? 'This verification link is invalid or has expired.');
-          return;
-        }
-
-        setState('success');
-        setTimeout(() => {
-          navigate(`/login?verified=1${data.email ? `&email=${encodeURIComponent(data.email)}` : ''}`, { replace: true });
-        }, 1800);
-      } catch (err) {
-        if (!cancelled) {
-          setState('error');
-          setMessage(getErrorMessage(err, 'Something went wrong verifying your email.'));
-        }
-      }
-    })();
-
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!isSuccess) return;
+    const t = setTimeout(() => {
+      navigate(`/login?verified=1${data?.email ? `&email=${encodeURIComponent(data.email)}` : ''}`, { replace: true });
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [isSuccess, data, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">

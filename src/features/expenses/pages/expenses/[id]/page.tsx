@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -13,11 +14,11 @@ import {
   Loader2,
   Package,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as expensesService from '@/features/expenses/services/expenses.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -47,134 +48,77 @@ import {
   formatCurrency,
   formatDate,
 } from '@/shared/lib/utils/status';
-import type { Expense, Shipment, Profile } from '@/shared/types';
-
-type ExpenseDetail = Expense & {
-  shipment: Shipment | null;
-  paid_by_user: Profile | null;
-  approved_by_user: Profile | null;
-};
 
 export default function ExpenseDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
   const expenseId = params.id!;
-  const isAdmin = profile?.role === 'admin';
+  const queryClient = useQueryClient();
   // Mirrors can_manage_finance() (migration 034's RLS for expenses UPDATE):
   // admin, branch_manager, and finance can all approve/reject, not just
   // admin — and a user can hold more than one of those at once.
   const canApprove = hasRole('admin') || hasRole('branch_manager') || hasRole('finance');
 
-  const [expense, setExpense] = useState<ExpenseDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const canDelete =
-    !!expense &&
-    canDeleteOwnRecord({ hasRole });
 
-  const loadData = useCallback(async () => {
-    if (!expenseId) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select(
-          '*, shipment:shipments(*), paid_by_user:profiles!expenses_paid_by_fkey(*), approved_by_user:profiles!expenses_approved_by_fkey(*)'
-        )
-        .eq('id', expenseId)
-        .is('deleted_at', null)
-        .maybeSingle();
+  const { data: expense, isLoading: loading } = useQuery({
+    queryKey: ['expense', expenseId],
+    queryFn: () => expensesService.fetchExpenseDetail(expenseId),
+    enabled: !!expenseId,
+  });
 
-      if (error || !data) {
-        setExpense(null);
-        return;
-      }
-      setExpense(data as ExpenseDetail);
-    } finally {
-      setLoading(false);
-    }
-  }, [expenseId]);
+  const canDelete = !!expense && canDeleteOwnRecord({ hasRole });
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleDecision = async (decision: 'approved' | 'rejected') => {
-    if (!expense || !profile) return;
-    setUpdating(true);
-    try {
-      const { error } = await supabase
-        .from('expenses')
-        .update({
-          status: decision,
-          approved_by: profile.id,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', expenseId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: expense.branch_id,
-        action: `expense.${decision}`,
-        entity_type: 'expense',
-        entity_id: expenseId,
-        description: `${decision === 'approved' ? 'Approved' : 'Rejected'} expense ${expense.expense_number ?? ''}`,
-        metadata: { expense_number: expense.expense_number },
-      });
-
-      toast.success(`Expense ${decision}`);
-      loadData();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to update expense');
-      toast.error(message);
-    } finally {
-      setUpdating(false);
-    }
+  const invalidateExpense = () => {
+    queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    queryClient.invalidateQueries({ queryKey: ['expense', expenseId] });
   };
 
-  const handleDelete = async () => {
-    if (!expense || !profile) return;
-    setDeleting(true);
-    try {
+  const decisionMutation = useMutation({
+    mutationFn: (decision: 'approved' | 'rejected') => {
+      if (!expense || !profile) throw new Error('Not ready');
+      return expensesService.decideExpense(
+        expenseId,
+        decision,
+        profile.id,
+        expense.branch_id,
+        expense.expense_number
+      );
+    },
+    onSuccess: (_data, decision) => {
+      invalidateExpense();
+      toast.success(`Expense ${decision}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to update expense');
+      toast.error(message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!expense || !profile) return;
       if (hasRole('admin')) {
         const result = await adminForceDelete('expense', expenseId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Expense permanently deleted');
-        navigate('/expenses');
         return;
       }
-
-      const { error } = await supabase
-        .from('expenses')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', expenseId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: expense.branch_id,
-        action: 'expense.deleted',
-        entity_type: 'expense',
-        entity_id: expenseId,
-        description: `Deleted expense ${expense.expense_number ?? ''}`,
-        metadata: { expense_number: expense.expense_number },
-      });
-
-      toast.success('Expense deleted');
+      await expensesService.softDeleteExpense(expenseId, profile.id, expense.branch_id, expense.expense_number);
+    },
+    onSuccess: () => {
+      invalidateExpense();
+      toast.success(hasRole('admin') ? 'Expense permanently deleted' : 'Expense deleted');
       navigate('/expenses');
-    } catch (err) {
+    },
+    onError: (err) => {
       const message = getErrorMessage(err, 'Failed to delete expense');
       toast.error(message);
-    } finally {
-      setDeleting(false);
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
 
   if (loading) {
     return (
@@ -250,15 +194,23 @@ export default function ExpenseDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           {canApprove && expense.status === 'pending' && (
             <>
-              <Button size="sm" onClick={() => handleDecision('approved')} disabled={updating}>
-                {updating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
+              <Button
+                size="sm"
+                onClick={() => decisionMutation.mutate('approved')}
+                disabled={decisionMutation.isPending}
+              >
+                {decisionMutation.isPending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-1.5 h-4 w-4" />
+                )}
                 Approve
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleDecision('rejected')}
-                disabled={updating}
+                onClick={() => decisionMutation.mutate('rejected')}
+                disabled={decisionMutation.isPending}
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <X className="mr-1.5 h-4 w-4" />
@@ -305,8 +257,8 @@ export default function ExpenseDetailPage() {
                   <DialogClose asChild>
                     <Button variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  <Button variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                    {deleteMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                     Delete
                   </Button>
                 </DialogFooter>

@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, GraduationCap, Loader2, Trash2, Upload, Link as LinkIcon } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { COURSE_FORM_DEFAULTS, courseSchema, type CourseFormValues } from '@/shared/lib/course-schema';
-import { uploadCourseMaterialFile } from '@/shared/lib/utils/course-material-upload';
+import { createCourse } from '@/features/hr/services/training.service';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -43,8 +43,8 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
 
 export default function NewCoursePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
   const [materialFiles, setMaterialFiles] = useState<Record<number, File | undefined>>({});
 
   const {
@@ -66,81 +66,36 @@ export default function NewCoursePage() {
     onChange(checked ? [...targetRoles, role] : targetRoles.filter((r) => r !== role));
   };
 
+  const createMutation = useMutation({
+    mutationFn: (values: CourseFormValues) => {
+      if (!profile?.organization_id) {
+        throw new Error('No organization found for your account.');
+      }
+      return createCourse({
+        values,
+        organizationId: profile.organization_id,
+        createdBy: profile.id,
+        branchId: profile.branch_id,
+        materialFiles,
+      });
+    },
+    onSuccess: ({ courseId, warnings }) => {
+      queryClient.invalidateQueries({ queryKey: ['training-courses'] });
+      warnings.forEach((w) => toast.warning(w));
+      toast.success('Course created');
+      navigate(`/hr/training/courses/${courseId}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to create course'));
+    },
+  });
+
   const onSubmit = async (values: CourseFormValues) => {
     if (!profile?.organization_id) {
       toast.error('No organization found for your account.');
       return;
     }
-    setSubmitting(true);
-    try {
-      const { data: course, error: courseError } = await supabase
-        .from('courses')
-        .insert({
-          organization_id: profile.organization_id,
-          title: values.title,
-          description: values.description || null,
-          category: values.category || null,
-          target_roles: values.target_roles,
-          provider: values.provider || null,
-          estimated_duration_minutes: values.estimated_duration_minutes ?? null,
-          is_certification: values.is_certification,
-          certification_validity_months: values.is_certification ? values.certification_validity_months ?? null : null,
-          is_active: values.is_active,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id')
-        .single();
-
-      if (courseError || !course) {
-        throw new Error(courseError?.message ?? 'Failed to create course');
-      }
-      const courseId = course.id;
-
-      for (let i = 0; i < values.materials.length; i += 1) {
-        const material = values.materials[i];
-        if (material.material_type === 'file') {
-          const file = materialFiles[i];
-          if (!file) continue;
-          const result = await uploadCourseMaterialFile({
-            file,
-            organizationId: profile.organization_id,
-            courseId,
-            title: material.title,
-            createdBy: profile.id,
-          });
-          if (!result.success) {
-            toast.warning(`Course created, but "${material.title}" failed to upload.`);
-          }
-        } else {
-          const { error: linkError } = await supabase.from('course_materials').insert({
-            course_id: courseId,
-            material_type: 'link',
-            title: material.title,
-            external_url: material.external_url,
-            created_by: profile.id,
-          });
-          if (linkError) console.error('Link material insert error:', linkError);
-        }
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: profile.branch_id,
-        action: 'course.created',
-        entity_type: 'course',
-        entity_id: courseId,
-        description: `Created course "${values.title}"`,
-        metadata: { category: values.category },
-      });
-
-      toast.success('Course created');
-      navigate(`/hr/training/courses/${courseId}`);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to create course'));
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(values);
   };
 
   return (
@@ -341,8 +296,8 @@ export default function NewCoursePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto">
+            {createMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Create Course
           </Button>
         </div>

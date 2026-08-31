@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -28,6 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  createTerminalRecord,
+  logTerminalActivity,
+  updateTerminalRecord,
+} from '@/features/terminal/services/terminal.service';
 import type { TerminalOperation, TerminalStatus } from '@/shared/types';
 
 const STATUS_OPTIONS: { value: TerminalStatus; label: string }[] = [
@@ -56,6 +61,7 @@ export function TerminalFormDialog({
   onSaved,
 }: TerminalFormDialogProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const [terminalName, setTerminalName] = useState('');
   const [arrivalDate, setArrivalDate] = useState('');
   const [containerPosition, setContainerPosition] = useState('');
@@ -79,7 +85,6 @@ export function TerminalFormDialog({
   const [terminalBookingRequired, setTerminalBookingRequired] = useState(true);
   const [releaseOrderNeeded, setReleaseOrderNeeded] = useState(false);
   const [expectedPickupDate, setExpectedPickupDate] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -109,10 +114,8 @@ export function TerminalFormDialog({
     setExpectedPickupDate(existing?.expected_pickup_date ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         terminal_name: terminalName.trim() || null,
         arrival_date: arrivalDate || null,
@@ -137,18 +140,13 @@ export function TerminalFormDialog({
         terminal_booking_required: terminalBookingRequired,
         release_order_needed: releaseOrderNeeded,
         expected_pickup_date: expectedPickupDate || null,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase
-          .from('terminal_operations')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        await updateTerminalRecord(existing.id, payload);
+        await logTerminalActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'terminal.updated',
           entity_type: 'terminal_operations',
@@ -156,17 +154,15 @@ export function TerminalFormDialog({
           description: `Updated terminal record (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Terminal record updated');
       } else {
-        const { data: created, error } = await supabase
-          .from('terminal_operations')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        const created = await createTerminalRecord({
+          ...payload,
+          shipment_id: shipmentId,
+          branch_id: branchId,
+          created_by: profile!.id,
+        });
+        await logTerminalActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'terminal.created',
           entity_type: 'terminal_operations',
@@ -174,17 +170,24 @@ export function TerminalFormDialog({
           description: `Created terminal record (status: ${status})`,
           metadata: { shipment_id: shipmentId },
         });
-        toast.success('Terminal record created');
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['terminal-queue'] });
+      toast.success(existing ? 'Terminal record updated' : 'Terminal record created');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save terminal record'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   const handleDelete = async () => {
     if (!existing) return;

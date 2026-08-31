@@ -17,10 +17,12 @@ import {
   CloudUpload,
   Eye,
 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DocumentViewerDialog } from '@/features/documents/components/document-viewer-dialog';
 import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { usePaginatedList } from '@/shared/hooks/use-paginated-list';
+import * as documentsService from '@/features/documents/services/documents.service';
 import { toast } from 'sonner';
 import {
   Card,
@@ -142,6 +144,7 @@ interface PendingFile {
 export default function DocumentsPage() {
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shipments, setShipments] = useState<{ id: string; reference_number: string | null }[]>([]);
@@ -155,14 +158,12 @@ export default function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(
     () => searchParams.get('upload') === '1'
   );
-  const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // Preview state
   const [previewTarget, setPreviewTarget] = useState<DocumentRow | null>(null);
@@ -186,36 +187,17 @@ export default function DocumentsPage() {
 
   const loadBranches = useCallback(async () => {
     if (!isAdmin) return;
-    const { data } = await supabase
-      .from('branches')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
-    setBranches((data as Branch[]) ?? []);
+    const data = await documentsService.fetchBranchesForDocumentsFilter();
+    setBranches(data);
   }, [isAdmin]);
 
   // Load shipments + customers for the upload link dropdowns (branch-scoped)
   const loadLinkOptions = useCallback(async () => {
     if (!profile) return;
-    let shipmentQuery = supabase
-      .from('shipments')
-      .select('id, reference_number')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    let customerQuery = supabase
-      .from('customers')
-      .select('id, company_name')
-      .is('deleted_at', null)
-      .order('company_name', { ascending: true });
-
-    if (!isAdmin && userBranchId) {
-      shipmentQuery = shipmentQuery.eq('branch_id', userBranchId);
-      customerQuery = customerQuery.eq('branch_id', userBranchId);
-    }
-
-    const [shipRes, custRes] = await Promise.all([shipmentQuery, customerQuery]);
-    setShipments((shipRes.data as { id: string; reference_number: string | null }[]) ?? []);
-    setCustomers((custRes.data as { id: string; company_name: string }[]) ?? []);
+    const { shipments: shipmentOptions, customers: customerOptions } =
+      await documentsService.fetchDocumentLinkOptions(isAdmin, userBranchId);
+    setShipments(shipmentOptions);
+    setCustomers(customerOptions);
   }, [profile, isAdmin, userBranchId]);
 
   // Shared by both the paginated display query and the (unbounded, only
@@ -374,138 +356,94 @@ export default function DocumentsPage() {
     [addFiles]
   );
 
-  const handleUpload = useCallback(async () => {
-    if (!profile || !userBranchId) {
-      toast.error('Your profile is not fully loaded. Please reload the page.');
-      return;
-    }
-    if (pendingFiles.length === 0) return;
-
-    setUploading(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const pending of pendingFiles) {
-      const { file, category, linkTarget, shipmentId, customerId } = pending;
-      const filePath = `${userBranchId}/${Date.now()}-${file.name}`;
-
-      try {
-        // 1. Upload to Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from('documents')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: file.type || undefined,
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          toast.error(`Failed to upload "${file.name}"`, {
-            description: uploadError.message,
-          });
-          failCount++;
-          continue;
-        }
-
-        // 2. Insert document record
-        const insertPayload: Record<string, unknown> = {
-          name: file.name,
-          category,
-          file_path: filePath,
-          file_size: file.size,
-          mime_type: file.type || null,
-          branch_id: userBranchId,
-          created_by: profile.id,
-        };
-
-        if (linkTarget === 'shipment' && shipmentId) {
-          insertPayload.shipment_id = shipmentId;
-        } else if (linkTarget === 'customer' && customerId) {
-          insertPayload.customer_id = customerId;
-        }
-
-        const { error: insertError, data: inserted } = await supabase
-          .from('documents')
-          .insert(insertPayload)
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          // Attempt to clean up the uploaded file to avoid orphans
-          await supabase.storage.from('documents').remove([filePath]);
-          toast.error(`Failed to save record for "${file.name}"`, {
-            description: insertError.message,
-          });
-          failCount++;
-          continue;
-        }
-
-        // 3. Log activity
-        const docId = (inserted as { id: string }).id;
-        await supabase.from('activities').insert({
-          user_id: profile.id,
-          branch_id: userBranchId,
-          action: 'document_uploaded',
-          entity_type: 'document',
-          entity_id: docId,
-          description: `Uploaded document "${file.name}" (${CATEGORY_META[category].label})`,
-          metadata: {
-            document_id: docId,
-            file_name: file.name,
-            category,
-            file_size: file.size,
-            mime_type: file.type || null,
-          },
-        });
-
-        successCount++;
-      } catch (err) {
-        console.error('Unexpected upload error:', err);
-        toast.error(`An unexpected error occurred uploading "${file.name}"`);
-        failCount++;
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile || !userBranchId) {
+        throw new Error('Your profile is not fully loaded. Please reload the page.');
       }
-    }
 
-    setUploading(false);
+      let successCount = 0;
+      let failCount = 0;
 
-    if (successCount > 0 && failCount === 0) {
-      toast.success(
-        `${successCount} document${successCount > 1 ? 's' : ''} uploaded successfully`
-      );
-      setPendingFiles([]);
-      setUploadOpen(false);
-      setReloadToken((t) => t + 1);
-    } else if (successCount > 0 && failCount > 0) {
-      toast.warning(`${successCount} uploaded, ${failCount} failed`);
-      // Keep failed files in the list for retry; remove successful ones
-      // Since we don't track per-file success here, just reload and clear
-      setPendingFiles([]);
-      setUploadOpen(false);
-      setReloadToken((t) => t + 1);
-    } else if (failCount > 0) {
-      toast.error(`Upload failed for ${failCount} file${failCount > 1 ? 's' : ''}`);
-    }
-  }, [profile, userBranchId, pendingFiles]);
+      for (const pending of pendingFiles) {
+        const { file, category, linkTarget, shipmentId, customerId } = pending;
+        try {
+          const result = await documentsService.uploadDocument({
+            file,
+            category,
+            linkTarget,
+            shipmentId,
+            customerId,
+            userBranchId,
+            createdBy: profile.id,
+            categoryLabel: CATEGORY_META[category].label,
+          });
+
+          if (result.success) {
+            successCount++;
+          } else {
+            toast.error(`Failed to upload "${file.name}"`, { description: result.error });
+            failCount++;
+          }
+        } catch (err) {
+          console.error('Unexpected upload error:', err);
+          toast.error(`An unexpected error occurred uploading "${file.name}"`);
+          failCount++;
+        }
+      }
+
+      return { successCount, failCount };
+    },
+    onSuccess: ({ successCount, failCount }) => {
+      if (successCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['documents'] });
+      }
+      if (successCount > 0 && failCount === 0) {
+        toast.success(
+          `${successCount} document${successCount > 1 ? 's' : ''} uploaded successfully`
+        );
+        setPendingFiles([]);
+        setUploadOpen(false);
+        setReloadToken((t) => t + 1);
+      } else if (successCount > 0 && failCount > 0) {
+        toast.warning(`${successCount} uploaded, ${failCount} failed`);
+        // Keep failed files in the list for retry; remove successful ones
+        // Since we don't track per-file success here, just reload and clear
+        setPendingFiles([]);
+        setUploadOpen(false);
+        setReloadToken((t) => t + 1);
+      } else if (failCount > 0) {
+        toast.error(`Upload failed for ${failCount} file${failCount > 1 ? 's' : ''}`);
+      }
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    },
+  });
+
+  const handleUpload = useCallback(() => {
+    if (pendingFiles.length === 0) return;
+    uploadMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFiles]);
+
+  const uploading = uploadMutation.isPending;
 
   // ─── Download logic ───────────────────────────────────────────────────────
 
   const handleDownload = useCallback(async (doc: DocumentRow) => {
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
+      const { url, error } = await documentsService.createDocumentDownloadUrl(doc.file_path);
 
-      if (error || !data?.signedUrl) {
+      if (!url) {
         console.error('Signed URL error:', error);
         toast.error('Failed to generate download link', {
-          description: error?.message ?? 'Unknown error',
+          description: error ?? 'Unknown error',
         });
         return;
       }
 
-      window.open(data.signedUrl, '_blank');
+      window.open(url, '_blank');
     } catch (err) {
       console.error('Download error:', err);
       toast.error('An unexpected error occurred during download');
@@ -514,60 +452,31 @@ export default function DocumentsPage() {
 
   // ─── Delete logic ─────────────────────────────────────────────────────────
 
-  const handleDelete = useCallback(async () => {
-    if (!deleteTarget || !profile) return;
-    setDeleting(true);
-    try {
-      // 1. Soft-delete the record
-      const { error: updateError } = await supabase
-        .from('documents')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', deleteTarget.id);
-
-      if (updateError) {
-        console.error('Delete error:', updateError);
-        toast.error('Failed to delete document', {
-          description: updateError.message,
-        });
-        setDeleting(false);
-        return;
-      }
-
-      // 2. Remove from storage (best-effort — record is already soft-deleted)
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([deleteTarget.file_path]);
-
-      if (storageError) {
-        console.warn('Storage cleanup warning:', storageError);
-        // Don't fail the whole operation — the record is soft-deleted
-      }
-
-      // 3. Log activity
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: deleteTarget.branch_id,
-        action: 'document_deleted',
-        entity_type: 'document',
-        entity_id: deleteTarget.id,
-        description: `Deleted document "${deleteTarget.name}"`,
-        metadata: {
-          document_id: deleteTarget.id,
-          file_name: deleteTarget.name,
-          category: deleteTarget.category,
-        },
-      });
-
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteTarget || !profile) return;
+      await documentsService.deleteDocument(deleteTarget, profile.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast.success('Document deleted successfully');
       setDeleteTarget(null);
       setReloadToken((t) => t + 1);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Unexpected delete error:', err);
-      toast.error('An unexpected error occurred during deletion');
-    } finally {
-      setDeleting(false);
-    }
+      toast.error('Failed to delete document', {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred during deletion',
+      });
+    },
+  });
+
+  const handleDelete = useCallback(() => {
+    deleteMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deleteTarget, profile]);
+
+  const deleting = deleteMutation.isPending;
 
   // ─── Derived values ───────────────────────────────────────────────────────
 

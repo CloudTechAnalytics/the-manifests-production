@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Download, Pencil } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { DUTY_STATUS_META, formatCurrency, formatDate } from '@/shared/lib/utils/status';
 import { Button } from '@/shared/components/ui/button';
+import { fetchCustomsDocument, getCustomsDocumentDownloadUrl } from '@/features/customs/services/customs.service';
 import type { ShipmentCustoms } from '@/shared/types';
 
 interface InfoRowProps {
@@ -28,42 +29,22 @@ interface DutyAssessmentCardProps {
 }
 
 export function DutyAssessmentCard({ customsRecord, onEdit }: DutyAssessmentCardProps) {
-  const [receiptName, setReceiptName] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    if (!customsRecord.duty_receipt_document_id) {
-      setReceiptName(null);
-      return;
-    }
-    let cancelled = false;
-    supabase
-      .from('documents')
-      .select('name, file_path')
-      .eq('id', customsRecord.duty_receipt_document_id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setReceiptName(data?.name ?? 'Receipt on file');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [customsRecord.duty_receipt_document_id]);
+  const documentId = customsRecord.duty_receipt_document_id;
+  const { data: receiptDoc } = useQuery({
+    queryKey: ['customs-document', documentId],
+    queryFn: () => fetchCustomsDocument(documentId!),
+    enabled: !!documentId,
+  });
+  const receiptName = documentId ? receiptDoc?.name ?? 'Receipt on file' : null;
 
   const handleDownloadReceipt = async () => {
     if (!customsRecord.duty_receipt_document_id) return;
     setDownloading(true);
     try {
-      const { data: doc, error: fetchError } = await supabase
-        .from('documents')
-        .select('file_path')
-        .eq('id', customsRecord.duty_receipt_document_id)
-        .maybeSingle();
-      if (fetchError || !doc?.file_path) throw new Error('Receipt file not found');
-
-      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.file_path, 3600);
-      if (error || !data?.signedUrl) throw new Error(error?.message ?? 'Failed to generate download link');
-      window.open(data.signedUrl, '_blank');
+      const signedUrl = await getCustomsDocumentDownloadUrl(customsRecord.duty_receipt_document_id);
+      window.open(signedUrl, '_blank');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to download receipt');
     } finally {

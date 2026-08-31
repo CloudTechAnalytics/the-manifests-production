@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Building2,
@@ -18,9 +19,15 @@ import {
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate, formatDateTime, ORGANIZATION_STATUS_META, ORGANIZATION_ORIGIN_META } from '@/shared/lib/utils/status';
+import {
+  fetchOrganizationDetail,
+  inviteOrganizationAdmin,
+  createOrganizationAdmin,
+  revokeInvitation,
+  uploadOrganizationLogo,
+} from '@/features/platform/services/organizations.service';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -43,7 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
-import type { Organization, Invitation, Profile, OrgSubscription, Plan } from '@/shared/types';
+import type { Invitation } from '@/shared/types';
 
 const ROLE_LABEL: Record<string, string> = {
   platform_admin: 'Platform Admin',
@@ -76,75 +83,44 @@ function generateTempPassword(): string {
 export default function OrganizationDetailPage() {
   const params = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const orgId = params.id as string;
 
-  const [org, setOrg] = useState<Organization | null>(null);
-  const [members, setMembers] = useState<Profile[]>([]);
-  const [invites, setInvites] = useState<Invitation[]>([]);
-  const [subscription, setSubscription] = useState<(OrgSubscription & { plan: Plan }) | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: detail, isLoading: loading } = useQuery({
+    queryKey: ['organization', orgId],
+    queryFn: () => fetchOrganizationDetail(orgId),
+    enabled: !!orgId,
+  });
+
+  const org = detail?.org ?? null;
+  const members = detail?.members ?? [];
+  const invites = detail?.invites ?? [];
+  const subscription = detail?.subscription ?? null;
+
+  useEffect(() => {
+    if (!loading && detail === null) {
+      toast.error('Organization not found');
+      navigate('/platform/organizations', { replace: true });
+    }
+  }, [loading, detail, navigate]);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteErrors, setInviteErrors] = useState<{ email?: string }>({});
-  const [inviting, setInviting] = useState(false);
 
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
-  const [revoking, setRevoking] = useState(false);
 
   const [createAdminOpen, setCreateAdminOpen] = useState(false);
   const [createAdminEmail, setCreateAdminEmail] = useState('');
   const [createAdminName, setCreateAdminName] = useState('');
   const [createAdminPassword, setCreateAdminPassword] = useState('');
   const [createAdminErrors, setCreateAdminErrors] = useState<{ email?: string; full_name?: string }>({});
-  const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [orgRes, membersRes, invitesRes, subRes] = await Promise.all([
-        supabase.from('organizations').select('*').eq('id', orgId).maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('organization_id', orgId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('invitations')
-          .select('*')
-          .eq('organization_id', orgId)
-          .is('accepted_at', null)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase.from('org_subscriptions').select('*, plan:plans(*)').eq('organization_id', orgId).maybeSingle(),
-      ]);
-
-      if (orgRes.error) throw orgRes.error;
-      if (!orgRes.data) {
-        toast.error('Organization not found');
-        navigate('/platform/organizations', { replace: true });
-        return;
-      }
-      setOrg(orgRes.data as Organization);
-      setMembers((membersRes.data as Profile[]) ?? []);
-      setInvites((invitesRes.data as Invitation[]) ?? []);
-      setSubscription((subRes.data as (OrgSubscription & { plan: Plan }) | null) ?? null);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load organization'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, navigate]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const invalidateOrgDetail = () => queryClient.invalidateQueries({ queryKey: ['organization', orgId] });
 
   const validateInvite = (): boolean => {
     const errs: { email?: string } = {};
@@ -157,57 +133,28 @@ export default function OrganizationDetailPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleInviteAdmin = async () => {
-    if (!validateInvite()) return;
-    setInviting(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: inviteEmail.trim(),
-            full_name: inviteName.trim() || undefined,
-            role: 'admin',
-            organization_id: orgId,
-            branch_id: null,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        toast.error(result.error ?? `Request failed (${response.status})`);
-        return;
-      }
-
+  const inviteMutation = useMutation({
+    mutationFn: () =>
+      inviteOrganizationAdmin({ orgId, email: inviteEmail.trim(), fullName: inviteName.trim() }),
+    onSuccess: (result) => {
       toast.success(
         result.emailed
           ? `Invitation emailed to ${inviteEmail.trim()}`
           : `Invitation created. Email delivery isn't configured — share this link: ${result.link}`
       );
+      invalidateOrgDetail();
       setInviteOpen(false);
       setInviteEmail('');
       setInviteName('');
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to send invitation'));
-    } finally {
-      setInviting(false);
-    }
+    },
+  });
+
+  const handleInviteAdmin = () => {
+    if (!validateInvite()) return;
+    inviteMutation.mutate();
   };
 
   const openCreateAdmin = () => {
@@ -231,51 +178,27 @@ export default function OrganizationDetailPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleCreateAdmin = async () => {
-    if (!validateCreateAdmin()) return;
-    setCreatingAdmin(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: createAdminEmail.trim(),
-            full_name: createAdminName.trim(),
-            roles: ['admin'],
-            organization_id: orgId,
-            password: createAdminPassword,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        toast.error(result.error ?? `Request failed (${response.status})`);
-        return;
-      }
-
+  const createAdminMutation = useMutation({
+    mutationFn: () =>
+      createOrganizationAdmin({
+        orgId,
+        email: createAdminEmail.trim(),
+        fullName: createAdminName.trim(),
+        password: createAdminPassword,
+      }),
+    onSuccess: () => {
       toast.success(`Admin account created for ${createAdminEmail.trim()}`);
+      invalidateOrgDetail();
       setCreateAdminOpen(false);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to create admin account'));
-    } finally {
-      setCreatingAdmin(false);
-    }
+    },
+  });
+
+  const handleCreateAdmin = () => {
+    if (!validateCreateAdmin()) return;
+    createAdminMutation.mutate();
   };
 
   const handleCopyPassword = async () => {
@@ -284,40 +207,41 @@ export default function OrganizationDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleRevoke = async () => {
-    if (!revokeTarget) return;
-    setRevoking(true);
-    try {
-      const { error } = await supabase
-        .from('invitations')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', revokeTarget.id);
-      if (error) throw error;
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const callerId = sessionData?.session?.user?.id;
-      if (callerId) {
-        await supabase.from('activities').insert({
-          user_id: callerId,
-          organization_id: orgId,
-          action: 'invitation.revoked',
-          entity_type: 'invitation',
-          entity_id: revokeTarget.id,
-          description: `Revoked invitation for ${revokeTarget.email}`,
-        });
-      }
-
+  const revokeMutation = useMutation({
+    mutationFn: async () => {
+      if (!revokeTarget) throw new Error('Not ready');
+      await revokeInvitation({ invitationId: revokeTarget.id, invitationEmail: revokeTarget.email, orgId });
+    },
+    onSuccess: () => {
       toast.success('Invitation revoked');
+      invalidateOrgDetail();
       setRevokeTarget(null);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to revoke invitation'));
-    } finally {
-      setRevoking(false);
-    }
-  };
+    },
+  });
 
-  const handleLogoFile = async (file: File | undefined) => {
+  const handleRevoke = () => revokeMutation.mutate();
+
+  const logoMutation = useMutation({
+    mutationFn: (file: File) => {
+      if (!org) throw new Error('Not ready');
+      return uploadOrganizationLogo({ orgId, orgName: org.name, file });
+    },
+    onSuccess: () => {
+      toast.success('Logo updated');
+      invalidateOrgDetail();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to upload logo'));
+    },
+    onSettled: () => {
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    },
+  });
+
+  const handleLogoFile = (file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Please choose an image file (PNG, JPG or SVG)');
@@ -327,50 +251,13 @@ export default function OrganizationDetailPage() {
       toast.error('Logo must be 2 MB or smaller');
       return;
     }
-    setUploadingLogo(true);
-    try {
-      const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-      // One object per org, overwritten on replace, so we never accumulate
-      // orphaned files as the logo changes.
-      const path = `${orgId}/logo.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('org-logos')
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-
-      const { data: pub } = supabase.storage.from('org-logos').getPublicUrl(path);
-      // Cache-bust so a replaced logo shows immediately rather than serving
-      // the browser's cached copy of the same path.
-      const url = `${pub.publicUrl}?v=${Date.now()}`;
-
-      const { error: updErr } = await supabase
-        .from('organizations')
-        .update({ logo_url: url })
-        .eq('id', orgId);
-      if (updErr) throw updErr;
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const callerId = sessionData?.session?.user?.id;
-      if (callerId) {
-        await supabase.from('activities').insert({
-          user_id: callerId,
-          organization_id: orgId,
-          action: 'organization.logo_updated',
-          entity_type: 'organization',
-          entity_id: orgId,
-          description: `Updated logo for "${org?.name ?? 'organization'}"`,
-        });
-      }
-
-      toast.success('Logo updated');
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to upload logo'));
-    } finally {
-      setUploadingLogo(false);
-      if (logoInputRef.current) logoInputRef.current.value = '';
-    }
+    logoMutation.mutate(file);
   };
+
+  const inviting = inviteMutation.isPending;
+  const creatingAdmin = createAdminMutation.isPending;
+  const revoking = revokeMutation.isPending;
+  const uploadingLogo = logoMutation.isPending;
 
   if (loading || !org) {
     return (

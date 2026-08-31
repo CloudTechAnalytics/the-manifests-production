@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BadgeDollarSign, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -40,55 +40,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  createRateCard,
+  fetchRateCards,
+  softDeleteRateCard,
+  updateRateCard,
+} from '@/features/rates/services/rates.service';
 import type { FreightRateCard, ShipmentType } from '@/shared/types';
 
 const SHIPMENT_TYPES: ShipmentType[] = ['air', 'sea', 'road', 'rail', 'multimodal'];
 
 export default function RateCardsPage() {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const canManage = hasRole('admin') || hasRole('branch_manager') || hasRole('sales');
-  const [rows, setRows] = useState<FreightRateCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState<{ existing: FreightRateCard | null } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('freight_rate_cards')
-        .select('*')
-        .is('deleted_at', null)
-        .order('trade_lane_origin', { ascending: true });
-      if (error) throw error;
-      setRows((data as FreightRateCard[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['rate-cards'],
+    queryFn: fetchRateCards,
+    enabled: !!profile,
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => softDeleteRateCard(id, profile!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rate-cards'] });
+      toast.success('Rate card removed');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to remove rate card'));
+    },
+    onSettled: () => setDeletingId(null),
+  });
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!profile) return;
     setDeletingId(id);
-    try {
-      const { error } = await supabase
-        .from('freight_rate_cards')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', id);
-      if (error) throw error;
-      toast.success('Rate card removed');
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to remove rate card'));
-    } finally {
-      setDeletingId(null);
-    }
+    deleteMutation.mutate(id);
   };
 
   const filtered = rows.filter((r) => {
@@ -234,7 +225,6 @@ export default function RateCardsPage() {
           open={!!dialog}
           onOpenChange={(open) => !open && setDialog(null)}
           existing={dialog.existing}
-          onSaved={load}
         />
       )}
     </div>
@@ -245,14 +235,13 @@ function RateCardFormDialog({
   open,
   onOpenChange,
   existing,
-  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existing: FreightRateCard | null;
-  onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const {
     needsSelection: needsBranchSelection,
     branches,
@@ -272,7 +261,6 @@ function RateCardFormDialog({
   const [validFrom, setValidFrom] = useState('');
   const [validTo, setValidTo] = useState('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -289,11 +277,8 @@ function RateCardFormDialog({
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile || !origin.trim() || !destination.trim() || !buyRate || !sellRate) return;
-    if (!existing && !branchId) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         trade_lane_origin: origin.trim(),
         trade_lane_destination: destination.trim(),
@@ -306,29 +291,31 @@ function RateCardFormDialog({
         valid_from: validFrom || null,
         valid_to: validTo || null,
         notes: notes.trim() || null,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase.from('freight_rate_cards').update(payload).eq('id', existing.id);
-        if (error) throw error;
-        toast.success('Rate card updated');
+        await updateRateCard(existing.id, payload);
       } else {
-        const { error } = await supabase
-          .from('freight_rate_cards')
-          .insert({ ...payload, branch_id: branchId, created_by: profile.id });
-        if (error) throw error;
-        toast.success('Rate card added');
+        await createRateCard({ ...payload, branch_id: branchId, created_by: profile!.id });
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rate-cards'] });
+      toast.success(existing ? 'Rate card updated' : 'Rate card added');
       onOpenChange(false);
-      onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save rate card'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile || !origin.trim() || !destination.trim() || !buyRate || !sellRate) return;
+    if (!existing && !branchId) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

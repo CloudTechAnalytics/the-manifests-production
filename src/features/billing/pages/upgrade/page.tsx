@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Check, Loader2, Mail, Lock, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { formatCurrency } from '@/shared/lib/utils/status';
 import { CONTACT_EMAIL, CONTACT_PHONE_HREF } from '@/shared/lib/contact';
@@ -12,6 +12,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { cn, getErrorMessage } from '@/shared/lib/utils';
 import { diffPlanFeatures } from '@/shared/lib/plans';
+import * as billingService from '@/features/billing/services/billing.service';
 import type { Plan, BillingCycle } from '@/shared/types';
 
 /**
@@ -28,56 +29,32 @@ function UpgradePageContent() {
   const [searchParams] = useSearchParams();
   const requestedFeature = searchParams.get('feature');
   const { profile } = useAuth();
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [payingPlanId, setPayingPlanId] = useState<string | null>(null);
 
   const canPay = profile?.role === 'admin' || profile?.role === 'branch_manager';
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('is_active', true)
-        .eq('is_public', true)
-        .is('deleted_at', null)
-        .order('sort_order', { ascending: true });
-      setPlans((data ?? []) as Plan[]);
-      setLoading(false);
-    })();
-  }, []);
+  const { data: plans = [], isLoading: loading } = useQuery({
+    queryKey: ['billing-public-plans'],
+    queryFn: () => billingService.fetchPublicPlans(),
+  });
 
-  const handleSubscribe = async (plan: Plan) => {
-    setPayingPlanId(plan.id);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) throw new Error('Your session has expired. Please sign in again.');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/initialize-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ plan_id: plan.id, billing_cycle: cycle }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Failed to start checkout');
-
+  const subscribeMutation = useMutation({
+    mutationFn: (plan: Plan) => billingService.initializePayment(plan.id, cycle),
+    onSuccess: (result) => {
       // Full redirect, not a new tab — Paystack's own callback_url brings
       // the browser straight back to /billing/callback when done.
       window.location.href = result.authorization_url;
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to start checkout'));
       setPayingPlanId(null);
-    }
+    },
+  });
+
+  const handleSubscribe = (plan: Plan) => {
+    setPayingPlanId(plan.id);
+    subscribeMutation.mutate(plan);
   };
 
   return (

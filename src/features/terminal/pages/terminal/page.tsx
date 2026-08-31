@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Container, Search, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
@@ -19,19 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { TerminalOperation, TerminalStatus } from '@/shared/types';
+import { fetchTerminalQueue } from '@/features/terminal/services/terminal.service';
+import type { TerminalStatus } from '@/shared/types';
 
 /*
  * Terminal queue — a filtered work list for Terminal, not a second place
  * to edit terminal data. Every row opens the shipment's Terminal tab.
  */
-
-interface Row {
-  id: string;
-  reference_number: string | null;
-  customer: { company_name: string } | null;
-  terminal: TerminalOperation | null;
-}
 
 const STATUS_META: Record<TerminalStatus, { label: string; color: string }> = {
   waiting: { label: 'Waiting', color: 'bg-muted text-muted-foreground' },
@@ -47,48 +41,13 @@ export default function TerminalQueuePage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select('id, reference_number, branch_id, customer:customers(company_name)')
-        .is('deleted_at', null)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-
-      const { data: shipmentRows, error } = await query;
-      if (error) throw error;
-
-      const shipments = (shipmentRows as unknown as (Omit<Row, 'terminal'> & { branch_id: string })[]) ?? [];
-      const shipmentIds = shipments.map((s) => s.id);
-
-      const { data: terminalRows } = shipmentIds.length
-        ? await supabase.from('terminal_operations').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
-        : { data: [] };
-
-      const terminalByShipment = new Map<string, TerminalOperation>();
-      (terminalRows as TerminalOperation[] | null)?.forEach((t) => terminalByShipment.set(t.shipment_id, t));
-
-      const outstanding = shipments
-        .map((s) => ({ ...s, terminal: terminalByShipment.get(s.id) ?? null }))
-        .filter((s) => !s.terminal || s.terminal.status !== 'released');
-
-      setRows(outstanding);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, branchId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['terminal-queue', isAdmin, branchId],
+    queryFn: () => fetchTerminalQueue(isAdmin, branchId),
+    enabled: !!profile,
+  });
 
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;

@@ -1,46 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Loader2, Gauge } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  fetchDepartmentCapacity,
+  fetchHrDashboardStats,
+  fetchWorkforceByBranch,
+  fetchWorkforceByDepartment,
+} from '@/features/hr/services/hr.service';
 import { HrDashboardStatTiles } from '@/features/hr/components/hr-dashboard-stat-tiles';
 import { CapacityStatusBadge } from '@/features/hr/components/capacity-status-badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import type { DepartmentCapacity, HrDashboardStats, WorkforceByBranch, WorkforceByDepartment } from '@/shared/types';
 
 export default function HrDashboardPage() {
-  const [stats, setStats] = useState<HrDashboardStats | null>(null);
-  const [byBranch, setByBranch] = useState<WorkforceByBranch[]>([]);
-  const [byDepartment, setByDepartment] = useState<WorkforceByDepartment[]>([]);
-  const [departmentCapacity, setDepartmentCapacity] = useState<DepartmentCapacity[]>([]);
-  const [loading, setLoading] = useState(true);
+  // One useQuery per RPC — the platform_dashboard_stats() pattern
+  // (migration 071/087), not a pile of client-side counts.
+  const statsQuery = useQuery({ queryKey: ['hr-dashboard-stats'], queryFn: fetchHrDashboardStats });
+  const branchQuery = useQuery({ queryKey: ['hr-workforce-by-branch'], queryFn: fetchWorkforceByBranch });
+  const departmentQuery = useQuery({ queryKey: ['hr-workforce-by-department'], queryFn: fetchWorkforceByDepartment });
+  const capacityQuery = useQuery({ queryKey: ['hr-department-capacity'], queryFn: fetchDepartmentCapacity });
 
-  useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      setLoading(true);
-      // One Promise.all batch, each an RPC — the platform_dashboard_stats()
-      // pattern (migration 071/087), not a pile of client-side counts.
-      const [statsRes, branchRes, deptRes, capacityRes] = await Promise.all([
-        supabase.rpc('hr_dashboard_stats'),
-        supabase.rpc('hr_workforce_by_branch'),
-        supabase.rpc('hr_workforce_by_department'),
-        supabase.rpc('hr_department_capacity'),
-      ]);
-      if (!isMounted) return;
-
-      setStats(((statsRes.data as HrDashboardStats[]) ?? [])[0] ?? null);
-      setByBranch((branchRes.data as WorkforceByBranch[]) ?? []);
-      setByDepartment(((deptRes.data as WorkforceByDepartment[]) ?? []).filter((d) => d.employee_count > 0));
-      setDepartmentCapacity((capacityRes.data as DepartmentCapacity[]) ?? []);
-      setLoading(false);
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const loading = statsQuery.isLoading || branchQuery.isLoading || departmentQuery.isLoading || capacityQuery.isLoading;
+  const stats = statsQuery.data ?? null;
+  const byBranch = branchQuery.data ?? [];
+  const byDepartment = departmentQuery.data ?? [];
+  const departmentCapacity = capacityQuery.data ?? [];
 
   if (loading) {
     return (

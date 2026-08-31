@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import {
   Ship,
   Loader2,
@@ -22,6 +23,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as authService from '@/features/auth/services/auth.service';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -97,7 +99,6 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -129,19 +130,16 @@ function LoginForm() {
     }
   }, [loading, user, profile, navigate]);
 
-  const handleResend = async () => {
-    if (!email) return;
-    setResending(true);
-    try {
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ email: email.trim() }),
-      });
+  const resendMutation = useMutation({
+    mutationFn: (email: string) => authService.resendVerificationEmailSilently(email),
+    onSuccess: () => {
       toast.success('If that email needs verifying, a new link is on its way.');
-    } finally {
-      setResending(false);
-    }
+    },
+  });
+
+  const handleResend = () => {
+    if (!email) return;
+    resendMutation.mutate(email);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,7 +151,7 @@ function LoginForm() {
     if (error) {
       if (/email not confirmed/i.test(error)) {
         toast.error('Please verify your email before signing in.', {
-          action: { label: resending ? 'Sending…' : 'Resend email', onClick: handleResend },
+          action: { label: resendMutation.isPending ? 'Sending…' : 'Resend email', onClick: handleResend },
         });
       } else {
         toast.error(error);

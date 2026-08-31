@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { FileSearch, Search, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
@@ -19,19 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { ExaminationResult, ShipmentExamination } from '@/shared/types';
+import { fetchExaminationQueue } from '@/features/examination/services/examination.service';
+import type { ExaminationResult } from '@/shared/types';
 
 /*
  * Examination queue — a filtered work list for Examination, not a second
  * place to edit examination data. Every row opens the shipment's tab.
  */
-
-interface Row {
-  id: string;
-  reference_number: string | null;
-  customer: { company_name: string } | null;
-  examination: ShipmentExamination | null;
-}
 
 const RESULT_META: Record<ExaminationResult, { label: string; color: string }> = {
   passed: { label: 'Passed', color: 'bg-emerald-50 text-emerald-700' },
@@ -46,49 +40,13 @@ export default function ExaminationQueuePage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select('id, reference_number, branch_id, customer:customers(company_name)')
-        .is('deleted_at', null)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-
-      const { data: shipmentRows, error } = await query;
-      if (error) throw error;
-
-      const shipments = (shipmentRows as unknown as (Omit<Row, 'examination'> & { branch_id: string })[]) ?? [];
-      const shipmentIds = shipments.map((s) => s.id);
-
-      const { data: examinationRows } = shipmentIds.length
-        ? await supabase.from('shipment_examinations').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
-        : { data: [] };
-
-      const examinationByShipment = new Map<string, ShipmentExamination>();
-      (examinationRows as ShipmentExamination[] | null)?.forEach((e) => examinationByShipment.set(e.shipment_id, e));
-
-      // Outstanding work: no examination record yet, or no result recorded.
-      const outstanding = shipments
-        .map((s) => ({ ...s, examination: examinationByShipment.get(s.id) ?? null }))
-        .filter((s) => !s.examination || !s.examination.result);
-
-      setRows(outstanding);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, branchId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['examination-queue', isAdmin, branchId],
+    queryFn: () => fetchExaminationQueue(isAdmin, branchId),
+    enabled: !!profile,
+  });
 
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;

@@ -1,17 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Wallet, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
 import { BranchSelectField } from '@/shared/components/branch-select-field';
+import * as paymentsService from '@/features/payments/services/payments.service';
 import {
   Card,
   CardContent,
@@ -41,7 +42,7 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { PAYMENT_METHOD_META, formatCurrency } from '@/shared/lib/utils/status';
-import type { Customer, Invoice, PaymentMethod } from '@/shared/types';
+import type { Invoice, PaymentMethod } from '@/shared/types';
 
 const paymentSchema = z.object({
   customer_id: z.string().min(1, 'Customer is required'),
@@ -59,10 +60,8 @@ export default function NewPaymentPage() {
   const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const preselectInvoiceId = searchParams.get('invoice_id');
+  const queryClient = useQueryClient();
 
-  const [submitting, setSubmitting] = useState(false);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [outstandingInvoices, setOutstandingInvoices] = useState<Invoice[]>([]);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   const isAdmin = profile?.role === 'admin';
@@ -98,71 +97,43 @@ export default function NewPaymentPage() {
   const selectedCustomerId = watch('customer_id');
   const amount = Number(watch('amount')) || 0;
 
-  // Load customers
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('customers')
-      .select('*')
-      .is('deleted_at', null)
-      .order('company_name', { ascending: true });
-    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading customers:', error);
-      setCustomers((data as Customer[]) ?? []);
-    });
-  }, [profile, isAdmin, myBranchId]);
+  const { data: customers = [] } = useQuery({
+    queryKey: ['payments', 'form-customers', isAdmin, myBranchId],
+    queryFn: () => paymentsService.fetchCustomersForPaymentForm(isAdmin, myBranchId),
+    enabled: !!profile,
+  });
 
   // If arriving from an invoice's "Record Payment" link, preselect that
   // invoice's customer.
+  const { data: preselectCustomerId } = useQuery({
+    queryKey: ['payments', 'form-preselect-invoice', preselectInvoiceId],
+    queryFn: () => paymentsService.fetchInvoiceCustomerId(preselectInvoiceId!),
+    enabled: !!preselectInvoiceId,
+  });
   useEffect(() => {
-    if (!preselectInvoiceId) return;
-    supabase
-      .from('invoices')
-      .select('customer_id')
-      .eq('id', preselectInvoiceId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.customer_id) setValue('customer_id', data.customer_id);
-      });
-  }, [preselectInvoiceId, setValue]);
+    if (preselectCustomerId) setValue('customer_id', preselectCustomerId);
+  }, [preselectCustomerId, setValue]);
 
-  const loadOutstandingInvoices = useCallback(async () => {
-    if (!selectedCustomerId) {
-      setOutstandingInvoices([]);
-      return;
-    }
-    let query = supabase
-      .from('invoices')
-      .select('*')
-      .eq('customer_id', selectedCustomerId)
-      .in('status', ['sent', 'partial'])
-      .is('deleted_at', null)
-      .order('due_date', { ascending: true });
-    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
+  const { data: outstandingInvoices = [] } = useQuery({
+    queryKey: ['payments', 'form-outstanding-invoices', selectedCustomerId, isAdmin, myBranchId],
+    queryFn: () =>
+      paymentsService.fetchOutstandingInvoicesForPaymentForm(selectedCustomerId, isAdmin, myBranchId),
+    enabled: !!selectedCustomerId,
+  });
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading outstanding invoices:', error);
-      setOutstandingInvoices([]);
-      return;
+  // Preselect the invoice we arrived from, defaulted to its full outstanding amount
+  useEffect(() => {
+    if (!preselectInvoiceId || outstandingInvoices.length === 0) return;
+    const target = outstandingInvoices.find((i) => i.id === preselectInvoiceId);
+    if (target) {
+      const outstanding = Number(target.total) - Number(target.amount_paid);
+      setAllocations({ [target.id]: outstanding });
+      setValue('amount', outstanding);
     }
-    const invoices = (data as Invoice[]) ?? [];
-    setOutstandingInvoices(invoices);
-
-    // Preselect the invoice we arrived from, defaulted to its full outstanding amount
-    if (preselectInvoiceId) {
-      const target = invoices.find((i) => i.id === preselectInvoiceId);
-      if (target) {
-        const outstanding = Number(target.total) - Number(target.amount_paid);
-        setAllocations({ [target.id]: outstanding });
-        setValue('amount', outstanding);
-      }
-    }
-  }, [selectedCustomerId, isAdmin, myBranchId, preselectInvoiceId, setValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectInvoiceId, outstandingInvoices]);
 
   useEffect(() => {
-    loadOutstandingInvoices();
     setAllocations({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCustomerId]);
@@ -209,7 +180,46 @@ export default function NewPaymentPage() {
     setAllocations((prev) => ({ ...prev, [invoiceId]: value }));
   };
 
-  const onSubmit = async (values: PaymentFormValues) => {
+  const createMutation = useMutation({
+    mutationFn: (values: PaymentFormValues) => {
+      if (!profile?.id || !branchId) {
+        throw new Error('Please select a branch');
+      }
+      const customer = customers.find((c) => c.id === values.customer_id);
+      const allocationEntries = Object.entries(allocations).filter(([, amt]) => amt > 0) as [
+        string,
+        number,
+      ][];
+      return paymentsService.createPayment({
+        customer_id: values.customer_id,
+        branch_id: branchId,
+        payment_date: values.payment_date,
+        payment_method: values.payment_method,
+        amount: values.amount,
+        reference: values.reference || null,
+        notes: values.notes || null,
+        created_by: profile.id,
+        customer_name: customer?.company_name ?? 'Unknown customer',
+        allocations: allocationEntries,
+      });
+    },
+    onSuccess: (paymentData) => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      if (paymentData.allocationFailed) {
+        toast.warning('Payment recorded, but some allocations failed to save.');
+      } else {
+        toast.success('Payment recorded successfully');
+      }
+      navigate(`/payments/${paymentData.id}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to record payment');
+      toast.error(message);
+    },
+  });
+
+  const onSubmit = (values: PaymentFormValues) => {
     if (!profile?.id) return;
     if (!branchId) {
       setBranchError('Please select a branch');
@@ -220,63 +230,7 @@ export default function NewPaymentPage() {
       toast.error('Allocated amount cannot exceed the payment amount.');
       return;
     }
-    setSubmitting(true);
-    try {
-      const { data: paymentData, error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          customer_id: values.customer_id,
-          branch_id: branchId,
-          payment_date: values.payment_date,
-          payment_method: values.payment_method,
-          amount: values.amount,
-          reference: values.reference || null,
-          notes: values.notes || null,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id, payment_number')
-        .single();
-
-      if (paymentError || !paymentData) {
-        throw new Error(paymentError?.message ?? 'Failed to record payment');
-      }
-
-      const allocationEntries = Object.entries(allocations).filter(([, amt]) => amt > 0);
-      if (allocationEntries.length > 0) {
-        const { error: allocError } = await supabase.from('payment_allocations').insert(
-          allocationEntries.map(([invoiceId, amt]) => ({
-            payment_id: paymentData.id,
-            invoice_id: invoiceId,
-            amount: amt,
-            created_by: profile.id,
-          }))
-        );
-        if (allocError) {
-          console.error('Allocation insert error:', allocError);
-          toast.warning('Payment recorded, but some allocations failed to save.');
-        }
-      }
-
-      const customer = customers.find((c) => c.id === values.customer_id);
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'payment.created',
-        entity_type: 'payment',
-        entity_id: paymentData.id,
-        description: `Recorded payment ${paymentData.payment_number ?? ''} from "${customer?.company_name ?? 'Unknown customer'}"`,
-        metadata: { customer_id: values.customer_id, amount: values.amount },
-      });
-
-      toast.success('Payment recorded successfully');
-      navigate(`/payments/${paymentData.id}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to record payment');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(values);
   };
 
   return (
@@ -502,8 +456,8 @@ export default function NewPaymentPage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting || unallocated < 0} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={createMutation.isPending || unallocated < 0} className="w-full sm:w-auto">
+            {createMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Record Payment
           </Button>
         </div>

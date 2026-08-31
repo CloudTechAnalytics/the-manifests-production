@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Truck, Search, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
@@ -19,19 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { ShipmentTransportation, TransportationStatus } from '@/shared/types';
+import { fetchTransportationQueue } from '@/features/transportation/services/transportation.service';
+import type { TransportationStatus } from '@/shared/types';
 
 /*
  * Transportation queue — a filtered work list for Transport, not a second
  * place to edit transportation legs. Every row opens the shipment's tab.
  */
-
-interface Row {
-  id: string;
-  reference_number: string | null;
-  customer: { company_name: string } | null;
-  transportation: ShipmentTransportation | null;
-}
 
 const STATUS_META: Record<TransportationStatus, { label: string; color: string }> = {
   assigned: { label: 'Assigned', color: 'bg-muted text-muted-foreground' },
@@ -47,48 +41,13 @@ export default function TransportationQueuePage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select('id, reference_number, branch_id, customer:customers(company_name)')
-        .is('deleted_at', null)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-
-      const { data: shipmentRows, error } = await query;
-      if (error) throw error;
-
-      const shipments = (shipmentRows as unknown as (Omit<Row, 'transportation'> & { branch_id: string })[]) ?? [];
-      const shipmentIds = shipments.map((s) => s.id);
-
-      const { data: transportRows } = shipmentIds.length
-        ? await supabase.from('shipment_transportation').select('*').in('shipment_id', shipmentIds).is('deleted_at', null)
-        : { data: [] };
-
-      const transportByShipment = new Map<string, ShipmentTransportation>();
-      (transportRows as ShipmentTransportation[] | null)?.forEach((t) => transportByShipment.set(t.shipment_id, t));
-
-      const outstanding = shipments
-        .map((s) => ({ ...s, transportation: transportByShipment.get(s.id) ?? null }))
-        .filter((s) => !s.transportation || s.transportation.status !== 'delivered');
-
-      setRows(outstanding);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, branchId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['transportation-queue', isAdmin, branchId],
+    queryFn: () => fetchTransportationQueue(isAdmin, branchId),
+    enabled: !!profile,
+  });
 
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;

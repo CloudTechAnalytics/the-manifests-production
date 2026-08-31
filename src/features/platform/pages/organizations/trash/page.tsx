@@ -1,13 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Trash2, ArchiveRestore, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { formatDate } from '@/shared/lib/utils/status';
+import {
+  fetchTrashedOrganizations,
+  restoreOrganization,
+  permanentlyDeleteOrganization,
+} from '@/features/platform/services/organizations.service';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -31,107 +36,60 @@ import type { Organization } from '@/shared/types';
 
 export default function OrganizationsTrashPage() {
   const { profile } = useAuth();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['organizations', 'trash'],
+    queryFn: fetchTrashedOrganizations,
+  });
+  const orgs = data ?? [];
+
   const [restoreTarget, setRestoreTarget] = useState<Organization | null>(null);
-  const [restoring, setRestoring] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false });
-      if (error) throw error;
-      setOrgs((data as Organization[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load trash'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const invalidateOrganizations = () => queryClient.invalidateQueries({ queryKey: ['organizations'] });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleRestore = async () => {
-    if (!restoreTarget || !profile) return;
-    setRestoring(true);
-    try {
-      const { error } = await supabase
-        .from('organizations')
-        .update({ deleted_at: null })
-        .eq('id', restoreTarget.id);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: restoreTarget.id,
-        action: 'organization.restored',
-        entity_type: 'organization',
-        entity_id: restoreTarget.id,
-        description: `Restored organization "${restoreTarget.name}" from Trash`,
-      });
-
-      toast.success(`${restoreTarget.name} restored`);
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!restoreTarget || !profile) throw new Error('Not ready');
+      await restoreOrganization({ orgId: restoreTarget.id, orgName: restoreTarget.name, restoredBy: profile.id });
+    },
+    onSuccess: () => {
+      invalidateOrganizations();
+      if (restoreTarget) queryClient.invalidateQueries({ queryKey: ['organization', restoreTarget.id] });
+      toast.success(`${restoreTarget?.name} restored`);
       setRestoreTarget(null);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to restore organization'));
-    } finally {
-      setRestoring(false);
-    }
-  };
+    },
+  });
 
-  const handleDeletePermanently = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again.');
-        return;
-      }
+  const handleRestore = () => restoreMutation.mutate();
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-organization`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ organization_id: deleteTarget.id }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        toast.error(result.error ?? `Request failed (${response.status})`);
-        return;
-      }
-
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!deleteTarget) throw new Error('Not ready');
+      return permanentlyDeleteOrganization(deleteTarget.id);
+    },
+    onSuccess: (result) => {
+      invalidateOrganizations();
       toast.success(
         result.membersRemoved > 0
-          ? `${deleteTarget.name} and ${result.membersRemoved} member account${result.membersRemoved === 1 ? '' : 's'} permanently deleted`
-          : `${deleteTarget.name} permanently deleted`
+          ? `${deleteTarget?.name} and ${result.membersRemoved} member account${result.membersRemoved === 1 ? '' : 's'} permanently deleted`
+          : `${deleteTarget?.name} permanently deleted`
       );
       setDeleteTarget(null);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to permanently delete organization'));
-    } finally {
-      setDeleting(false);
-    }
-  };
+    },
+  });
+
+  const handleDeletePermanently = () => deleteMutation.mutate();
+
+  const restoring = restoreMutation.isPending;
+  const deleting = deleteMutation.isPending;
 
   return (
     <div className="space-y-6">

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -27,6 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import {
+  createExaminationRecord,
+  logExaminationActivity,
+  updateExaminationRecord,
+} from '@/features/examination/services/examination.service';
 import type { ExaminationResult, ShipmentExamination } from '@/shared/types';
 
 const RESULT_OPTIONS: { value: ExaminationResult; label: string }[] = [
@@ -54,6 +59,7 @@ export function ExaminationFormDialog({
   onSaved,
 }: ExaminationFormDialogProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const [inspectionDate, setInspectionDate] = useState('');
   const [inspectionOfficer, setInspectionOfficer] = useState('');
   const [terminalOfficer, setTerminalOfficer] = useState('');
@@ -61,7 +67,6 @@ export function ExaminationFormDialog({
   const [forwarderRep, setForwarderRep] = useState('');
   const [result, setResult] = useState<ExaminationResult | ''>('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -75,10 +80,8 @@ export function ExaminationFormDialog({
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         inspection_date: inspectionDate || null,
         inspection_officer: inspectionOfficer.trim() || null,
@@ -87,52 +90,52 @@ export function ExaminationFormDialog({
         freight_forwarder_representative: forwarderRep.trim() || null,
         result: result || null,
         notes: notes.trim() || null,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase
-          .from('shipment_examinations')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        await updateExaminationRecord(existing.id, payload);
+        await logExaminationActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'examination.updated',
           entity_type: 'shipment_examinations',
           entity_id: existing.id,
           description: `Updated examination record${result ? ` (result: ${result})` : ''}`,
         });
-        toast.success('Examination record updated');
       } else {
-        const { data: created, error } = await supabase
-          .from('shipment_examinations')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
+        const created = await createExaminationRecord({
+          ...payload,
+          shipment_id: shipmentId,
+          branch_id: branchId,
+          created_by: profile!.id,
+        });
+        await logExaminationActivity({
+          user_id: profile!.id,
           branch_id: branchId,
           action: 'examination.created',
           entity_type: 'shipment_examinations',
           entity_id: created?.id,
           description: `Logged a physical examination${result ? ` (result: ${result})` : ''}`,
         });
-        toast.success('Examination logged');
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['examination-queue'] });
+      toast.success(existing ? 'Examination record updated' : 'Examination logged');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save examination record'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   const handleDelete = async () => {
     if (!existing) return;

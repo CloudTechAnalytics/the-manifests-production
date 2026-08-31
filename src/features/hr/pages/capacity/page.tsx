@@ -1,41 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Gauge, Loader2, Boxes, Network } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { generateWorkforceInsights, thinDataMessage } from '@/shared/lib/hr/capacity-insights';
+import {
+  fetchBranchCapacity,
+  fetchDepartmentCapacity,
+  fetchPeopleCapacity,
+} from '@/features/hr/services/hr.service';
 import { CapacityStatusBadge } from '@/features/hr/components/capacity-status-badge';
 import { CapacityInsightCard } from '@/features/hr/components/capacity-insight-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import type { BranchCapacity, DepartmentCapacity, EmployeeCapacity } from '@/shared/types';
+import type { EmployeeCapacity } from '@/shared/types';
 
 export default function PeopleCapacityPage() {
-  const [people, setPeople] = useState<EmployeeCapacity[]>([]);
-  const [departments, setDepartments] = useState<DepartmentCapacity[]>([]);
-  const [branches, setBranches] = useState<BranchCapacity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const peopleQuery = useQuery({ queryKey: ['hr-people-capacity'], queryFn: fetchPeopleCapacity });
+  const departmentsQuery = useQuery({ queryKey: ['hr-department-capacity'], queryFn: fetchDepartmentCapacity });
+  const branchesQuery = useQuery({ queryKey: ['hr-branch-capacity'], queryFn: fetchBranchCapacity });
 
-  useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      setLoading(true);
-      const [peopleRes, deptRes, branchRes] = await Promise.all([
-        supabase.rpc('hr_people_capacity'),
-        supabase.rpc('hr_department_capacity'),
-        supabase.rpc('hr_branch_capacity'),
-      ]);
-      if (!isMounted) return;
-      setPeople((peopleRes.data as EmployeeCapacity[]) ?? []);
-      setDepartments((deptRes.data as DepartmentCapacity[]) ?? []);
-      setBranches((branchRes.data as BranchCapacity[]) ?? []);
-      setLoading(false);
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const loading = peopleQuery.isLoading || departmentsQuery.isLoading || branchesQuery.isLoading;
+  const people = peopleQuery.data ?? [];
+  const departments = departmentsQuery.data ?? [];
+  const branches = branchesQuery.data ?? [];
 
   if (loading) {
     return (

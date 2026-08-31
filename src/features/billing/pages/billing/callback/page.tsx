@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent } from '@/shared/components/ui/card';
+import * as billingService from '@/features/billing/services/billing.service';
 
 /**
  * Where Paystack's callback_url (set in initialize-payment) redirects the
@@ -29,51 +29,31 @@ function BillingCallbackContent() {
   // already applies before it ever reaches this URL.
   const rawReturnTo = searchParams.get('return_to');
   const returnTo = rawReturnTo && rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/dashboard';
-  const [status, setStatus] = useState<Status>('checking');
-  const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!reference) {
-      setStatus('missing_reference');
-      return;
-    }
-    (async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const session = sessionData?.session;
-        if (!session) throw new Error('Your session has expired. Please sign in and check Settings for your payment status.');
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: ['billing-verify-payment', reference],
+    queryFn: () => billingService.verifyPayment(reference as string),
+    enabled: !!reference,
+    retry: false,
+  });
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-payment`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({ reference }),
-          }
-        );
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? 'Could not verify payment');
-
-        if (result.status === 'success' || result.status === 'already_processed') {
-          setStatus('success');
-        } else {
-          setStatus('failed');
-          setMessage(
-            result.status === 'amount_mismatch'
-              ? 'This payment could not be verified. Please contact support before trying again.'
-              : 'Paystack reported this payment was not completed.'
-          );
-        }
-      } catch (err) {
-        setStatus('failed');
-        setMessage(err instanceof Error ? err.message : 'Could not verify payment');
-      }
-    })();
-  }, [reference]);
+  let status: Status;
+  let message: string | null = null;
+  if (!reference) {
+    status = 'missing_reference';
+  } else if (isPending) {
+    status = 'checking';
+  } else if (isError) {
+    status = 'failed';
+    message = error instanceof Error ? error.message : 'Could not verify payment';
+  } else if (data && (data.status === 'success' || data.status === 'already_processed')) {
+    status = 'success';
+  } else {
+    status = 'failed';
+    message = data?.status === 'amount_mismatch'
+      ? 'This payment could not be verified. Please contact support before trying again.'
+      : 'Paystack reported this payment was not completed.';
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-4 py-16 text-center">

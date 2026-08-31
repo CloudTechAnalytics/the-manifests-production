@@ -1,11 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { ScrollText, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
-import { getErrorMessage } from '@/shared/lib/utils';
+import { usePaginatedList } from '@/shared/hooks/use-paginated-list';
 import { formatDateTime } from '@/shared/lib/utils/status';
+import { fetchAuditLogsPage } from '@/features/platform/services/audit-logs.service';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -18,100 +16,14 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-interface AuditRow {
-  id: string;
-  user_id: string | null;
-  action: string;
-  description: string;
-  created_at: string;
-  organizationName: string;
-  userName: string;
-}
-
-const PAGE_SIZE = 25;
-
 export default function AuditLogsPage() {
-  const [rows, setRows] = useState<AuditRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-
-  const loadPage = useCallback(async (offset: number) => {
-    const { data, error } = await supabase
-      .from('activities')
-      .select(
-        'id, user_id, action, description, created_at, branch:branches(name, organization:organizations(name)), organization:organizations(name)'
-      )
-      .order('created_at', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-
-    if (error) throw error;
-
-    const actRows = (data as unknown as {
-      id: string;
-      user_id: string | null;
-      action: string;
-      description: string;
-      created_at: string;
-      branch: { name: string; organization: { name: string } | null } | null;
-      organization: { name: string } | null;
-    }[]) ?? [];
-
-    // activities.user_id is a FK to auth.users, not profiles — no PostgREST
-    // embed exists for it, so actor names are batch-fetched separately and
-    // mapped in memory (same pattern as the dashboard's activity feed).
-    const actorIds = Array.from(
-      new Set(actRows.map((a) => a.user_id).filter(Boolean))
-    ) as string[];
-    const actorNames = new Map<string, string>();
-    if (actorIds.length > 0) {
-      const { data: actorRows } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', actorIds);
-      (actorRows ?? []).forEach((p) => actorNames.set(p.id, p.full_name));
-    }
-
-    const mapped: AuditRow[] = actRows.map((a) => ({
-      id: a.id,
-      user_id: a.user_id,
-      action: a.action,
-      description: a.description,
-      created_at: a.created_at,
-      organizationName: a.organization?.name ?? a.branch?.organization?.name ?? '—',
-      userName: a.user_id ? actorNames.get(a.user_id) ?? 'Unknown user' : 'System',
-    }));
-
-    return mapped;
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const first = await loadPage(0);
-        setRows(first);
-        setHasMore(first.length === PAGE_SIZE);
-      } catch (err) {
-        toast.error(getErrorMessage(err, 'Failed to load audit logs'));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [loadPage]);
-
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    try {
-      const next = await loadPage(rows.length);
-      setRows((prev) => [...prev, ...next]);
-      setHasMore(next.length === PAGE_SIZE);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load more entries'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  const {
+    rows,
+    loading,
+    loadingMore,
+    hasMore,
+    loadMore,
+  } = usePaginatedList(['audit-logs'], fetchAuditLogsPage);
 
   return (
     <div className="space-y-6">
@@ -163,7 +75,7 @@ export default function AuditLogsPage() {
               </Table>
               {hasMore && (
                 <div className="flex justify-center border-t border-border p-4">
-                  <Button variant="outline" size="sm" onClick={handleLoadMore} disabled={loadingMore}>
+                  <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
                     {loadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                     Load more
                   </Button>

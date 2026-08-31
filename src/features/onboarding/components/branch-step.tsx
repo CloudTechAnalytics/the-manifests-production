@@ -1,15 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, MapPin, Plus } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import type { Branch } from '@/shared/types';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
 
 /**
  * Onboarding step 2 — spec section 8. Head Office already exists
@@ -19,62 +19,63 @@ import type { Branch } from '@/shared/types';
  * insert/update to the org's own admin, no edge function needed.
  */
 export function BranchStep({ organizationId }: { organizationId: string }) {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = ['onboarding-branches', organizationId];
+
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [newName, setNewName] = useState('');
-  const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      setBranches((data ?? []) as Branch[]);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load branches'));
-    } finally {
-      setLoading(false);
-    }
-  }, [organizationId]);
+  const {
+    data: branches = [],
+    isLoading: loading,
+    error: loadError,
+  } = useQuery({
+    queryKey,
+    queryFn: () => onboardingService.fetchBranches(organizationId),
+  });
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (loadError) toast.error(getErrorMessage(loadError, 'Failed to load branches'));
+  }, [loadError]);
 
-  const handleRename = async (id: string) => {
-    const name = renameValue.trim();
-    if (!name) { setRenamingId(null); return; }
-    try {
-      const { error } = await supabase.from('branches').update({ name }).eq('id', id);
-      if (error) throw error;
+  const renameMutation = useMutation({
+    mutationFn: (id: string) => onboardingService.renameBranch(id, renameValue.trim()),
+    onSuccess: () => {
       setRenamingId(null);
-      await load();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to rename branch'));
-    }
-  };
+    },
+  });
 
-  const handleCreate = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
+  const createMutation = useMutation({
+    mutationFn: (name: string) => {
       const code = name.slice(0, 3).toUpperCase() + '-' + Math.random().toString(36).slice(2, 5).toUpperCase();
-      const { error } = await supabase.from('branches').insert({ name, code, organization_id: organizationId });
-      if (error) throw error;
+      return onboardingService.createBranch(name, code, organizationId);
+    },
+    onSuccess: (_data, name) => {
       setNewName('');
       toast.success(`"${name}" branch added`);
-      await load();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to add branch'));
-    } finally {
-      setCreating(false);
-    }
+    },
+  });
+  const creating = createMutation.isPending;
+
+  const handleRename = (id: string) => {
+    const name = renameValue.trim();
+    if (!name) { setRenamingId(null); return; }
+    renameMutation.mutate(id);
+  };
+
+  const handleCreate = () => {
+    const name = newName.trim();
+    if (!name) return;
+    createMutation.mutate(name);
   };
 
   if (loading) {

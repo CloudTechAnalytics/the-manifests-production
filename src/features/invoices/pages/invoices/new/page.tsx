@@ -1,17 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Receipt, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
 import { BranchSelectField } from '@/shared/components/branch-select-field';
+import * as invoicesService from '@/features/invoices/services/invoices.service';
 import {
   Card,
   CardContent,
@@ -40,7 +41,6 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { formatCurrency } from '@/shared/lib/utils/status';
-import type { Customer, Quotation, Shipment } from '@/shared/types';
 
 const CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
 
@@ -62,11 +62,7 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 export default function NewInvoicePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === 'admin';
   const myBranchId = profile?.branch_id ?? null;
@@ -108,54 +104,20 @@ export default function NewInvoicePage() {
   const currency = watch('currency');
   const total = (Number(subtotal) || 0) + (Number(taxAmount) || 0);
 
-  // Load customers
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('customers')
-      .select('*')
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .order('company_name', { ascending: true });
-    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading customers:', error);
-      setCustomers((data as Customer[]) ?? []);
-    });
-  }, [profile, isAdmin, myBranchId]);
+  const { data: customers = [] } = useQuery({
+    queryKey: ['invoices', 'form-customers', isAdmin, myBranchId],
+    queryFn: () => invoicesService.fetchActiveCustomersForInvoiceForm(isAdmin, myBranchId),
+    enabled: !!profile,
+  });
 
-  // Load shipments + approved quotations for the selected customer
-  const loadForCustomer = useCallback(async () => {
-    if (!selectedCustomerId) {
-      setShipments([]);
-      setQuotations([]);
-      return;
-    }
-    let shipQuery = supabase
-      .from('shipments')
-      .select('*')
-      .eq('customer_id', selectedCustomerId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    let quotQuery = supabase
-      .from('quotations')
-      .select('*')
-      .eq('customer_id', selectedCustomerId)
-      .eq('status', 'approved')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (!isAdmin && myBranchId) {
-      shipQuery = shipQuery.eq('branch_id', myBranchId);
-      quotQuery = quotQuery.eq('branch_id', myBranchId);
-    }
-    const [shipRes, quotRes] = await Promise.all([shipQuery, quotQuery]);
-    setShipments((shipRes.data as Shipment[]) ?? []);
-    setQuotations((quotRes.data as Quotation[]) ?? []);
-  }, [selectedCustomerId, isAdmin, myBranchId]);
-
-  useEffect(() => {
-    loadForCustomer();
-  }, [loadForCustomer]);
+  const { data: shipmentsAndQuotations } = useQuery({
+    queryKey: ['invoices', 'form-shipments-quotations', selectedCustomerId, isAdmin, myBranchId],
+    queryFn: () =>
+      invoicesService.fetchShipmentsAndQuotationsForCustomer(selectedCustomerId, isAdmin, myBranchId),
+    enabled: !!selectedCustomerId,
+  });
+  const shipments = selectedCustomerId ? shipmentsAndQuotations?.shipments ?? [] : [];
+  const quotations = selectedCustomerId ? shipmentsAndQuotations?.quotations ?? [] : [];
 
   const handleQuotationSelect = (quotationId: string) => {
     setValue('quotation_id', quotationId);
@@ -167,64 +129,48 @@ export default function NewInvoicePage() {
     }
   };
 
-  const onSubmit = async (values: InvoiceFormValues) => {
+  const createMutation = useMutation({
+    mutationFn: (values: InvoiceFormValues) => {
+      if (!profile?.id || !branchId) {
+        throw new Error('Please select a branch');
+      }
+      const customer = customers.find((c) => c.id === values.customer_id);
+      return invoicesService.createInvoice({
+        customer_id: values.customer_id,
+        shipment_id: values.shipment_id || null,
+        quotation_id: values.quotation_id || null,
+        branch_id: branchId,
+        issue_date: values.issue_date,
+        due_date: values.due_date || null,
+        subtotal: values.subtotal,
+        tax_amount: values.tax_amount,
+        total,
+        currency: values.currency,
+        notes: values.notes || null,
+        terms: values.terms || null,
+        created_by: profile.id,
+        customer_name: customer?.company_name ?? 'Unknown customer',
+      });
+    },
+    onSuccess: (invoiceData) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Invoice created successfully');
+      navigate(`/invoices/${invoiceData.id}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to create invoice');
+      toast.error(message);
+    },
+  });
+
+  const onSubmit = (values: InvoiceFormValues) => {
     if (!profile?.id) return;
     if (!branchId) {
       setBranchError('Please select a branch');
       return;
     }
     setBranchError('');
-    setSubmitting(true);
-    try {
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert({
-          customer_id: values.customer_id,
-          shipment_id: values.shipment_id || null,
-          quotation_id: values.quotation_id || null,
-          branch_id: branchId,
-          status: 'sent',
-          issue_date: values.issue_date,
-          due_date: values.due_date || null,
-          subtotal: values.subtotal,
-          tax_amount: values.tax_amount,
-          total,
-          currency: values.currency,
-          notes: values.notes || null,
-          terms: values.terms || null,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id, invoice_number')
-        .single();
-
-      if (invoiceError || !invoiceData) {
-        throw new Error(invoiceError?.message ?? 'Failed to create invoice');
-      }
-
-      const customer = customers.find((c) => c.id === values.customer_id);
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'invoice.created',
-        entity_type: 'invoice',
-        entity_id: invoiceData.id,
-        description: `Created invoice ${invoiceData.invoice_number ?? ''} for "${customer?.company_name ?? 'Unknown customer'}"`,
-        metadata: {
-          customer_id: values.customer_id,
-          total,
-          currency: values.currency,
-        },
-      });
-
-      toast.success('Invoice created successfully');
-      navigate(`/invoices/${invoiceData.id}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to create invoice');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(values);
   };
 
   return (
@@ -460,8 +406,8 @@ export default function NewInvoicePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto">
+            {createMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Create Invoice
           </Button>
         </div>

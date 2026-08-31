@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import { Ship, Loader2, Eye, EyeOff, Lock, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -9,6 +10,7 @@ import { getErrorMessage } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import * as authService from '@/features/auth/services/auth.service';
 
 function AcceptInviteForm() {
   const navigate = useNavigate();
@@ -20,10 +22,29 @@ function AcceptInviteForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const acceptInviteMutation = useMutation({
+    mutationFn: () => authService.acceptInvite(token, password, fullName),
+    onSuccess: async ({ email }) => {
+      setDone(true);
+      const { error } = await signIn(email, password);
+      if (error) {
+        // Account was created successfully; sign-in just didn't chain
+        // automatically. Send them to the login page instead of stalling.
+        toast.success('Account created. Please sign in.');
+        navigate('/login', { replace: true });
+        return;
+      }
+      navigate('/dashboard', { replace: true });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to accept invitation'));
+    },
+  });
+  const submitting = acceptInviteMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) {
       toast.error('This invitation link is missing its token');
@@ -38,46 +59,7 @@ function AcceptInviteForm() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invite`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            token,
-            password,
-            full_name: fullName.trim() || undefined,
-          }),
-        }
-      );
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        toast.error(result.error ?? `Request failed (${response.status})`);
-        return;
-      }
-
-      setDone(true);
-      const { error } = await signIn(result.email as string, password);
-      if (error) {
-        // Account was created successfully; sign-in just didn't chain
-        // automatically. Send them to the login page instead of stalling.
-        toast.success('Account created. Please sign in.');
-        navigate('/login', { replace: true });
-        return;
-      }
-      navigate('/dashboard', { replace: true });
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to accept invitation'));
-    } finally {
-      setSubmitting(false);
-    }
+    acceptInviteMutation.mutate();
   };
 
   return (

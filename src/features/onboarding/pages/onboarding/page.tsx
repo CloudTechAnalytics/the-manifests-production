@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Check, ChevronLeft, ChevronRight, Loader2, PartyPopper, Ship } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/auth-context';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
 import { Button } from '@/shared/components/ui/button';
 import { ThemeToggle } from '@/shared/components/theme-toggle';
 import { SummaryCard } from '@/features/onboarding/components/summary-card';
@@ -60,7 +61,6 @@ export default function OnboardingPage() {
   const { user, profile, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [stage, setStage] = useState<'welcome' | number>('welcome');
-  const [finishing, setFinishing] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -69,33 +69,18 @@ export default function OnboardingPage() {
     if (profile?.organization?.onboarding_completed_at) { navigate('/dashboard', { replace: true }); return; }
   }, [loading, user, profile, navigate]);
 
-  const finish = async () => {
-    setFinishing(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { toast.error('Your session has expired. Please sign in again.'); return; }
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-organization-profile`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ mark_onboarding_complete: true }),
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error ?? 'Failed to finish setup');
+  const finishMutation = useMutation({
+    mutationFn: () => onboardingService.finishOnboarding(),
+    onSuccess: async () => {
       await refreshProfile();
       navigate('/dashboard', { replace: true });
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to finish setup'));
-    } finally {
-      setFinishing(false);
-    }
-  };
+    },
+  });
+  const finishing = finishMutation.isPending;
+  const finish = () => finishMutation.mutate();
 
   if (loading || !profile?.organization) {
     return (

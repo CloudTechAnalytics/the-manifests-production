@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import {
@@ -14,9 +15,12 @@ import {
   Building2,
   Loader2,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
+import {
+  fetchCustomerForEdit,
+  updateCustomerWithContacts,
+} from '@/features/customers/services/customers.service';
 import {
   Card,
   CardContent,
@@ -45,7 +49,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
-import type { Customer, CustomerContact } from '@/shared/types';
 
 // --- Validation schema ----------------------------------------------------
 
@@ -103,10 +106,9 @@ export default function EditCustomerPage() {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const customerId = params.id!;
 
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [existingContactIds, setExistingContactIds] = useState<string[]>([]);
 
   const {
@@ -140,69 +142,45 @@ export default function EditCustomerPage() {
   } = useFieldArray({ control, name: 'contacts' });
 
   // Load existing customer + contacts
+  const { data: editData, isLoading: loading } = useQuery({
+    queryKey: ['customer-edit', customerId],
+    queryFn: () => fetchCustomerForEdit(customerId),
+    enabled: !!customerId,
+  });
+
   useEffect(() => {
-    if (!customerId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data: cust, error: custErr } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('id', customerId)
-          .is('deleted_at', null)
-          .maybeSingle();
+    if (loading) return;
+    if (!editData) {
+      toast.error('Customer not found');
+      navigate('/customers');
+      return;
+    }
 
-        if (cancelled) return;
+    const { customer, contacts } = editData;
+    setExistingContactIds(contacts.map((c) => c.id));
 
-        if (custErr || !cust) {
-          toast.error('Customer not found');
-          navigate('/customers');
-          return;
-        }
-
-        const customer = cust as Customer;
-
-        const { data: ctcts } = await supabase
-          .from('customer_contacts')
-          .select('*')
-          .eq('customer_id', customerId)
-          .is('deleted_at', null)
-          .order('is_primary', { ascending: false });
-
-        if (cancelled) return;
-
-        const contacts = (ctcts as CustomerContact[]) ?? [];
-        setExistingContactIds(contacts.map((c) => c.id));
-
-        reset({
-          company_name: customer.company_name,
-          type: customer.type,
-          email: customer.email ?? '',
-          phone: customer.phone ?? '',
-          address: customer.address ?? '',
-          city: customer.city ?? '',
-          country: customer.country,
-          website: customer.website ?? '',
-          notes: customer.notes ?? '',
-          status: customer.status,
-          contacts: contacts.map((c) => ({
-            id: c.id,
-            name: c.name,
-            title: c.title ?? '',
-            email: c.email ?? '',
-            phone: c.phone ?? '',
-            is_primary: c.is_primary,
-          })),
-        });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    reset({
+      company_name: customer.company_name,
+      type: customer.type,
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
+      address: customer.address ?? '',
+      city: customer.city ?? '',
+      country: customer.country,
+      website: customer.website ?? '',
+      notes: customer.notes ?? '',
+      status: customer.status,
+      contacts: contacts.map((c) => ({
+        id: c.id,
+        name: c.name,
+        title: c.title ?? '',
+        email: c.email ?? '',
+        phone: c.phone ?? '',
+        is_primary: c.is_primary,
+      })),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId]);
+  }, [editData, loading]);
 
   const addContact = () =>
     appendContact({
@@ -213,109 +191,53 @@ export default function EditCustomerPage() {
       is_primary: contactFields.length === 0,
     });
 
+  const updateMutation = useMutation({
+    mutationFn: (values: CustomerFormValues) =>
+      updateCustomerWithContacts({
+        customerId,
+        // zod's .optional().or(z.literal('')) types these as possibly
+        // undefined, but every field has a '' defaultValue and is a
+        // controlled input, so it's always a real string at submit time —
+        // `?? ''` just satisfies the service's stricter (all-required) shape.
+        values: {
+          ...values,
+          email: values.email ?? '',
+          phone: values.phone ?? '',
+          address: values.address ?? '',
+          city: values.city ?? '',
+          website: values.website ?? '',
+          notes: values.notes ?? '',
+          contacts: values.contacts.map((c) => ({
+            ...c,
+            email: c.email ?? '',
+            title: c.title ?? '',
+            phone: c.phone ?? '',
+          })),
+        },
+        existingContactIds,
+        updatedBy: profile!.id,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customer-edit', customerId] });
+      toast.success('Customer updated successfully');
+      navigate(`/customers/${customerId}`);
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to update customer');
+      toast.error(message);
+    },
+  });
+
+  const submitting = updateMutation.isPending;
+
   const onSubmit = async (values: CustomerFormValues) => {
     if (!profile) {
       toast.error('You must be signed in.');
       return;
     }
-    setSubmitting(true);
-    try {
-      // 1. Update customer
-      const { error: custErr } = await supabase
-        .from('customers')
-        .update({
-          company_name: values.company_name,
-          type: values.type,
-          email: values.email || null,
-          phone: values.phone || null,
-          address: values.address || null,
-          city: values.city || null,
-          country: values.country,
-          website: values.website || null,
-          notes: values.notes || null,
-          status: values.status,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', customerId);
-
-      if (custErr) throw custErr;
-
-      // 2. Sync contacts: upsert existing, insert new, soft-delete removed
-      const submittedIds = values.contacts
-        .map((c) => c.id)
-        .filter((id): id is string => Boolean(id));
-      const removedIds = existingContactIds.filter(
-        (id) => !submittedIds.includes(id)
-      );
-
-      // Soft-delete removed contacts
-      if (removedIds.length > 0) {
-        const { error: delErr } = await supabase
-          .from('customer_contacts')
-          .update({ deleted_at: new Date().toISOString() })
-          .in('id', removedIds);
-        if (delErr) console.error('Contact delete error:', delErr);
-      }
-
-      // Upsert each contact — at most one primary: the first marked
-      // primary wins, matching the new-customer form's enforcement (no
-      // DB constraint prevents multiple, so this has to happen here).
-      let primaryAssigned = false;
-      for (const c of values.contacts) {
-        const isPrimary = c.is_primary && !primaryAssigned;
-        if (isPrimary) primaryAssigned = true;
-        const payload = {
-          customer_id: customerId,
-          name: c.name,
-          title: c.title || null,
-          email: c.email || null,
-          phone: c.phone || null,
-          is_primary: isPrimary,
-        };
-
-        if (c.id) {
-          // Update existing
-          const { error: upErr } = await supabase
-            .from('customer_contacts')
-            .update(payload)
-            .eq('id', c.id);
-          if (upErr) console.error('Contact update error:', upErr);
-        } else {
-          // Insert new
-          const { error: insErr } = await supabase
-            .from('customer_contacts')
-            .insert(payload);
-          if (insErr) console.error('Contact insert error:', insErr);
-        }
-      }
-
-      // 3. Log activity
-      const { data: branchRow } = await supabase
-        .from('customers')
-        .select('branch_id')
-        .eq('id', customerId)
-        .single();
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchRow?.branch_id ?? '',
-        action: 'customer.updated',
-        entity_type: 'customer',
-        entity_id: customerId,
-        description: `Updated customer "${values.company_name}"`,
-        metadata: { company_name: values.company_name },
-      });
-
-      toast.success('Customer updated successfully');
-      navigate(`/customers/${customerId}`);
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to update customer');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    updateMutation.mutate(values);
   };
 
   if (loading) {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Mail, Send, UserPlus } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -11,7 +11,8 @@ import { Label } from '@/shared/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/shared/components/ui/select';
-import type { Branch, Department, UserRole } from '@/shared/types';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
+import type { UserRole } from '@/shared/types';
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -32,67 +33,53 @@ interface PendingInvite { email: string; role: UserRole; }
 
 /** Onboarding step 4 — spec section 10. Same invite-user edge function the Users page uses; not a parallel invite system. */
 export function InviteTeamStep({ organizationId }: { organizationId: string }) {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('operations');
   const [branchId, setBranchId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
-  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<PendingInvite[]>([]);
 
-  const load = useCallback(async () => {
-    const [{ data: b }, { data: d }] = await Promise.all([
-      supabase.from('branches').select('*').eq('organization_id', organizationId).is('deleted_at', null),
-      supabase.from('departments').select('*').eq('organization_id', organizationId).is('deleted_at', null).eq('is_active', true),
-    ]);
-    setBranches((b ?? []) as Branch[]);
-    setDepartments((d ?? []) as Department[]);
-    if (b?.[0]) setBranchId(b[0].id);
-  }, [organizationId]);
+  const { data } = useQuery({
+    queryKey: ['onboarding-invite-branches-departments', organizationId],
+    queryFn: () => onboardingService.fetchOrgBranchesAndDepartments(organizationId),
+  });
+  const branches = data?.branches ?? [];
+  const departments = data?.departments ?? [];
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (branches[0] && !branchId) setBranchId(branches[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branches]);
 
-  const handleInvite = async () => {
-    if (!email.trim() || !branchId) {
-      toast.error('Email and branch are required');
-      return;
-    }
-    setSending(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { toast.error('Your session has expired. Please sign in again.'); return; }
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            email: email.trim(),
-            full_name: fullName.trim() || undefined,
-            role,
-            branch_id: branchId,
-            department_id: departmentId || null,
-            organization_id: organizationId,
-          }),
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error ?? 'Failed to send invite');
+  const inviteMutation = useMutation({
+    mutationFn: () =>
+      onboardingService.inviteUser({
+        email: email.trim(),
+        full_name: fullName.trim() || undefined,
+        role,
+        branch_id: branchId,
+        department_id: departmentId || null,
+        organization_id: organizationId,
+      }),
+    onSuccess: (data) => {
       setSent((s) => [...s, { email: email.trim(), role }]);
       setFullName('');
       setEmail('');
       toast.success(data.emailed ? `Invitation sent to ${email}` : `Invitation created (email not configured): ${data.link ?? ''}`);
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to send invitation'));
-    } finally {
-      setSending(false);
+    },
+  });
+  const sending = inviteMutation.isPending;
+
+  const handleInvite = () => {
+    if (!email.trim() || !branchId) {
+      toast.error('Email and branch are required');
+      return;
     }
+    inviteMutation.mutate();
   };
 
   return (

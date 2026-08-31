@@ -1,15 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as expensesService from '@/features/expenses/services/expenses.service';
 import {
   Card,
   CardContent,
@@ -38,7 +39,7 @@ import {
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
 import { EXPENSE_CATEGORY_META } from '@/shared/lib/utils/status';
-import type { Expense, ExpenseCategory, Shipment } from '@/shared/types';
+import type { ExpenseCategory } from '@/shared/types';
 
 const expenseSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -70,13 +71,7 @@ export default function EditExpensePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const expenseId = params.id!;
-
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [notFound, setNotFound] = useState(false);
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [expenseNumber, setExpenseNumber] = useState<string | null>(null);
-  const [branchId, setBranchId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
@@ -99,97 +94,63 @@ export default function EditExpensePage() {
     },
   });
 
-  const loadExpense = useCallback(async () => {
-    if (!expenseId) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('id', expenseId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (error || !data) {
-        setNotFound(true);
-        return;
-      }
-
-      const expense = data as Expense;
-      setExpenseNumber(expense.expense_number ?? null);
-      setBranchId(expense.branch_id);
-      reset({
-        description: expense.description,
-        category: expense.category,
-        shipment_id: expense.shipment_id ?? '',
-        amount: Number(expense.amount),
-        currency: expense.currency,
-        expense_date: expense.expense_date,
-        notes: expense.notes ?? '',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [expenseId, reset]);
+  const { data: expense, isLoading: loading, isError } = useQuery({
+    queryKey: ['expense', expenseId],
+    queryFn: () => expensesService.fetchExpenseForEdit(expenseId),
+    enabled: !!expenseId,
+  });
+  const notFound = !loading && (isError || !expense);
 
   useEffect(() => {
-    loadExpense();
-  }, [loadExpense]);
-
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('shipments')
-      .select('*')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (!isAdmin && userBranchId) query = query.eq('branch_id', userBranchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading shipments:', error);
-      setShipments((data as Shipment[]) ?? []);
+    if (!expense) return;
+    reset({
+      description: expense.description,
+      category: expense.category,
+      shipment_id: expense.shipment_id ?? '',
+      amount: Number(expense.amount),
+      currency: expense.currency,
+      expense_date: expense.expense_date,
+      notes: expense.notes ?? '',
     });
-  }, [profile, isAdmin, userBranchId]);
+  }, [expense, reset]);
 
-  const onSubmit = async (values: ExpenseFormValues) => {
-    if (!profile?.id) return;
-    setSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('expenses')
-        .update({
-          description: values.description,
-          category: values.category,
-          shipment_id: values.shipment_id || null,
-          amount: values.amount,
-          currency: values.currency,
-          expense_date: values.expense_date,
-          notes: values.notes || null,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', expenseId);
+  const { data: shipments = [] } = useQuery({
+    queryKey: ['expenses', 'form-shipments', isAdmin, userBranchId],
+    queryFn: () => expensesService.fetchShipmentsForExpenseForm(isAdmin, userBranchId),
+    enabled: !!profile,
+  });
 
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'expense.updated',
-        entity_type: 'expense',
-        entity_id: expenseId,
-        description: `Updated expense ${expenseNumber ?? ''}`,
-        metadata: { category: values.category, amount: values.amount },
+  const updateMutation = useMutation({
+    mutationFn: (values: ExpenseFormValues) => {
+      if (!profile?.id || !expense) throw new Error('Not ready');
+      return expensesService.updateExpense(expenseId, {
+        description: values.description,
+        category: values.category,
+        shipment_id: values.shipment_id || null,
+        amount: values.amount,
+        currency: values.currency,
+        expense_date: values.expense_date,
+        notes: values.notes || null,
+        updated_by: profile.id,
+        branch_id: expense.branch_id,
+        expense_number: expense.expense_number,
       });
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense', expenseId] });
       toast.success('Expense updated successfully');
       navigate(`/expenses/${expenseId}`);
-    } catch (err) {
+    },
+    onError: (err) => {
       const message = getErrorMessage(err, 'Failed to update expense');
       toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const onSubmit = (values: ExpenseFormValues) => {
+    if (!profile?.id) return;
+    updateMutation.mutate(values);
   };
 
   if (loading) {
@@ -222,6 +183,8 @@ export default function EditExpensePage() {
       </div>
     );
   }
+
+  const expenseNumber = expense?.expense_number ?? null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">
@@ -392,8 +355,8 @@ export default function EditExpensePage() {
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={updateMutation.isPending} className="w-full sm:w-auto">
+            {updateMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </div>

@@ -2,20 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import { Ship, Loader2 } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/auth-context';
-import { supabase } from '@/shared/lib/supabase/client';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { toast } from 'sonner';
+import * as authService from '@/features/auth/services/auth.service';
 
 export default function ChangePasswordPage() {
   const { user, profile, loading, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -23,7 +23,20 @@ export default function ChangePasswordPage() {
     }
   }, [loading, user, navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const changePasswordMutation = useMutation({
+    mutationFn: () => authService.changePassword(user!.id, newPassword),
+    onSuccess: async () => {
+      await refreshProfile();
+      toast.success('Password changed successfully!');
+      navigate(profile?.role === 'platform_admin' ? '/platform' : '/dashboard', { replace: true });
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+  const submitting = changePasswordMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (newPassword.length < 8) {
@@ -35,33 +48,7 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    setSubmitting(true);
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    if (updateError) {
-      toast.error(updateError.message);
-      setSubmitting(false);
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ must_change_password: false })
-      .eq('id', user!.id);
-
-    if (profileError) {
-      toast.error('Password updated but profile flag not cleared. Please contact admin.');
-      setSubmitting(false);
-      return;
-    }
-
-    await refreshProfile();
-    toast.success('Password changed successfully!');
-    navigate(profile?.role === 'platform_admin' ? '/platform' : '/dashboard', { replace: true });
-    setSubmitting(false);
+    changePasswordMutation.mutate();
   };
 
   if (loading || !user) {

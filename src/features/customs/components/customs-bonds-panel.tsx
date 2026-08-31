@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Pencil, Plus, ScrollText } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate, formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -25,6 +25,7 @@ import {
   DialogTitle,
   DialogClose,
 } from '@/shared/components/ui/dialog';
+import { createCustomsBond, updateCustomsBond } from '@/features/customs/services/customs.service';
 import type { CustomsBond, CustomsBondType, CustomsBondStatus } from '@/shared/types';
 
 const BOND_TYPE_LABELS: Record<CustomsBondType, string> = {
@@ -142,6 +143,7 @@ function CustomsBondFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [bondNumber, setBondNumber] = useState('');
   const [bondType, setBondType] = useState<CustomsBondType>('single_entry');
   const [suretyName, setSuretyName] = useState('');
@@ -152,8 +154,6 @@ function CustomsBondFormDialog({
   const [status, setStatus] = useState<CustomsBondStatus>('active');
   const [dischargedDate, setDischargedDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
   useEffect(() => {
     if (!open) return;
     setBondNumber(existing?.bond_number ?? '');
@@ -168,10 +168,8 @@ function CustomsBondFormDialog({
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         bond_number: bondNumber.trim() || null,
         bond_type: bondType,
@@ -183,29 +181,31 @@ function CustomsBondFormDialog({
         status,
         discharged_date: dischargedDate || null,
         notes: notes.trim() || null,
-        updated_by: profile.id,
+        updated_by: profile!.id,
       };
 
       if (existing) {
-        const { error } = await supabase.from('customs_bonds').update(payload).eq('id', existing.id);
-        if (error) throw error;
-        toast.success('Bond updated');
+        await updateCustomsBond(existing.id, payload);
       } else {
-        const { error } = await supabase
-          .from('customs_bonds')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id });
-        if (error) throw error;
-        toast.success('Bond added');
+        await createCustomsBond({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile!.id });
       }
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customs-queue'] });
+      toast.success(existing ? 'Bond updated' : 'Bond added');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save bond'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile) return;
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

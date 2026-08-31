@@ -1,15 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, Receipt, FileText } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/ui/empty-state';
-import { formatCurrency, formatDate } from '@/shared/lib/utils/status';
+import { fetchApprovals } from '@/features/approvals/services/approvals.service';
 
 /*
  * Approvals — everything currently awaiting an approval decision from
@@ -20,98 +19,18 @@ import { formatCurrency, formatDate } from '@/shared/lib/utils/status';
  * single queue pointing at both.
  */
 
-interface ApprovalRow {
-  id: string;
-  kind: 'expense' | 'quotation';
-  title: string;
-  subtitle: string;
-  amount: string;
-  date: string;
-  href: string;
-}
-
 export default function ApprovalsPage() {
   const { profile, hasRole } = useAuth();
-  const [rows, setRows] = useState<ApprovalRow[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const isAdmin = profile?.role === 'admin';
   const seesWholeOrg = isAdmin || hasRole('branch_manager');
   const branchFilter = seesWholeOrg ? null : profile?.branch_id ?? null;
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let expensesQuery = supabase
-        .from('expenses')
-        .select('id, expense_number, description, amount, currency, expense_date, category')
-        .is('deleted_at', null)
-        .eq('status', 'pending')
-        .order('expense_date', { ascending: false });
-      if (branchFilter) expensesQuery = expensesQuery.eq('branch_id', branchFilter);
-
-      let quotationsQuery = supabase
-        .from('quotations')
-        .select('id, quotation_number, total, currency, created_at, customer:customers(company_name)')
-        .is('deleted_at', null)
-        .eq('status', 'pending_approval')
-        .order('created_at', { ascending: false });
-      if (branchFilter) quotationsQuery = quotationsQuery.eq('branch_id', branchFilter);
-
-      const [expenses, quotations] = await Promise.all([expensesQuery, quotationsQuery]);
-
-      const expenseRows: ApprovalRow[] = (
-        (expenses.data ?? []) as {
-          id: string;
-          expense_number: string | null;
-          description: string;
-          amount: number;
-          currency: string;
-          expense_date: string;
-          category: string;
-        }[]
-      ).map((e) => ({
-        id: e.id,
-        kind: 'expense',
-        title: e.expense_number ?? 'Expense',
-        subtitle: `${e.description} · ${e.category.replace(/_/g, ' ')}`,
-        amount: formatCurrency(e.amount, e.currency),
-        date: formatDate(e.expense_date),
-        href: `/expenses/${e.id}`,
-      }));
-
-      const quotationRows: ApprovalRow[] = (
-        (quotations.data ?? []) as unknown as {
-          id: string;
-          quotation_number: string | null;
-          total: number;
-          currency: string;
-          created_at: string;
-          customer: { company_name: string } | null;
-        }[]
-      ).map((q) => ({
-        id: q.id,
-        kind: 'quotation',
-        title: q.quotation_number ?? 'Quotation',
-        subtitle: q.customer?.company_name ?? 'Unknown customer',
-        amount: formatCurrency(q.total, q.currency),
-        date: formatDate(q.created_at),
-        href: `/quotations/${q.id}`,
-      }));
-
-      setRows([...expenseRows, ...quotationRows]);
-    } catch (err) {
-      console.error('Approvals load error:', err);
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, branchFilter]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['approvals', branchFilter],
+    queryFn: () => fetchApprovals(branchFilter),
+    enabled: !!profile,
+  });
 
   return (
     <div className="space-y-6 p-6 lg:p-8">

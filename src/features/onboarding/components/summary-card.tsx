@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import { supabase } from '@/shared/lib/supabase/client';
 import { daysRemaining } from '@/shared/lib/utils/status';
+import * as onboardingService from '@/features/onboarding/services/onboarding.service';
 import type { Organization } from '@/shared/types';
 
 interface Summary {
@@ -17,32 +18,23 @@ interface Summary {
 
 /** The "Organization / Plan / Users / Branch" summary block from spec section 27, shared by the onboarding welcome splash and its Ready step. */
 export function SummaryCard({ organization }: { organization: Organization }) {
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const { data } = useQuery({
+    queryKey: ['onboarding-org-summary', organization.id],
+    queryFn: () => onboardingService.fetchOrgSummaryData(organization.id),
+  });
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: sub }, { data: count }, { data: branch }] = await Promise.all([
-        supabase.from('org_subscriptions').select('*, plan:plans(*)').eq('organization_id', organization.id).maybeSingle(),
-        supabase.rpc('org_user_count', { p_org_id: organization.id }),
-        supabase
-          .from('branches')
-          .select('name')
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-      setSummary({
-        planName: sub?.plan?.name ?? 'Trial',
-        isTrial: sub?.status === 'trial',
-        remaining: sub?.trial_ends_at ? daysRemaining(sub.trial_ends_at) : null,
-        userCount: typeof count === 'number' ? count : 1,
-        userLimit: sub?.plan?.max_users ?? null,
-        branchName: branch?.name ?? 'Head Office',
-      });
-    })();
-  }, [organization.id]);
+  const summary = useMemo<Summary | null>(() => {
+    if (!data) return null;
+    const { sub, userCount, branchName } = data;
+    return {
+      planName: sub?.plan?.name ?? 'Trial',
+      isTrial: sub?.status === 'trial',
+      remaining: sub?.trial_ends_at ? daysRemaining(sub.trial_ends_at) : null,
+      userCount: typeof userCount === 'number' ? userCount : 1,
+      userLimit: sub?.plan?.max_users ?? null,
+      branchName: branchName ?? 'Head Office',
+    };
+  }, [data]);
 
   if (!summary) return <Skeleton className="h-32 w-full" />;
 

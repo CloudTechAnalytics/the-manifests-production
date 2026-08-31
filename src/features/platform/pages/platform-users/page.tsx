@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate } from '@/shared/lib/utils/status';
+import { fetchPlatformUsers, createPlatformUser } from '@/features/platform/services/platform-users.service';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -29,41 +30,37 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { Profile } from '@/shared/types';
 
 const EMPTY_FORM = { fullName: '', email: '', password: '' };
 
 export default function PlatformUsersPage() {
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['platform-users'],
+    queryFn: fetchPlatformUsers,
+  });
+  const users = data ?? [];
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'platform_admin')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      setUsers((data as Profile[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load platform users'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createPlatformUser({ fullName: form.fullName.trim(), email: form.email.trim(), password: form.password }),
+    onSuccess: () => {
+      toast.success(
+        `${form.fullName.trim()} can now sign in — they'll be asked to set their own password first.`
+      );
+      queryClient.invalidateQueries({ queryKey: ['platform-users'] });
+      setOpen(false);
+      setForm(EMPTY_FORM);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to add platform user'));
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!form.fullName.trim() || !form.email.trim() || !form.password) {
       toast.error('Full name, email, and a temporary password are required');
       return;
@@ -72,41 +69,10 @@ export default function PlatformUsersPage() {
       toast.error('Temporary password must be at least 10 characters');
       return;
     }
-
-    setCreating(true);
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-platform-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({
-            full_name: form.fullName.trim(),
-            email: form.email.trim(),
-            password: form.password,
-          }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Failed to add platform user');
-
-      toast.success(`${form.fullName.trim()} can now sign in — they'll be asked to set their own password first.`);
-      setOpen(false);
-      setForm(EMPTY_FORM);
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to add platform user'));
-    } finally {
-      setCreating(false);
-    }
+    createMutation.mutate();
   };
+
+  const creating = createMutation.isPending;
 
   return (
     <div className="space-y-6">

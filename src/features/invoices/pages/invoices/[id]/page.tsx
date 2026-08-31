@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -17,11 +18,12 @@ import {
   Printer,
   Ship,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { useAuth } from '@/shared/contexts/auth-context';
+import * as invoicesService from '@/features/invoices/services/invoices.service';
+import type { InvoiceDetail, InvoiceAllocationRow } from '@/features/invoices/services/invoices.service';
 import {
   Card,
   CardContent,
@@ -65,153 +67,79 @@ import {
   isInvoiceOverdue,
   formatCurrency,
   formatDate,
-  formatDateTime,
 } from '@/shared/lib/utils/status';
-import type { Invoice, Customer, Shipment, Quotation, PaymentAllocation, Branch } from '@/shared/types';
-
-type InvoiceDetail = Invoice & {
-  customer: Customer | null;
-  shipment: Shipment | null;
-  quotation: Quotation | null;
-  branch: Branch | null;
-};
-
-type AllocationRow = PaymentAllocation & {
-  payment: {
-    id: string;
-    payment_number: string | null;
-    payment_date: string;
-    payment_method: string;
-  } | null;
-};
 
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
   const invoiceId = params.id!;
+  const queryClient = useQueryClient();
 
-  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
-  const [allocations, setAllocations] = useState<AllocationRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const canDelete =
-    !!invoice &&
-    canDeleteOwnRecord({ hasRole });
 
-  const loadData = useCallback(async () => {
-    if (!invoiceId) return;
-    setLoading(true);
-    try {
-      const { data: inv, error: invErr } = await supabase
-        .from('invoices')
-        .select('*, customer:customers(*), shipment:shipments(*), quotation:quotations(*), branch:branches(*)')
-        .eq('id', invoiceId)
-        .is('deleted_at', null)
-        .maybeSingle();
+  const { data, isLoading } = useQuery({
+    queryKey: ['invoice', invoiceId],
+    queryFn: () => invoicesService.fetchInvoiceDetail(invoiceId),
+    enabled: !!invoiceId,
+  });
+  const invoice = data?.invoice ?? null;
+  const allocations = data?.allocations ?? [];
+  const loading = isLoading;
 
-      if (invErr || !inv) {
-        setInvoice(null);
-        return;
-      }
-      setInvoice(inv as InvoiceDetail);
+  const canDelete = !!invoice && canDeleteOwnRecord({ hasRole });
 
-      const { data: allocs } = await supabase
-        .from('payment_allocations')
-        .select('*, payment:payments(id, payment_number, payment_date, payment_method)')
-        .eq('invoice_id', invoiceId)
-        .order('created_at', { ascending: false });
-      setAllocations((allocs as AllocationRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [invoiceId]);
+  const invalidateInvoice = () => {
+    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+  };
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleDelete = async () => {
-    if (!invoice || !profile) return;
-    setDeleting(true);
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoice || !profile) return;
       if (hasRole('admin')) {
         const result = await adminForceDelete('invoice', invoiceId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Invoice permanently deleted');
-        navigate('/invoices');
         return;
       }
-
-      // Remove allocations first so the sync trigger recalculates the
-      // affected payments' allocated/unallocated amounts before this
-      // invoice disappears — otherwise a payment would keep counting
-      // money as allocated to an invoice that's now hidden everywhere
-      // (deleted_at IS NULL is required by every SELECT policy), with no
-      // way to free that cash without direct DB intervention. Mirrors
-      // payments/[id]'s delete handler.
-      const { error: allocDeleteError } = await supabase
-        .from('payment_allocations')
-        .delete()
-        .eq('invoice_id', invoiceId);
-      if (allocDeleteError) throw allocDeleteError;
-
-      const { error } = await supabase
-        .from('invoices')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', invoiceId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: invoice.branch_id,
-        action: 'invoice.deleted',
-        entity_type: 'invoice',
-        entity_id: invoiceId,
-        description: `Deleted invoice ${invoice.invoice_number ?? ''}`,
-        metadata: { invoice_number: invoice.invoice_number },
-      });
-
-      toast.success('Invoice deleted');
+      await invoicesService.deleteInvoiceWithAllocations(
+        invoiceId,
+        profile.id,
+        invoice.branch_id,
+        invoice.invoice_number
+      );
+    },
+    onSuccess: () => {
+      invalidateInvoice();
+      toast.success(hasRole('admin') ? 'Invoice permanently deleted' : 'Invoice deleted');
       navigate('/invoices');
-    } catch (err) {
+    },
+    onError: (err) => {
       const message = getErrorMessage(err, 'Failed to delete invoice');
       toast.error(message);
-    } finally {
-      setDeleting(false);
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoice || !profile) return;
+      await invoicesService.cancelInvoice(invoiceId, profile.id, invoice.branch_id, invoice.invoice_number);
+    },
+    onSuccess: () => {
+      invalidateInvoice();
+      toast.success('Invoice cancelled');
+    },
+    onError: (err) => {
+      const message = getErrorMessage(err, 'Failed to cancel invoice');
+      toast.error(message);
+    },
+  });
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleCancel = async () => {
-    if (!invoice || !profile) return;
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({ status: 'cancelled', updated_by: profile.id, updated_at: new Date().toISOString() })
-        .eq('id', invoiceId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: invoice.branch_id,
-        action: 'invoice.cancelled',
-        entity_type: 'invoice',
-        entity_id: invoiceId,
-        description: `Cancelled invoice ${invoice.invoice_number ?? ''}`,
-      });
-
-      toast.success('Invoice cancelled');
-      loadData();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to cancel invoice');
-      toast.error(message);
-    }
   };
 
   if (loading) {
@@ -319,7 +247,8 @@ export default function InvoiceDetailPage() {
             </Button>
           </Link>
           {canCancel && (
-            <Button variant="outline" size="sm" onClick={handleCancel}>
+            <Button variant="outline" size="sm" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
+              {cancelMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Cancel Invoice
             </Button>
           )}
@@ -358,8 +287,8 @@ export default function InvoiceDetailPage() {
                   <DialogClose asChild>
                     <Button variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                    {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  <Button variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                    {deleteMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                     Delete
                   </Button>
                 </DialogFooter>
@@ -570,7 +499,7 @@ function PrintInvoice({
   allocations,
 }: {
   invoice: InvoiceDetail;
-  allocations: AllocationRow[];
+  allocations: InvoiceAllocationRow[];
 }) {
   const statusMeta = INVOICE_STATUS_META[invoice.status] ?? {
     label: invoice.status ?? 'Unknown',
