@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -14,7 +15,6 @@ import {
   SlidersHorizontal,
   ArrowLeftRight,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -64,22 +64,27 @@ import {
   formatDateTime,
   getStockStatus,
 } from '@/shared/lib/utils/status';
-import type { StockItem, StockMovement, Warehouse, WarehouseStock } from '@/shared/types';
+import { deleteStockItem, fetchStockItemDetail } from '@/features/warehouse/services/warehouse.service';
 
 export default function StockItemDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const itemId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [item, setItem] = useState<StockItem | null>(null);
-  const [stockRows, setStockRows] = useState<WarehouseStock[]>([]);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
+  const { data: detail, isLoading: loading } = useQuery({
+    queryKey: ['stock-item-detail', itemId],
+    queryFn: () => fetchStockItemDetail(itemId, { isAdmin, branchId }),
+    enabled: !!itemId,
+  });
+  const item = detail?.item ?? null;
+  const stockRows = detail?.stockRows ?? [];
+  const movements = detail?.movements ?? [];
+  const warehouses = detail?.warehouses ?? [];
+
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete =
     !!item && canDeleteOwnRecord({ hasRole });
@@ -87,94 +92,34 @@ export default function StockItemDetailPage() {
   const [movementOpen, setMovementOpen] = useState(false);
   const [movementMode, setMovementMode] = useState<MovementMode>('inbound');
 
-  const loadData = useCallback(async () => {
-    if (!itemId) return;
-    setLoading(true);
-    try {
-      let whQuery = supabase
-        .from('warehouses')
-        .select('*')
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
-      if (!isAdmin && branchId) whQuery = whQuery.eq('branch_id', branchId);
-
-      // stock/movements/warehouses are all independent of the item row
-      // and of each other — one concurrent batch instead of four
-      // sequential round trips.
-      const [{ data: itemData, error: itemError }, { data: stock }, { data: moves }, { data: whRows }] =
-        await Promise.all([
-          supabase
-            .from('stock_items')
-            .select('*')
-            .eq('id', itemId)
-            .is('deleted_at', null)
-            .maybeSingle(),
-          supabase
-            .from('warehouse_stock')
-            .select('*, warehouse:warehouses(*)')
-            .eq('item_id', itemId),
-          supabase
-            .from('stock_movements')
-            .select(
-              '*, warehouse:warehouses!stock_movements_warehouse_id_fkey(*), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(*), created_by_user:profiles!stock_movements_created_by_fkey(id, full_name)'
-            )
-            .eq('item_id', itemId)
-            .order('created_at', { ascending: false })
-            .limit(100),
-          whQuery,
-        ]);
-
-      if (itemError || !itemData) {
-        setItem(null);
-        return;
-      }
-      setItem(itemData as StockItem);
-      setStockRows((stock as unknown as WarehouseStock[]) ?? []);
-      setMovements((moves as unknown as StockMovement[]) ?? []);
-      setWarehouses((whRows as Warehouse[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [itemId, isAdmin, branchId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const handleMovementSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['stock-item-detail', itemId] });
+    queryClient.invalidateQueries({ queryKey: ['stock-items'] });
+  };
 
   const openMovement = (mode: MovementMode) => {
     setMovementMode(mode);
     setMovementOpen(true);
   };
 
-  const handleDelete = async () => {
-    if (!item || !profile) return;
-    setDeleting(true);
-    try {
-      const { error } = await supabase
-        .from('stock_items')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', itemId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: item.branch_id,
-        action: 'stock_item.deleted',
-        entity_type: 'stock_item',
-        entity_id: itemId,
-        description: `Deleted item "${item.name}"`,
-      });
-
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteStockItem(item!, itemId, { id: profile!.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stock-items'] });
       toast.success('Item deleted');
       navigate('/warehouse');
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to delete item');
-      toast.error(message);
-    } finally {
-      setDeleting(false);
-      setDeleteOpen(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to delete item'));
+    },
+    onSettled: () => setDeleteOpen(false),
+  });
+
+  const handleDelete = () => {
+    if (!item || !profile) return;
+    deleteMutation.mutate();
   };
+  const deleting = deleteMutation.isPending;
 
   if (loading) {
     return (
@@ -447,7 +392,7 @@ export default function StockItemDetailPage() {
         warehouses={warehouses}
         stockRows={stockRows}
         presetItemId={item.id}
-        onSuccess={loadData}
+        onSuccess={handleMovementSuccess}
       />
     </div>
   );

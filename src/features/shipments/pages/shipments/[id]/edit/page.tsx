@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -18,7 +19,6 @@ import {
   CalendarClock,
   Boxes,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
@@ -48,11 +48,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
+import {
+  fetchActiveCustomersForBranch,
+  fetchAssignableUsersForBranch,
+  fetchApprovedQuotationsForCustomer,
+  fetchShipmentForEdit,
+  updateShipment,
+} from '@/features/shipments/services/shipments.service';
 import type {
-  Customer,
-  Profile,
-  Quotation,
-  Shipment,
   ShipmentType,
 } from '@/shared/types';
 
@@ -89,18 +92,9 @@ type ShipmentFormValues = z.infer<typeof shipmentSchema>;
 export default function EditShipmentPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile } = useAuth();
   const shipmentId = params.id!;
-
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [assignableUsers, setAssignableUsers] = useState<Profile[]>([]);
-  const [shipmentBranchId, setShipmentBranchId] = useState<string | null>(null);
-  const [referenceNumber, setReferenceNumber] = useState<string | null>(null);
 
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
@@ -135,201 +129,92 @@ export default function EditShipmentPage() {
   const selectedCustomerId = watch('customer_id');
 
   // Load customers in user's branch
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('customers')
-      .select('*')
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .order('company_name', { ascending: true });
-
-    if (!isAdmin && branchId) {
-      query = query.eq('branch_id', branchId);
-    }
-
-    query.then(({ data, error }) => {
-      if (error) {
-        console.error('Error loading customers:', error);
-        return;
-      }
-      setCustomers((data as Customer[]) ?? []);
-    });
-  }, [profile, isAdmin, branchId]);
+  const { data: customers = [] } = useQuery({
+    queryKey: ['shipment-form-customers', isAdmin, branchId],
+    queryFn: () => fetchActiveCustomersForBranch({ isAdmin, branchId }),
+    enabled: !!profile,
+  });
 
   // Load assignable users (profiles) in user's branch
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('profiles')
-      .select('*')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('full_name', { ascending: true });
-
-    if (!isAdmin && branchId) {
-      query = query.eq('branch_id', branchId);
-    }
-
-    query.then(({ data, error }) => {
-      if (error) {
-        console.error('Error loading users:', error);
-        return;
-      }
-      setAssignableUsers((data as Profile[]) ?? []);
-    });
-  }, [profile, isAdmin, branchId]);
+  const { data: assignableUsers = [] } = useQuery({
+    queryKey: ['shipment-form-assignable-users', isAdmin, branchId],
+    queryFn: () => fetchAssignableUsersForBranch({ isAdmin, branchId }),
+    enabled: !!profile,
+  });
 
   // Load approved quotations for the selected customer
-  const loadQuotations = useCallback(async () => {
-    if (!selectedCustomerId) {
-      setQuotations([]);
-      return;
-    }
-    let query = supabase
-      .from('quotations')
-      .select('*')
-      .eq('customer_id', selectedCustomerId)
-      .eq('status', 'approved')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-
-    if (!isAdmin && branchId) {
-      query = query.eq('branch_id', branchId);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error loading quotations:', error);
-      setQuotations([]);
-      return;
-    }
-    setQuotations((data as Quotation[]) ?? []);
-  }, [selectedCustomerId, isAdmin, branchId]);
-
-  useEffect(() => {
-    loadQuotations();
-  }, [loadQuotations]);
+  const { data: quotations = [] } = useQuery({
+    queryKey: ['shipment-form-quotations', selectedCustomerId, isAdmin, branchId],
+    queryFn: () =>
+      fetchApprovedQuotationsForCustomer({ customerId: selectedCustomerId, isAdmin, branchId }),
+    enabled: !!selectedCustomerId,
+  });
 
   // Load the existing shipment and pre-fill the form
+  const {
+    data: shipmentData,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: ['shipment-for-edit', shipmentId],
+    queryFn: () => fetchShipmentForEdit(shipmentId),
+    enabled: !!shipmentId,
+  });
+
+  const notFound = !loading && !shipmentData;
+  const shipmentBranchId = shipmentData?.branch_id ?? null;
+  const referenceNumber = shipmentData?.reference_number ?? null;
+
   useEffect(() => {
-    if (!shipmentId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('shipments')
-          .select('*')
-          .eq('id', shipmentId)
-          .is('deleted_at', null)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        if (error || !data) {
-          setNotFound(true);
-          return;
-        }
-
-        const shipment = data as Shipment;
-        setShipmentBranchId(shipment.branch_id);
-        setReferenceNumber(shipment.reference_number);
-
-        reset({
-          customer_id: shipment.customer_id,
-          quotation_id: shipment.quotation_id ?? '',
-          shipment_type: shipment.shipment_type ?? 'sea',
-          origin: shipment.origin ?? '',
-          destination: shipment.destination ?? '',
-          assigned_to: shipment.assigned_to ?? '',
-          booking_date: shipment.booking_date ?? '',
-          estimated_departure: shipment.estimated_departure ?? '',
-          estimated_arrival: shipment.estimated_arrival ?? '',
-          carrier: shipment.carrier ?? '',
-          tracking_number: shipment.tracking_number ?? '',
-          container_number: shipment.container_number ?? '',
-          weight: shipment.weight ?? '',
-          volume: shipment.volume ?? '',
-          notes: shipment.notes ?? '',
-        });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    if (!shipmentData) return;
+    reset({
+      customer_id: shipmentData.customer_id,
+      quotation_id: shipmentData.quotation_id ?? '',
+      shipment_type: shipmentData.shipment_type ?? 'sea',
+      origin: shipmentData.origin ?? '',
+      destination: shipmentData.destination ?? '',
+      assigned_to: shipmentData.assigned_to ?? '',
+      booking_date: shipmentData.booking_date ?? '',
+      estimated_departure: shipmentData.estimated_departure ?? '',
+      estimated_arrival: shipmentData.estimated_arrival ?? '',
+      carrier: shipmentData.carrier ?? '',
+      tracking_number: shipmentData.tracking_number ?? '',
+      container_number: shipmentData.container_number ?? '',
+      weight: shipmentData.weight ?? '',
+      volume: shipmentData.volume ?? '',
+      notes: shipmentData.notes ?? '',
+    });
   }, [shipmentId, reset]);
 
-  const onSubmit = async (values: ShipmentFormValues) => {
+  const updateMutation = useMutation({
+    mutationFn: (values: ShipmentFormValues) => {
+      if (!profile?.id || !shipmentBranchId) throw new Error('Unable to determine shipment branch.');
+      return updateShipment({
+        shipmentId,
+        values,
+        updatedBy: profile.id,
+        branchId: shipmentBranchId,
+        referenceNumber,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      queryClient.invalidateQueries({ queryKey: ['shipment-for-edit', shipmentId] });
+      toast.success('Shipment updated successfully');
+      navigate(`/shipments/${shipmentId}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update shipment'));
+    },
+  });
+  const submitting = updateMutation.isPending;
+
+  const onSubmit = (values: ShipmentFormValues) => {
     if (!profile?.id || !shipmentBranchId) {
       toast.error('Unable to determine shipment branch.');
       return;
     }
-    setSubmitting(true);
-    try {
-      const { error: shipmentError } = await supabase
-        .from('shipments')
-        .update({
-          customer_id: values.customer_id,
-          quotation_id: values.quotation_id || null,
-          shipment_type: values.shipment_type,
-          origin: values.origin,
-          destination: values.destination,
-          assigned_to: values.assigned_to || null,
-          booking_date: values.booking_date || null,
-          estimated_departure: values.estimated_departure || null,
-          estimated_arrival: values.estimated_arrival || null,
-          carrier: values.carrier || null,
-          tracking_number: values.tracking_number || null,
-          container_number: values.container_number || null,
-          weight:
-            values.weight === '' || values.weight == null
-              ? null
-              : Number(values.weight),
-          volume:
-            values.volume === '' || values.volume == null
-              ? null
-              : Number(values.volume),
-          notes: values.notes || null,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', shipmentId);
-
-      if (shipmentError) throw shipmentError;
-
-      // Log activity
-      const { error: activityError } = await supabase
-        .from('activities')
-        .insert({
-          user_id: profile.id,
-          branch_id: shipmentBranchId,
-          action: 'shipment.updated',
-          entity_type: 'shipment',
-          entity_id: shipmentId,
-          description: `Updated shipment ${referenceNumber ?? ''} details`,
-          metadata: {
-            reference_number: referenceNumber,
-            shipment_type: values.shipment_type,
-            origin: values.origin,
-            destination: values.destination,
-          },
-        });
-
-      if (activityError) {
-        console.error('Activity log error:', activityError);
-      }
-
-      toast.success('Shipment updated successfully');
-      navigate(`/shipments/${shipmentId}`);
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to update shipment');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    updateMutation.mutate(values);
   };
 
   // --- Loading state ---------------------------------------------------------

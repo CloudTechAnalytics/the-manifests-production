@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Shield, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  deleteCargoInsurancePolicy,
+  saveCargoInsurancePolicy,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { formatDate, formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -37,26 +41,32 @@ export function CargoInsurancePanel({
   onReload,
 }: CargoInsurancePanelProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const canManage = hasRole('admin') || hasRole('branch_manager') || hasRole('documentation');
   const [dialog, setDialog] = useState<{ existing: CargoInsurancePolicy | null } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = async (id: string) => {
-    if (!profile) return;
-    setDeletingId(id);
-    try {
-      const { error } = await supabase
-        .from('cargo_insurance_policies')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', id);
-      if (error) throw error;
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => {
+      if (!profile) throw new Error('Not ready');
+      return deleteCargoInsurancePolicy({ policyId: id, updatedBy: profile.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
       toast.success('Policy removed');
       onReload();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to remove policy'));
-    } finally {
+    },
+    onSettled: () => {
       setDeletingId(null);
-    }
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    setDeletingId(id);
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -166,6 +176,7 @@ function InsurancePolicyFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [insurerName, setInsurerName] = useState('');
   const [policyNumber, setPolicyNumber] = useState('');
   const [coverageAmount, setCoverageAmount] = useState('');
@@ -174,7 +185,29 @@ function InsurancePolicyFormDialog({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof saveCargoInsurancePolicy>[0]['payload']) => {
+      if (!profile) throw new Error('Not ready');
+      return saveCargoInsurancePolicy({
+        shipmentId,
+        branchId,
+        existingId: existing?.id ?? null,
+        payload,
+        updatedBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(existing ? 'Policy updated' : 'Policy added');
+      onOpenChange(false);
+      onSaved();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save policy'));
+    },
+  });
+  const submitting = saveMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -188,44 +221,18 @@ function InsurancePolicyFormDialog({
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile || !insurerName.trim()) return;
-    setSubmitting(true);
-    try {
-      const payload = {
-        insurer_name: insurerName.trim(),
-        policy_number: policyNumber.trim() || null,
-        coverage_amount: coverageAmount ? Number(coverageAmount) : null,
-        currency: currency.trim() || 'NGN',
-        premium_amount: premiumAmount ? Number(premiumAmount) : null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        notes: notes.trim() || null,
-        updated_by: profile.id,
-      };
-
-      if (existing) {
-        const { error } = await supabase
-          .from('cargo_insurance_policies')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-        toast.success('Policy updated');
-      } else {
-        const { error } = await supabase
-          .from('cargo_insurance_policies')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id });
-        if (error) throw error;
-        toast.success('Policy added');
-      }
-
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save policy'));
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSubmit = () => {
+    if (!insurerName.trim()) return;
+    saveMutation.mutate({
+      insurer_name: insurerName.trim(),
+      policy_number: policyNumber.trim() || null,
+      coverage_amount: coverageAmount ? Number(coverageAmount) : null,
+      currency: currency.trim() || 'NGN',
+      premium_amount: premiumAmount ? Number(premiumAmount) : null,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      notes: notes.trim() || null,
+    });
   };
 
   return (

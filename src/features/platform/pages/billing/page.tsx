@@ -1,11 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { CreditCard, DollarSign, Tag, Users, AlertTriangle, Hourglass } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
-import { getErrorMessage } from '@/shared/lib/utils';
 import { formatCurrency, formatDate } from '@/shared/lib/utils/status';
 import { KpiCard } from '@/shared/components/dashboard/kpi-card';
 import { BreakdownBars } from '@/features/platform/components/breakdown-bars';
@@ -20,9 +17,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import type { Plan, OrgSubscription, Organization } from '@/shared/types';
-
-type SubRow = OrgSubscription & { plan: Plan; organization: Pick<Organization, 'id' | 'name' | 'slug'> | null };
+import {
+  fetchBillingSubscriptions,
+  type BillingSubRow as SubRow,
+} from '@/features/platform/services/subscriptions.service';
+import type { OrgSubscription, Plan } from '@/shared/types';
 
 function monthlyEquivalent(sub: OrgSubscription & { plan: Plan }): number {
   return sub.billing_cycle === 'annual'
@@ -45,27 +44,10 @@ function nextRenewal(sub: OrgSubscription): Date {
 }
 
 export default function BillingPage() {
-  const [subs, setSubs] = useState<SubRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('org_subscriptions')
-        .select('*, plan:plans(*), organization:organizations(id, name, slug)');
-      if (error) throw error;
-      setSubs((data as unknown as SubRow[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load billing data'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: subs = [], isLoading: loading } = useQuery({
+    queryKey: ['billing-subscriptions'],
+    queryFn: fetchBillingSubscriptions,
+  });
 
   const active = subs.filter((s) => s.status === 'active' && s.organization);
   const trials = subs.filter((s) => s.status === 'trial');

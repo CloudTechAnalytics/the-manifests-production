@@ -1,10 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Receipt, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  fetchApprovedExpensesForShipment,
+  generateInvoiceFromExpenses,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { formatCurrency, EXPENSE_CATEGORY_META } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -13,7 +17,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import type { Expense, ExpenseCategory } from '@/shared/types';
+import type { ExpenseCategory } from '@/shared/types';
 
 /**
  * The workflow a CEO described directly: for a lot of jobs the forwarder
@@ -38,27 +42,14 @@ export function GenerateInvoiceFromExpenses({
   customerId: string;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [markupPercent, setMarkupPercent] = useState('15');
-  const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('shipment_id', shipmentId)
-        .eq('status', 'approved')
-        .is('deleted_at', null);
-      if (error) {
-        console.error('Failed to load expenses:', error.message);
-      }
-      setExpenses((data as Expense[]) ?? []);
-      setLoading(false);
-    })();
-  }, [shipmentId]);
+  const { data: expenses = [], isLoading: loading } = useQuery({
+    queryKey: ['shipment-expenses-approved', shipmentId],
+    queryFn: () => fetchApprovedExpensesForShipment(shipmentId),
+  });
 
   if (loading) return <Skeleton className="h-48 w-full" />;
 
@@ -72,50 +63,38 @@ export function GenerateInvoiceFromExpenses({
     return acc;
   }, {});
 
-  const handleGenerate = async () => {
-    if (!profile) return;
-    setGenerating(true);
-    try {
+  const generateMutation = useMutation({
+    mutationFn: () => {
+      if (!profile) throw new Error('Not ready');
       const breakdown = Object.entries(byCategory)
         .map(([cat, amt]) => `${EXPENSE_CATEGORY_META[cat as ExpenseCategory]?.label ?? cat}: ${formatCurrency(amt, currency)}`)
         .join('\n');
       const notes = `Generated from ${expenses.length} approved shipment expense${expenses.length === 1 ? '' : 's'} (${formatCurrency(costTotal, currency)}) + ${markup}% margin.\n\n${breakdown}`;
 
-      const { data: invoice, error } = await supabase
-        .from('invoices')
-        .insert({
-          customer_id: customerId,
-          shipment_id: shipmentId,
-          quotation_id: null,
-          branch_id: branchId,
-          status: 'draft',
-          subtotal: total,
-          tax_amount: 0,
-          total,
-          currency,
-          notes,
-          created_by: profile.id,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'invoice.generated_from_expenses',
-        entity_type: 'invoices',
-        entity_id: invoice.id,
-        description: `Generated invoice from ${expenses.length} shipment expense(s)`,
+      return generateInvoiceFromExpenses({
+        shipmentId,
+        branchId,
+        customerId,
+        total,
+        currency,
+        notes,
+        expenseCount: expenses.length,
+        createdBy: profile.id,
       });
-
+    },
+    onSuccess: ({ invoiceId }) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Invoice generated — review before sending');
-      navigate(`/invoices/${invoice.id}`);
-    } catch (err) {
+      navigate(`/invoices/${invoiceId}`);
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to generate invoice'));
-    } finally {
-      setGenerating(false);
-    }
+    },
+  });
+  const generating = generateMutation.isPending;
+
+  const handleGenerate = () => {
+    generateMutation.mutate();
   };
 
   return (

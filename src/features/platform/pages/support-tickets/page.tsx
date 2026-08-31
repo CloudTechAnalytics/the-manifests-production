@@ -1,11 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LifeBuoy, AlertTriangle, UserX, CheckCircle2, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
+import {
+  fetchSupportTickets,
+  updateSupportTicket,
+} from '@/features/platform/services/support-tickets.service';
 import { formatDateTime } from '@/shared/lib/utils/status';
 import { KpiCard } from '@/shared/components/dashboard/kpi-card';
 import { Card, CardContent } from '@/shared/components/ui/card';
@@ -52,32 +56,15 @@ const STATUS_OPTIONS: { value: 'all' | TicketStatus; label: string }[] = [
 
 export default function SupportTicketsPage() {
   const { profile } = useAuth();
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TicketStatus>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('*, organization:organizations(id, name), assigned_user:profiles!support_tickets_assigned_to_fkey(id, full_name)')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setTickets((data as unknown as TicketRow[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load support tickets'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: tickets = [], isLoading: loading } = useQuery({
+    queryKey: ['support-tickets'],
+    queryFn: fetchSupportTickets,
+  });
 
   const thirtyDaysAgo = useMemo(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), []);
   const openCount = tickets.filter((t) => t.status === 'open').length;
@@ -109,17 +96,23 @@ export default function SupportTicketsPage() {
     return true;
   });
 
-  const updateTicket = async (id: string, patch: Partial<Pick<SupportTicket, 'status' | 'assigned_to'>>) => {
-    setBusyId(id);
-    try {
-      const { error } = await supabase.from('support_tickets').update(patch).eq('id', id);
-      if (error) throw error;
-      load();
-    } catch (err) {
+  const updateMutation = useMutation({
+    mutationFn: (params: { id: string; patch: Partial<Pick<SupportTicket, 'status' | 'assigned_to'>> }) =>
+      updateSupportTicket(params.id, params.patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['support-tickets'] });
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update ticket'));
-    } finally {
+    },
+    onSettled: () => {
       setBusyId(null);
-    }
+    },
+  });
+
+  const updateTicket = (id: string, patch: Partial<Pick<SupportTicket, 'status' | 'assigned_to'>>) => {
+    setBusyId(id);
+    updateMutation.mutate({ id, patch });
   };
 
   return (

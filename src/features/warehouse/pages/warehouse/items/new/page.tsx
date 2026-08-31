@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Boxes, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
@@ -38,7 +38,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
-import type { Warehouse } from '@/shared/types';
+import { createStockItem, fetchWarehouses } from '@/features/warehouse/services/warehouse.service';
 
 const itemSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
@@ -57,8 +57,7 @@ type ItemFormValues = z.infer<typeof itemSchema>;
 export default function NewStockItemPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === 'admin';
   const myBranchId = profile?.branch_id ?? null;
@@ -94,83 +93,52 @@ export default function NewStockItemPage() {
 
   const initialWarehouseId = watch('initial_warehouse_id');
 
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('warehouses')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
-    if (!isAdmin && myBranchId) query = query.eq('branch_id', myBranchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading warehouses:', error);
-      setWarehouses((data as Warehouse[]) ?? []);
-    });
-  }, [profile, isAdmin, myBranchId]);
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses', isAdmin, myBranchId],
+    queryFn: () => fetchWarehouses({ isAdmin, branchId: myBranchId }),
+    enabled: !!profile,
+  });
 
-  const onSubmit = async (values: ItemFormValues) => {
+  const createMutation = useMutation({
+    mutationFn: (values: ItemFormValues) =>
+      createStockItem(
+        {
+          sku: values.sku,
+          name: values.name,
+          category: values.category,
+          unit: values.unit,
+          unit_cost: values.unit_cost,
+          reorder_point: values.reorder_point,
+          notes: values.notes,
+          initial_warehouse_id: values.initial_warehouse_id,
+          initial_quantity: values.initial_quantity,
+        },
+        branchId!,
+        { id: profile!.id }
+      ),
+    onSuccess: ({ item, initialStockFailed }) => {
+      queryClient.invalidateQueries({ queryKey: ['stock-items'] });
+      if (initialStockFailed) {
+        toast.warning('Item created, but initial stock failed to save.');
+      }
+      toast.success('Item added to catalog');
+      navigate(`/warehouse/items/${item.id}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to create item'));
+    },
+  });
+
+  const onSubmit = (values: ItemFormValues) => {
     if (!profile?.id) return;
     if (!branchId) {
       setBranchError('Please select a branch');
       return;
     }
     setBranchError('');
-    setSubmitting(true);
-    try {
-      const { data: item, error } = await supabase
-        .from('stock_items')
-        .insert({
-          sku: values.sku.trim(),
-          name: values.name.trim(),
-          category: values.category?.trim() || null,
-          unit: values.unit.trim(),
-          unit_cost: values.unit_cost,
-          reorder_point: values.reorder_point,
-          notes: values.notes || null,
-          branch_id: branchId,
-          created_by: profile.id,
-          updated_by: profile.id,
-        })
-        .select('id, name')
-        .single();
-
-      if (error || !item) {
-        throw new Error(error?.message ?? 'Failed to create item');
-      }
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: branchId,
-        action: 'stock_item.created',
-        entity_type: 'stock_item',
-        entity_id: item.id,
-        description: `Added item "${item.name}" to the catalog`,
-      });
-
-      if (values.initial_warehouse_id && values.initial_quantity && values.initial_quantity > 0) {
-        const { error: moveError } = await supabase.from('stock_movements').insert({
-          item_id: item.id,
-          warehouse_id: values.initial_warehouse_id,
-          branch_id: branchId,
-          movement_type: 'inbound',
-          quantity: values.initial_quantity,
-          reference: 'Initial stock',
-          created_by: profile.id,
-        });
-        if (moveError) {
-          toast.warning('Item created, but initial stock failed to save.');
-        }
-      }
-
-      toast.success('Item added to catalog');
-      navigate(`/warehouse/items/${item.id}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to create item');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(values);
   };
+  const submitting = createMutation.isPending;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">

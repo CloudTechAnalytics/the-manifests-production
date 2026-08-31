@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
   Circle,
@@ -8,9 +8,9 @@ import {
   AlertTriangle,
   MinusCircle,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { fetchShipmentStagesForTimeline } from '@/features/shipments/services/shipments.service';
 import { cn } from '@/shared/lib/utils';
-import type { Shipment, ShipmentStage } from '@/shared/types';
+import type { Shipment } from '@/shared/types';
 
 type StageState = 'completed' | 'in_progress' | 'pending' | 'delayed' | 'not_required';
 
@@ -52,54 +52,33 @@ export function LifecycleTimeline({
   shipment: Shipment;
   refreshToken?: number;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [stages, setStages] = useState<StageDef[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-
-      const { data } = await supabase
-        .from('shipment_stages')
-        .select('*')
-        .eq('shipment_id', shipment.id)
-        .order('sequence', { ascending: true });
-
-      if (cancelled) return;
-
+  const { data: stages = [], isLoading: loading } = useQuery({
+    queryKey: ['shipment-stages', shipment.id, refreshToken],
+    queryFn: async (): Promise<StageDef[]> => {
+      const rows = await fetchShipmentStagesForTimeline(shipment.id);
       const today = new Date().toISOString().split('T')[0];
-      const rows = (data as ShipmentStage[] | null) ?? [];
 
-      setStages(
-        rows.map((stage) => {
-          const isOverdue =
-            (stage.status === 'pending' || stage.status === 'in_progress') &&
-            !!stage.due_date &&
-            stage.due_date < today;
+      return rows.map((stage) => {
+        const isOverdue =
+          (stage.status === 'pending' || stage.status === 'in_progress') &&
+          !!stage.due_date &&
+          stage.due_date < today;
 
-          const state: StageState =
-            stage.status === 'skipped'
-              ? 'not_required'
-              : stage.status === 'completed'
-                ? 'completed'
-                : isOverdue
-                  ? 'delayed'
-                  : stage.status === 'in_progress'
-                    ? 'in_progress'
-                    : 'pending';
+        const state: StageState =
+          stage.status === 'skipped'
+            ? 'not_required'
+            : stage.status === 'completed'
+              ? 'completed'
+              : isOverdue
+                ? 'delayed'
+                : stage.status === 'in_progress'
+                  ? 'in_progress'
+                  : 'pending';
 
-          return { key: stage.stage_key, label: stage.label, state };
-        })
-      );
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shipment.id, refreshToken]);
+        return { key: stage.stage_key, label: stage.label, state };
+      });
+    },
+  });
 
   if (shipment.status === 'cancelled') {
     return (

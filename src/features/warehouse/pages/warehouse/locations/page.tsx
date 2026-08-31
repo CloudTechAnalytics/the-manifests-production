@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Warehouse as WarehouseIcon, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useBranchSelector } from '@/shared/hooks/use-branch-selector';
@@ -41,10 +41,17 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
+import {
+  createWarehouse,
+  deleteWarehouse,
+  editWarehouse,
+  fetchWarehouses,
+} from '@/features/warehouse/services/warehouse.service';
 import type { Warehouse } from '@/shared/types';
 
 export default function WarehouseLocationsPage() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
@@ -57,8 +64,11 @@ export default function WarehouseLocationsPage() {
     loading: branchesLoading,
   } = useBranchSelector(profile);
 
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: warehouses = [], isLoading: loading } = useQuery({
+    queryKey: ['warehouses', isAdmin, branchId],
+    queryFn: () => fetchWarehouses({ isAdmin, branchId }),
+    enabled: !!profile,
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
@@ -66,36 +76,8 @@ export default function WarehouseLocationsPage() {
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [branchError, setBranchError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const loadWarehouses = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('warehouses')
-        .select('*')
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
-      if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-      const { data, error } = await query;
-      if (error) {
-        console.error('Error loading warehouses:', error);
-        setWarehouses([]);
-        return;
-      }
-      setWarehouses((data as Warehouse[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, branchId]);
-
-  useEffect(() => {
-    loadWarehouses();
-  }, [loadWarehouses]);
 
   const openCreate = () => {
     setEditing(null);
@@ -115,102 +97,52 @@ export default function WarehouseLocationsPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = async () => {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (editing) {
+        await editWarehouse(editing, { name, city, address }, { id: profile!.id });
+      } else {
+        await createWarehouse({ name, city, address }, newWarehouseBranchId!, { id: profile!.id });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      toast.success(editing ? 'Warehouse updated' : 'Warehouse created');
+      setDialogOpen(false);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save warehouse'));
+    },
+  });
+
+  const handleSubmit = () => {
     if (!profile?.id || !name.trim()) return;
     if (!editing && !newWarehouseBranchId) {
       setBranchError('Please select a branch');
       return;
     }
     setBranchError('');
-    setSubmitting(true);
-    try {
-      if (editing) {
-        const { error } = await supabase
-          .from('warehouses')
-          .update({
-            name: name.trim(),
-            city: city.trim() || null,
-            address: address.trim() || null,
-            updated_by: profile.id,
-          })
-          .eq('id', editing.id);
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
-          branch_id: editing.branch_id,
-          action: 'warehouse.updated',
-          entity_type: 'warehouse',
-          entity_id: editing.id,
-          description: `Updated warehouse "${name.trim()}"`,
-        });
-
-        toast.success('Warehouse updated');
-      } else {
-        const { data: created, error } = await supabase
-          .from('warehouses')
-          .insert({
-            name: name.trim(),
-            city: city.trim() || null,
-            address: address.trim() || null,
-            branch_id: newWarehouseBranchId,
-            created_by: profile.id,
-            updated_by: profile.id,
-          })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
-          branch_id: newWarehouseBranchId,
-          action: 'warehouse.created',
-          entity_type: 'warehouse',
-          entity_id: created?.id,
-          description: `Created warehouse "${name.trim()}"`,
-        });
-
-        toast.success('Warehouse created');
-      }
-      setDialogOpen(false);
-      loadWarehouses();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to save warehouse');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    saveMutation.mutate();
   };
+  const submitting = saveMutation.isPending;
 
-  const handleDelete = async () => {
-    if (!deleteTarget || !profile) return;
-    setDeleting(true);
-    try {
-      const { error } = await supabase
-        .from('warehouses')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', deleteTarget.id);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: deleteTarget.branch_id,
-        action: 'warehouse.deleted',
-        entity_type: 'warehouse',
-        entity_id: deleteTarget.id,
-        description: `Deleted warehouse "${deleteTarget.name}"`,
-      });
-
+  const deleteMutation = useMutation({
+    mutationFn: (target: Warehouse) => deleteWarehouse(target, { id: profile!.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       toast.success('Warehouse deleted');
       setDeleteTarget(null);
-      loadWarehouses();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to delete warehouse');
-      toast.error(message);
-    } finally {
-      setDeleting(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to delete warehouse'));
+    },
+  });
+
+  const handleDelete = () => {
+    if (!deleteTarget || !profile) return;
+    deleteMutation.mutate(deleteTarget);
   };
+  const deleting = deleteMutation.isPending;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 lg:p-8">

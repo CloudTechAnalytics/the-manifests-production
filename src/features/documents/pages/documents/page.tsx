@@ -207,7 +207,11 @@ export default function DocumentsPage() {
     let query = supabase
       .from('documents')
       .select(
-        '*, shipment:shipments(id, reference_number), customer:customers(id, company_name), created_by_user:profiles!documents_created_by_fkey(id, full_name), branch:branches(id, name)'
+        // documents<->shipments has two FKs (this doc's own shipment_id,
+        // and shipments.booking_confirmation_document_id pointing back at
+        // a document) — PostgREST can't pick one on its own, so the FK is
+        // named explicitly to get "the shipment this document belongs to".
+        '*, shipment:shipments!documents_shipment_id_fkey(id, reference_number), customer:customers(id, company_name), created_by_user:profiles!documents_created_by_fkey(id, full_name), branch:branches(id, name)'
       )
       .is('deleted_at', null)
       .order('created_at', { ascending: false });

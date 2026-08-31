@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, TriangleAlert } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { fetchFinancialExposures } from '@/features/shipments/services/shipments.service';
 import {
   EXPOSURE_TYPE_META,
   EXPOSURE_STATUS_META,
@@ -43,30 +44,19 @@ export function FinancialExposurePanel({
   defaultCurrency,
   onChanged,
 }: FinancialExposurePanelProps) {
-  const [exposures, setExposures] = useState<FinancialExposure[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [dialogState, setDialogState] = useState<{
     type: ExposureType;
     existing: FinancialExposure | null;
   } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('financial_exposures')
-      .select('*')
-      .eq('shipment_id', shipmentId)
-      .order('created_at', { ascending: false });
-    setExposures((data as FinancialExposure[] | null) ?? []);
-    setLoading(false);
-  }, [shipmentId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: exposures = [], isLoading: loading } = useQuery({
+    queryKey: ['financial-exposures', shipmentId],
+    queryFn: () => fetchFinancialExposures(shipmentId),
+  });
 
   const handleSaved = () => {
-    load();
+    queryClient.invalidateQueries({ queryKey: ['financial-exposures', shipmentId] });
     onChanged();
   };
 

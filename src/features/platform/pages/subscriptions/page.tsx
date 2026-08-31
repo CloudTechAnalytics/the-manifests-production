@@ -1,11 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, DollarSign, Building2, Hourglass, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { getErrorMessage } from '@/shared/lib/utils';
+import {
+  fetchSubscriptionsPageData,
+  assignSubscription,
+  changeSubscriptionPlan,
+  extendSubscriptionTrial,
+  changeSubscriptionStatus,
+  type SubscriptionOrgRow,
+} from '@/features/platform/services/subscriptions.service';
 import { formatCurrency, formatDate } from '@/shared/lib/utils/status';
 import { Button } from '@/shared/components/ui/button';
 import { Label } from '@/shared/components/ui/label';
@@ -37,12 +45,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import type { Plan, OrgSubscription, SubscriptionStatus, BillingCycle } from '@/shared/types';
 
-interface OrgRow {
-  id: string;
-  name: string;
-  slug: string;
-  subscription: (OrgSubscription & { plan: Plan }) | null;
-}
+type OrgRow = SubscriptionOrgRow;
 
 const STATUS_OPTIONS: { value: SubscriptionStatus; label: string }[] = [
   { value: 'trial', label: 'Trial' },
@@ -66,9 +69,7 @@ function daysLeft(dateStr: string | null): number | null {
 
 export default function SubscriptionsPage() {
   const { profile } = useAuth();
-  const [orgs, setOrgs] = useState<OrgRow[]>([]);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [updating, setUpdating] = useState<string | null>(null);
 
   const [assignTarget, setAssignTarget] = useState<OrgRow | null>(null);
@@ -76,66 +77,15 @@ export default function SubscriptionsPage() {
   const [assignCycle, setAssignCycle] = useState<BillingCycle>('monthly');
   const [assignStatus, setAssignStatus] = useState<SubscriptionStatus>('trial');
   const [assignSeats, setAssignSeats] = useState('1');
-  const [assigning, setAssigning] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Load subscriptions with their own query keyed by organization_id
-      // rather than embedding them under the organizations query. The
-      // parent→child embed was returning empty for orgs that do have a
-      // subscription, which made the page offer "Assign Plan" for an org
-      // that already had one — and the assign then collided with the
-      // unique constraint on organization_id.
-      const [orgsRes, subsRes, plansRes] = await Promise.all([
-        supabase
-          .from('organizations')
-          .select('id, name, slug')
-          .is('deleted_at', null)
-          .order('name', { ascending: true }),
-        supabase.from('org_subscriptions').select('*, plan:plans(*)'),
-        supabase
-          .from('plans')
-          .select('*')
-          .is('deleted_at', null)
-          .eq('is_active', true)
-          // Excludes the internal "Trial" plan (migration 065) — it's
-          // auto-assigned only by self-service registration, not something
-          // to hand-pick when changing an org's plan here.
-          .eq('is_public', true)
-          .order('sort_order', { ascending: true }),
-      ]);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['subscriptions'],
+    queryFn: fetchSubscriptionsPageData,
+  });
+  const orgs = data?.orgs ?? [];
+  const plans = data?.plans ?? [];
 
-      if (orgsRes.error) throw orgsRes.error;
-      if (subsRes.error) throw subsRes.error;
-      if (plansRes.error) throw plansRes.error;
-
-      const subsByOrg = new Map<string, OrgSubscription & { plan: Plan }>();
-      for (const s of (subsRes.data as (OrgSubscription & { plan: Plan })[]) ?? []) {
-        subsByOrg.set(s.organization_id, s);
-      }
-
-      const mapped: OrgRow[] = (
-        orgsRes.data as { id: string; name: string; slug: string }[]
-      ).map((o) => ({
-        id: o.id,
-        name: o.name,
-        slug: o.slug,
-        subscription: subsByOrg.get(o.id) ?? null,
-      }));
-
-      setOrgs(mapped);
-      setPlans((plansRes.data as Plan[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load subscriptions'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const invalidateSubscriptions = () => queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
 
   const stats = useMemo(() => {
     const active = orgs.filter((o) => o.subscription?.status === 'active');
@@ -157,136 +107,103 @@ export default function SubscriptionsPage() {
     setAssignSeats('1');
   };
 
-  const handleAssign = async () => {
-    if (!assignTarget || !profile || !assignPlanId) return;
-    setAssigning(true);
-    try {
-      // Upsert on organization_id: one subscription per org (the column is
-      // UNIQUE), so assigning to an org that somehow already has one
-      // updates it rather than colliding with the constraint.
-      const { error } = await supabase.from('org_subscriptions').upsert(
-        {
-          organization_id: assignTarget.id,
-          plan_id: assignPlanId,
-          status: assignStatus,
-          billing_cycle: assignCycle,
-          seats: Number(assignSeats) || 1,
-          updated_by: profile.id,
-        },
-        { onConflict: 'organization_id' }
-      );
-      if (error) throw error;
-
+  const assignMutation = useMutation({
+    mutationFn: () => {
+      if (!assignTarget || !profile || !assignPlanId) throw new Error('Not ready');
       const planName = plans.find((p) => p.id === assignPlanId)?.name ?? 'a plan';
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: assignTarget.id,
-        action: 'subscription.assigned',
-        entity_type: 'org_subscription',
-        description: `Assigned "${assignTarget.name}" to the ${planName} plan`,
+      return assignSubscription({
+        orgId: assignTarget.id,
+        orgName: assignTarget.name,
+        planId: assignPlanId,
+        planName,
+        status: assignStatus,
+        billingCycle: assignCycle,
+        seats: Number(assignSeats) || 1,
+        updatedBy: profile.id,
       });
-
-      toast.success(`${assignTarget.name} assigned to a plan`);
+    },
+    onSuccess: () => {
+      invalidateSubscriptions();
+      toast.success(`${assignTarget!.name} assigned to a plan`);
       setAssignTarget(null);
-      load();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to assign plan'));
-    } finally {
-      setAssigning(false);
-    }
+    },
+  });
+  const assigning = assignMutation.isPending;
+  const handleAssign = () => {
+    if (!assignTarget || !profile || !assignPlanId) return;
+    assignMutation.mutate();
   };
 
-  const handleChangePlan = async (sub: OrgSubscription, planId: string) => {
-    if (!profile) return;
-    setUpdating(sub.id);
-    try {
-      const { error } = await supabase
-        .from('org_subscriptions')
-        .update({ plan_id: planId, updated_by: profile.id })
-        .eq('id', sub.id);
-      if (error) throw error;
-
-      const org = orgs.find((o) => o.subscription?.id === sub.id);
-      const planName = plans.find((p) => p.id === planId)?.name ?? 'a plan';
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: sub.organization_id,
-        action: 'subscription.plan_changed',
-        entity_type: 'org_subscription',
-        entity_id: sub.id,
-        description: `Changed "${org?.name ?? 'organization'}" to the ${planName} plan`,
+  const changePlanMutation = useMutation({
+    mutationFn: (params: { sub: OrgSubscription; planId: string }) => {
+      if (!profile) throw new Error('Not ready');
+      const org = orgs.find((o) => o.subscription?.id === params.sub.id);
+      const planName = plans.find((p) => p.id === params.planId)?.name ?? 'a plan';
+      return changeSubscriptionPlan({
+        subscriptionId: params.sub.id,
+        orgId: params.sub.organization_id,
+        orgName: org?.name ?? 'organization',
+        planId: params.planId,
+        planName,
+        updatedBy: profile.id,
       });
-
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to change plan'));
-    } finally {
-      setUpdating(null);
-    }
+    },
+    onSuccess: () => invalidateSubscriptions(),
+    onError: (err) => toast.error(getErrorMessage(err, 'Failed to change plan')),
+    onSettled: () => setUpdating(null),
+  });
+  const handleChangePlan = (sub: OrgSubscription, planId: string) => {
+    setUpdating(sub.id);
+    changePlanMutation.mutate({ sub, planId });
   };
 
-  const handleExtendTrial = async (sub: OrgSubscription, days: number) => {
-    if (!profile) return;
-    setUpdating(sub.id);
-    try {
-      // Extend from the later of "now" or the current end date, so
-      // extending an already-expired trial doesn't leave it still expired.
-      const base = sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date()
-        ? new Date(sub.trial_ends_at)
-        : new Date();
-      const newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
-
-      const { error } = await supabase
-        .from('org_subscriptions')
-        .update({ trial_ends_at: newEnd, updated_by: profile.id })
-        .eq('id', sub.id);
-      if (error) throw error;
-
-      const org = orgs.find((o) => o.subscription?.id === sub.id);
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: sub.organization_id,
-        action: 'subscription.trial_extended',
-        entity_type: 'org_subscription',
-        entity_id: sub.id,
-        description: `Extended "${org?.name ?? 'organization'}"'s trial by ${days} days`,
+  const extendTrialMutation = useMutation({
+    mutationFn: (params: { sub: OrgSubscription; days: number }) => {
+      if (!profile) throw new Error('Not ready');
+      const org = orgs.find((o) => o.subscription?.id === params.sub.id);
+      return extendSubscriptionTrial({
+        subscriptionId: params.sub.id,
+        orgId: params.sub.organization_id,
+        orgName: org?.name ?? 'organization',
+        currentTrialEndsAt: params.sub.trial_ends_at,
+        days: params.days,
+        updatedBy: profile.id,
       });
-
-      toast.success(`Trial extended by ${days} days`);
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to extend trial'));
-    } finally {
-      setUpdating(null);
-    }
+    },
+    onSuccess: (_data, params) => {
+      invalidateSubscriptions();
+      toast.success(`Trial extended by ${params.days} days`);
+    },
+    onError: (err) => toast.error(getErrorMessage(err, 'Failed to extend trial')),
+    onSettled: () => setUpdating(null),
+  });
+  const handleExtendTrial = (sub: OrgSubscription, days: number) => {
+    setUpdating(sub.id);
+    extendTrialMutation.mutate({ sub, days });
   };
 
-  const handleChangeStatus = async (sub: OrgSubscription, status: SubscriptionStatus) => {
-    if (!profile) return;
-    setUpdating(sub.id);
-    try {
-      const { error } = await supabase
-        .from('org_subscriptions')
-        .update({ status, updated_by: profile.id })
-        .eq('id', sub.id);
-      if (error) throw error;
-
-      const org = orgs.find((o) => o.subscription?.id === sub.id);
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        organization_id: sub.organization_id,
-        action: 'subscription.status_changed',
-        entity_type: 'org_subscription',
-        entity_id: sub.id,
-        description: `Changed "${org?.name ?? 'organization'}"'s subscription status to ${status}`,
+  const changeStatusMutation = useMutation({
+    mutationFn: (params: { sub: OrgSubscription; status: SubscriptionStatus }) => {
+      if (!profile) throw new Error('Not ready');
+      const org = orgs.find((o) => o.subscription?.id === params.sub.id);
+      return changeSubscriptionStatus({
+        subscriptionId: params.sub.id,
+        orgId: params.sub.organization_id,
+        orgName: org?.name ?? 'organization',
+        status: params.status,
+        updatedBy: profile.id,
       });
-
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to change status'));
-    } finally {
-      setUpdating(null);
-    }
+    },
+    onSuccess: () => invalidateSubscriptions(),
+    onError: (err) => toast.error(getErrorMessage(err, 'Failed to change status')),
+    onSettled: () => setUpdating(null),
+  });
+  const handleChangeStatus = (sub: OrgSubscription, status: SubscriptionStatus) => {
+    setUpdating(sub.id);
+    changeStatusMutation.mutate({ sub, status });
   };
 
   return (

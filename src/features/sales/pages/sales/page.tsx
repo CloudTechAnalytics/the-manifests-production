@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useMemo, useState, lazy, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp,
   DollarSign,
@@ -10,7 +11,6 @@ import {
   Building2,
   CalendarDays,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
   Card,
@@ -38,18 +38,14 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 import { QUOTATION_STATUS_META, formatCurrency } from '@/shared/lib/utils/status';
-import type { Branch, Quotation, QuotationStatus } from '@/shared/types';
+import { fetchBranchesForSales, fetchSalesQuotations } from '@/features/sales/services/sales.service';
+import type { QuotationStatus } from '@/shared/types';
 
 // recharts is a large dependency — code-split so it only loads once
 // this card actually renders, not bundled into this page's own chunk.
 const MonthlyRevenueChart = lazy(() =>
   import('@/features/sales/components/monthly-revenue-chart').then((m) => ({ default: m.MonthlyRevenueChart }))
 );
-
-type QuotationRow = Quotation & {
-  customer?: { id: string; company_name: string } | null;
-  branch?: { id: string; name: string } | null;
-};
 
 interface AggRow {
   id: string;
@@ -73,23 +69,16 @@ export default function SalesPage() {
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
 
-  const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [branchIdFilter, setBranchIdFilter] = useState('all');
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [quotations, setQuotations] = useState<QuotationRow[]>([]);
 
   // Load branches for admin filter
-  useEffect(() => {
-    if (!isAdmin) return;
-    supabase
-      .from('branches')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true })
-      .then(({ data }) => setBranches((data as Branch[]) ?? []));
-  }, [isAdmin]);
+  const { data: branches = [] } = useQuery({
+    queryKey: ['sales-branches'],
+    queryFn: fetchBranchesForSales,
+    enabled: isAdmin,
+  });
 
   const effectiveBranchId = useMemo(() => {
     if (!isAdmin && userBranchId) return userBranchId;
@@ -97,45 +86,11 @@ export default function SalesPage() {
     return null;
   }, [isAdmin, userBranchId, branchIdFilter]);
 
-  const loadQuotations = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('quotations')
-        .select(
-          '*, customer:customers(id, company_name), branch:branches(id, name)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (effectiveBranchId) {
-        query = query.eq('branch_id', effectiveBranchId);
-      }
-      if (fromDate) {
-        query = query.gte('created_at', fromDate);
-      }
-      if (toDate) {
-        const endOfDay = new Date(toDate);
-        endOfDay.setDate(endOfDay.getDate() + 1);
-        query = query.lte('created_at', endOfDay.toISOString().split('T')[0]);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.error('Error loading sales data:', error);
-        setQuotations([]);
-        return;
-      }
-      setQuotations((data as QuotationRow[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, effectiveBranchId, fromDate, toDate]);
-
-  useEffect(() => {
-    loadQuotations();
-  }, [loadQuotations]);
+  const { data: quotations = [], isLoading: loading } = useQuery({
+    queryKey: ['sales-quotations', effectiveBranchId, fromDate, toDate],
+    queryFn: () => fetchSalesQuotations({ branchId: effectiveBranchId, fromDate, toDate }),
+    enabled: !!profile,
+  });
 
   // --- Derived metrics -------------------------------------------------------
 

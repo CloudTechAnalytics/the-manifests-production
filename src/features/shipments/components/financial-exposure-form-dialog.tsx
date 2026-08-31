@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { saveFinancialExposure } from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { EXPOSURE_TYPE_META, EXPOSURE_STATUS_META, RESPONSIBLE_PARTY_META, formatCurrency } from '@/shared/lib/utils/status';
@@ -78,7 +79,46 @@ export function FinancialExposureFormDialog({
   const [responsibleParty, setResponsibleParty] = useState<ResponsibleParty>('customer');
   const [reason, setReason] = useState('');
   const [status, setStatus] = useState<ExposureStatus>('pending');
-  const [submitting, setSubmitting] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: {
+      exposure_type: ExposureType;
+      start_date: string;
+      free_days: number;
+      end_date: string | null;
+      charge_per_day: number;
+      currency: string;
+      responsible_party: ResponsibleParty;
+      reason: string | null;
+      status: ExposureStatus;
+    }) => {
+      if (!profile) throw new Error('Not ready');
+      return saveFinancialExposure({
+        shipmentId,
+        branchId,
+        shipmentStatus,
+        existing,
+        payload,
+        exposureTypeLabel: EXPOSURE_TYPE_META[payload.exposure_type]?.label ?? payload.exposure_type,
+        previousStatusLabel: existing
+          ? EXPOSURE_STATUS_META[existing.status]?.label ?? existing.status
+          : '',
+        newStatusLabel: EXPOSURE_STATUS_META[payload.status]?.label ?? payload.status,
+        chargePerDayFormatted: formatCurrency(payload.charge_per_day, payload.currency),
+        freeDays: payload.free_days,
+        updatedBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      toast.success(existing ? 'Financial exposure updated' : 'Financial exposure recorded');
+      onOpenChange(false);
+      onSaved();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save financial exposure'));
+    },
+  });
+  const submitting = saveMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -100,8 +140,7 @@ export function FinancialExposureFormDialog({
     charge_per_day: Number(chargePerDay) || 0,
   });
 
-  const handleSubmit = async () => {
-    if (!profile) return;
+  const handleSubmit = () => {
     if (!startDate) {
       toast.error('Start date is required');
       return;
@@ -111,88 +150,17 @@ export function FinancialExposureFormDialog({
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const payload = {
-        exposure_type: exposureType,
-        start_date: startDate,
-        free_days: Math.max(0, Number(freeDays) || 0),
-        end_date: endDate || null,
-        charge_per_day: Math.max(0, Number(chargePerDay) || 0),
-        currency,
-        responsible_party: responsibleParty,
-        reason: reason.trim() || null,
-        status,
-        updated_by: profile.id,
-      };
-
-      if (existing) {
-        const statusChanged = status !== existing.status;
-        const updatePayload: Record<string, unknown> = { ...payload };
-        if (statusChanged && status === 'approved' && existing.status !== 'approved') {
-          updatePayload.approved_by = profile.id;
-          updatePayload.approved_at = new Date().toISOString();
-        }
-
-        const { error } = await supabase.from('financial_exposures').update(updatePayload).eq('id', existing.id);
-        if (error) throw error;
-
-        if (statusChanged) {
-          await supabase.from('activities').insert({
-            user_id: profile.id,
-            branch_id: branchId,
-            action: 'financial_exposure.status_changed',
-            entity_type: 'financial_exposure',
-            entity_id: existing.id,
-            description: `Financial exposure (${EXPOSURE_TYPE_META[exposureType]?.label ?? exposureType}) status changed from "${EXPOSURE_STATUS_META[existing.status]?.label ?? existing.status}" to "${EXPOSURE_STATUS_META[status]?.label ?? status}"`,
-            metadata: { from: existing.status, to: status, reason: reason.trim() || null },
-          });
-        }
-        toast.success('Financial exposure updated');
-      } else {
-        const { data: created, error } = await supabase
-          .from('financial_exposures')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id })
-          .select('id')
-          .single();
-        if (error) throw error;
-
-        await supabase.from('shipment_timeline').insert({
-          shipment_id: shipmentId,
-          status: shipmentStatus,
-          notes: `Financial exposure recorded: ${EXPOSURE_TYPE_META[exposureType]?.label ?? exposureType} (${formatCurrency(
-            Number(chargePerDay) || 0,
-            currency
-          )}/day, ${freeDays} free days)`,
-          created_by: profile.id,
-        });
-
-        await supabase.from('activities').insert({
-          user_id: profile.id,
-          branch_id: branchId,
-          action: 'financial_exposure.created',
-          entity_type: 'financial_exposure',
-          entity_id: created?.id,
-          description: `Financial exposure recorded: ${EXPOSURE_TYPE_META[exposureType]?.label ?? exposureType}`,
-          metadata: {
-            exposure_type: exposureType,
-            start_date: startDate,
-            free_days: payload.free_days,
-            charge_per_day: payload.charge_per_day,
-            currency,
-            responsible_party: responsibleParty,
-          },
-        });
-        toast.success('Financial exposure recorded');
-      }
-
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save financial exposure'));
-    } finally {
-      setSubmitting(false);
-    }
+    saveMutation.mutate({
+      exposure_type: exposureType,
+      start_date: startDate,
+      free_days: Math.max(0, Number(freeDays) || 0),
+      end_date: endDate || null,
+      charge_per_day: Math.max(0, Number(chargePerDay) || 0),
+      currency,
+      responsible_party: responsibleParty,
+      reason: reason.trim() || null,
+      status,
+    });
   };
 
   return (

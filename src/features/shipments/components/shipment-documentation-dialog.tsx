@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Upload } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  fetchDocumentName,
+  updateShipmentDocumentation,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { uploadDocumentFile } from '@/shared/lib/utils/document-upload';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -65,6 +69,7 @@ export function ShipmentDocumentationDialog({
   onSaved,
 }: ShipmentDocumentationDialogProps) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [incoterm, setIncoterm] = useState('');
   const [hsCode, setHsCode] = useState('');
   const [commodity, setCommodity] = useState('');
@@ -90,7 +95,6 @@ export function ShipmentDocumentationDialog({
   const [bookingDocId, setBookingDocId] = useState<string | null>(null);
   const [bookingDocName, setBookingDocName] = useState<string | null>(null);
   const [uploadingBookingDoc, setUploadingBookingDoc] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -121,21 +125,15 @@ export function ShipmentDocumentationDialog({
     setBookingDocName(null);
   }, [open, shipment]);
 
+  const { data: fetchedBookingDocName } = useQuery({
+    queryKey: ['shipment-document-name', bookingDocId],
+    queryFn: () => fetchDocumentName(bookingDocId as string),
+    enabled: open && !!bookingDocId,
+  });
+
   useEffect(() => {
-    if (!open || !bookingDocId) return;
-    let cancelled = false;
-    supabase
-      .from('documents')
-      .select('name')
-      .eq('id', bookingDocId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setBookingDocName(data?.name ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, bookingDocId]);
+    if (fetchedBookingDocName !== undefined) setBookingDocName(fetchedBookingDocName);
+  }, [fetchedBookingDocName]);
 
   // Chargeable weight is the greater of actual and volumetric — the
   // industry-standard rule for both air (volumetric = L*W*H/6000) and
@@ -183,63 +181,60 @@ export function ShipmentDocumentationDialog({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
-      const payload = {
-        incoterm: incoterm.trim() || null,
-        hs_code: hsCode.trim() || null,
-        commodity: commodity.trim() || null,
-        mbl_number: mblNumber.trim() || null,
-        hbl_number: hblNumber.trim() || null,
-        awb_number: awbNumber.trim() || null,
-        vessel_name: vesselName.trim() || null,
-        voyage_number: voyageNumber.trim() || null,
-        port_of_loading: portOfLoading.trim() || null,
-        port_of_discharge: portOfDischarge.trim() || null,
-        goods_value: goodsValue ? Number(goodsValue) : null,
-        goods_value_currency: goodsValueCurrency.trim() || 'NGN',
-        actual_weight: actualWeight ? Number(actualWeight) : null,
-        volumetric_weight: volumetricWeight ? Number(volumetricWeight) : null,
-        chargeable_weight: chargeableWeight,
-        carrier: carrier.trim() || null,
-        estimated_departure: estimatedDeparture || null,
-        estimated_arrival: estimatedArrival || null,
-        transshipment_port: transshipmentPort.trim() || null,
-        booking_reference: bookingReference.trim() || null,
-        booking_requested: bookingRequested,
-        booking_status: bookingStatus,
-        booking_date: bookingDate || null,
-        // booking_confirmed stays a denormalized "= booking_status ===
-        // 'confirmed'" flag, kept in sync here — same precedent as
-        // shipment_customs.duty_paid vs duty_status.
-        booking_confirmed: bookingStatus === 'confirmed',
-        booking_confirmation_document_id: bookingDocId,
-        updated_by: profile.id,
-      };
-
-      const { error } = await supabase.from('shipments').update(payload).eq('id', shipment.id);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: shipment.branch_id,
-        action: 'shipment.documentation_updated',
-        entity_type: 'shipment',
-        entity_id: shipment.id,
-        description: `Updated trade documentation for shipment ${shipment.reference_number ?? ''}`,
-        metadata: { shipment_id: shipment.id },
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!profile) throw new Error('Not ready');
+      return updateShipmentDocumentation({
+        shipmentId: shipment.id,
+        branchId: shipment.branch_id,
+        referenceNumber: shipment.reference_number,
+        payload: {
+          incoterm: incoterm.trim() || null,
+          hs_code: hsCode.trim() || null,
+          commodity: commodity.trim() || null,
+          mbl_number: mblNumber.trim() || null,
+          hbl_number: hblNumber.trim() || null,
+          awb_number: awbNumber.trim() || null,
+          vessel_name: vesselName.trim() || null,
+          voyage_number: voyageNumber.trim() || null,
+          port_of_loading: portOfLoading.trim() || null,
+          port_of_discharge: portOfDischarge.trim() || null,
+          goods_value: goodsValue ? Number(goodsValue) : null,
+          goods_value_currency: goodsValueCurrency.trim() || 'NGN',
+          actual_weight: actualWeight ? Number(actualWeight) : null,
+          volumetric_weight: volumetricWeight ? Number(volumetricWeight) : null,
+          chargeable_weight: chargeableWeight,
+          carrier: carrier.trim() || null,
+          estimated_departure: estimatedDeparture || null,
+          estimated_arrival: estimatedArrival || null,
+          transshipment_port: transshipmentPort.trim() || null,
+          booking_reference: bookingReference.trim() || null,
+          booking_requested: bookingRequested,
+          booking_status: bookingStatus,
+          booking_date: bookingDate || null,
+          // booking_confirmed stays a denormalized "= booking_status ===
+          // 'confirmed'" flag, kept in sync here — same precedent as
+          // shipment_customs.duty_paid vs duty_status.
+          booking_confirmed: bookingStatus === 'confirmed',
+          booking_confirmation_document_id: bookingDocId,
+        },
+        updatedBy: profile.id,
       });
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipment.id] });
       toast.success('Trade documentation updated');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save trade documentation'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+  const submitting = saveMutation.isPending;
+
+  const handleSubmit = () => {
+    saveMutation.mutate();
   };
 
   return (

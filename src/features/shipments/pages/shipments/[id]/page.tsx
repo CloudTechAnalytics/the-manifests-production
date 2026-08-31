@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -35,7 +36,6 @@ import {
   Container as ContainerIcon,
   Banknote,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { cn, getErrorMessage } from '@/shared/lib/utils';
 import { adminForceDelete } from '@/shared/lib/utils/admin-delete';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
@@ -127,24 +127,19 @@ import {
   formatDateTime,
   formatCurrency,
 } from '@/shared/lib/utils/status';
+import {
+  fetchShipmentDetail,
+  updateShipmentStatus,
+  addShipmentTimelineEntry,
+  softDeleteShipment,
+} from '@/features/shipments/services/shipments.service';
 import type {
-  Shipment,
   ShipmentStatus,
-  ShipmentTimelineEntry,
   ShipmentType,
-  Customer,
-  Profile,
-  DocumentRecord,
-  Branch,
   ShipmentCustoms,
   TerminalOperation,
   ShipmentExamination,
   ShipmentTransportation,
-  ShipmentContainer,
-  CargoInsurancePolicy,
-  CargoClaim,
-  DeliveryOrder,
-  CustomsBond,
 } from '@/shared/types';
 
 const SHIPMENT_TYPE_LABELS: Record<ShipmentType, string> = {
@@ -166,16 +161,6 @@ const SHIPMENT_TYPE_ICONS: Record<
   multimodal: Waypoints,
 };
 
-type ShipmentDetail = Shipment & {
-  customer: Customer | null;
-  branch: Branch | null;
-  assigned_user: Profile | null;
-};
-
-type TimelineEntry = ShipmentTimelineEntry & {
-  user: { id: string; full_name: string } | null;
-};
-
 const KNOWN_TABS = new Set([
   'overview', 'timeline', 'workflow', 'documents', 'cargo', 'customs', 'terminal', 'examination', 'transportation',
   'financial_exposure',
@@ -186,24 +171,38 @@ export default function ShipmentDetailPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
 
   const shipmentId = params.id!;
   // A department queue links straight into the right tab, e.g. ?tab=customs.
   const requestedTab = searchParams.get('tab');
   const initialTab = requestedTab && KNOWN_TABS.has(requestedTab) ? requestedTab : 'overview';
 
-  const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [customsRecord, setCustomsRecord] = useState<ShipmentCustoms | null>(null);
-  const [terminalRecord, setTerminalRecord] = useState<TerminalOperation | null>(null);
-  const [examinations, setExaminations] = useState<ShipmentExamination[]>([]);
-  const [transportLegs, setTransportLegs] = useState<ShipmentTransportation[]>([]);
-  const [containers, setContainers] = useState<ShipmentContainer[]>([]);
-  const [insurancePolicies, setInsurancePolicies] = useState<CargoInsurancePolicy[]>([]);
-  const [claims, setClaims] = useState<CargoClaim[]>([]);
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
-  const [customsBonds, setCustomsBonds] = useState<CustomsBond[]>([]);
+  const {
+    data: detail,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ['shipment', shipmentId],
+    queryFn: () => fetchShipmentDetail(shipmentId),
+    enabled: !!shipmentId,
+  });
+
+  const shipment = detail?.shipment ?? null;
+  const timeline = detail?.timeline ?? [];
+  const documents = detail?.documents ?? [];
+  const customsRecord = detail?.customsRecord ?? null;
+  const terminalRecord = detail?.terminalRecord ?? null;
+  const examinations = detail?.examinations ?? [];
+  const transportLegs = detail?.transportLegs ?? [];
+  const containers = detail?.containers ?? [];
+  const insurancePolicies = detail?.insurancePolicies ?? [];
+  const claims = detail?.claims ?? [];
+  const deliveryOrders = detail?.deliveryOrders ?? [];
+  const customsBonds = detail?.customsBonds ?? [];
+
+  const loadData = () => refetch();
+
   const [customsDialogOpen, setCustomsDialogOpen] = useState(false);
   const [dutyAssessmentDialogOpen, setDutyAssessmentDialogOpen] = useState(false);
   const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
@@ -215,8 +214,6 @@ export default function ShipmentDetailPage() {
   const [transportDialog, setTransportDialog] = useState<{ existing: ShipmentTransportation | null } | null>(
     null
   );
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canDelete = !!shipment && canDeleteOwnRecord({ hasRole });
   // Shipment ownership: Operations owns the shipment (mirrors
@@ -224,7 +221,6 @@ export default function ShipmentDetailPage() {
   // Sales and every other non-operations track can View/Track but not
   // Edit/Assign/Update Status.
   const canManageShipment = hasRole('admin') || hasRole('branch_manager') || hasRole('operations');
-  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [stagesVersion, setStagesVersion] = useState(0);
   const [statusBlockers, setStatusBlockers] = useState<string[]>([]);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
@@ -234,136 +230,6 @@ export default function ShipmentDetailPage() {
     'documentation'
   );
   const [timelineNotes, setTimelineNotes] = useState('');
-  const [addingTimeline, setAddingTimeline] = useState(false);
-
-  const loadData = useCallback(async () => {
-    if (!shipmentId) return;
-    setLoading(true);
-    try {
-      // All nine of these only depend on shipmentId, not on each other —
-      // one concurrent batch instead of shipment, then timeline, then
-      // documents, then the rest. The (rare) case where shipmentId turns
-      // out not to exist just means the other eight resolve to empty/null
-      // results that are never rendered — a discarded response, not a
-      // wrong one.
-      const [
-        { data: ship, error: shipErr },
-        { data: tl },
-        { data: docs },
-        { data: customs },
-        { data: terminal },
-        { data: exams },
-        { data: legs },
-        { data: containerRows },
-        { data: insuranceRows },
-        { data: claimRows },
-        { data: doRows },
-        { data: bondRows },
-      ] = await Promise.all([
-        supabase
-          .from('shipments')
-          .select(
-            '*, customer:customers(*), branch:branches(*), assigned_user:profiles!shipments_assigned_to_fkey(*)'
-          )
-          .eq('id', shipmentId)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('shipment_timeline')
-          .select('*, user:profiles!shipment_timeline_created_by_fkey(id, full_name)')
-          .eq('shipment_id', shipmentId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('documents')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('shipment_customs')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('terminal_operations')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .maybeSingle(),
-        supabase
-          .from('shipment_examinations')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('shipment_transportation')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('shipment_containers')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('cargo_insurance_policies')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('cargo_claims')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('delivery_orders')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('issued_at', { ascending: false }),
-        supabase
-          .from('customs_bonds')
-          .select('*')
-          .eq('shipment_id', shipmentId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-      ]);
-
-      if (shipErr) {
-        console.error('Error loading shipment:', shipErr);
-        setShipment(null);
-        return;
-      }
-      if (!ship) {
-        setShipment(null);
-        return;
-      }
-      setShipment(ship as ShipmentDetail);
-      setTimeline((tl as TimelineEntry[]) ?? []);
-      setDocuments((docs as DocumentRecord[]) ?? []);
-      setCustomsRecord((customs as ShipmentCustoms) ?? null);
-      setTerminalRecord((terminal as TerminalOperation) ?? null);
-      setExaminations((exams as ShipmentExamination[]) ?? []);
-      setTransportLegs((legs as ShipmentTransportation[]) ?? []);
-      setContainers((containerRows as ShipmentContainer[]) ?? []);
-      setInsurancePolicies((insuranceRows as CargoInsurancePolicy[]) ?? []);
-      setClaims((claimRows as CargoClaim[]) ?? []);
-      setDeliveryOrders((doRows as DeliveryOrder[]) ?? []);
-      setCustomsBonds((bondRows as CustomsBond[]) ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [shipmentId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Next status in the flow — used both to gate what "Update Status" can do
   // and to check readiness for it below.
@@ -405,6 +271,30 @@ export default function ShipmentDetailPage() {
 
   // --- Status update handler ------------------------------------------------
 
+  const updateStatusMutation = useMutation({
+    mutationFn: (target: ShipmentStatus) => {
+      if (!shipment || !profile) throw new Error('Not ready');
+      return updateShipmentStatus({
+        shipmentId,
+        target,
+        fromLabel: SHIPMENT_STATUS_META[shipment.status]?.label ?? shipment.status,
+        toLabel: SHIPMENT_STATUS_META[target].label,
+        updatedBy: profile.id,
+        branchId: shipment.branch_id,
+        referenceNumber: shipment.reference_number,
+      });
+    },
+    onSuccess: (_data, target) => {
+      queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(`Shipment marked as ${SHIPMENT_STATUS_META[target].label}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update status'));
+    },
+  });
+  const updatingStatus = updateStatusMutation.isPending;
+
   const handleStatusChange = async (target: ShipmentStatus) => {
     if (!shipment || !profile) return;
 
@@ -431,67 +321,35 @@ export default function ShipmentDetailPage() {
       }
     }
 
-    setUpdatingStatus(true);
-    try {
-      // 1. Update shipment status
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({
-          status: target,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', shipmentId);
-
-      if (updateError) throw updateError;
-
-      // 2. Insert timeline entry
-      const { error: timelineError } = await supabase
-        .from('shipment_timeline')
-        .insert({
-          shipment_id: shipmentId,
-          status: target,
-          notes: `Status updated to "${SHIPMENT_STATUS_META[target].label}"`,
-          created_by: profile.id,
-        });
-
-      if (timelineError) {
-        console.error('Timeline insert error:', timelineError);
-      }
-
-      // 3. Log activity
-      const { error: activityError } = await supabase
-        .from('activities')
-        .insert({
-          user_id: profile.id,
-          branch_id: shipment.branch_id,
-          action: 'shipment.status_changed',
-          entity_type: 'shipment',
-          entity_id: shipmentId,
-          description: `Shipment ${shipment.reference_number ?? ''} status changed from "${SHIPMENT_STATUS_META[shipment.status]?.label ?? shipment.status}" to "${SHIPMENT_STATUS_META[target].label}"`,
-          metadata: {
-            from: shipment.status,
-            to: target,
-            reference_number: shipment.reference_number,
-          },
-        });
-
-      if (activityError) {
-        console.error('Activity log error:', activityError);
-      }
-
-      toast.success(`Shipment marked as ${SHIPMENT_STATUS_META[target].label}`);
-      loadData();
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to update status');
-      toast.error(message);
-    } finally {
-      setUpdatingStatus(false);
-    }
+    updateStatusMutation.mutate(target);
   };
 
   // --- Add timeline entry handler -------------------------------------------
+
+  const addTimelineMutation = useMutation({
+    mutationFn: () => {
+      if (!shipment || !profile) throw new Error('Not ready');
+      return addShipmentTimelineEntry({
+        shipmentId,
+        status: timelineStatus,
+        notes: timelineNotes || null,
+        statusLabel: SHIPMENT_STATUS_META[timelineStatus].label,
+        updatedBy: profile.id,
+        branchId: shipment.branch_id,
+        referenceNumber: shipment.reference_number,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success('Timeline entry added');
+      setTimelineNotes('');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to add timeline entry'));
+    },
+  });
+  const addingTimeline = addTimelineMutation.isPending;
 
   const handleAddTimeline = async () => {
     if (!shipment || !profile) return;
@@ -518,107 +376,44 @@ export default function ShipmentDetailPage() {
       }
     }
 
-    setAddingTimeline(true);
-    try {
-      // 1. Update shipment status
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({
-          status: timelineStatus,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', shipmentId);
-
-      if (updateError) throw updateError;
-
-      // 2. Insert timeline entry
-      const { error: timelineError } = await supabase
-        .from('shipment_timeline')
-        .insert({
-          shipment_id: shipmentId,
-          status: timelineStatus,
-          notes: timelineNotes || null,
-          created_by: profile.id,
-        });
-
-      if (timelineError) throw timelineError;
-
-      // 3. Log activity
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: shipment.branch_id,
-        action: 'shipment.timeline_added',
-        entity_type: 'shipment',
-        entity_id: shipmentId,
-        description: `Timeline entry added to shipment ${shipment.reference_number ?? ''}: "${SHIPMENT_STATUS_META[timelineStatus].label}"`,
-        metadata: {
-          status: timelineStatus,
-          reference_number: shipment.reference_number,
-        },
-      });
-
-      toast.success('Timeline entry added');
-      setTimelineNotes('');
-      loadData();
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to add timeline entry');
-      toast.error(message);
-    } finally {
-      setAddingTimeline(false);
-    }
+    addTimelineMutation.mutate();
   };
 
   // --- Delete handler -------------------------------------------------------
 
-  const handleDelete = async () => {
-    if (!shipment || !profile) return;
-    setDeleting(true);
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!shipment || !profile) throw new Error('Not ready');
       if (hasRole('admin')) {
         const result = await adminForceDelete('shipment', shipmentId);
         if (!result.success) throw new Error(result.error);
-        toast.success('Shipment permanently deleted');
-        navigate('/shipments');
-        return;
+        return { permanent: true };
       }
 
-      const { error } = await supabase
-        .from('shipments')
-        .update({
-          deleted_at: new Date().toISOString(),
-          updated_by: profile.id,
-        })
-        .eq('id', shipmentId);
-
-      if (error) throw error;
-
-      // Log activity
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: shipment.branch_id,
-        action: 'shipment.deleted',
-        entity_type: 'shipment',
-        entity_id: shipmentId,
-        description: `Deleted shipment ${shipment.reference_number ?? ''}`,
-        metadata: {
-          reference_number: shipment.reference_number,
-          customer_id: shipment.customer_id,
-        },
+      await softDeleteShipment({
+        shipmentId,
+        updatedBy: profile.id,
+        branchId: shipment.branch_id,
+        referenceNumber: shipment.reference_number,
+        customerId: shipment.customer_id,
       });
-
-      toast.success('Shipment deleted');
+      return { permanent: false };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(result.permanent ? 'Shipment permanently deleted' : 'Shipment deleted');
       navigate('/shipments');
-    } catch (err) {
-      const message =
-        getErrorMessage(err, 'Failed to delete shipment');
-      toast.error(message);
-    } finally {
-      setDeleting(false);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to delete shipment'));
+    },
+    onSettled: () => {
       setDeleteOpen(false);
-    }
-  };
+    },
+  });
+  const deleting = deleteMutation.isPending;
+  const handleDelete = () => deleteMutation.mutate();
 
   // --- Loading state --------------------------------------------------------
 

@@ -1,9 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, ListChecks, Loader2, MessageSquare, Plus, SkipForward } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  fetchShipmentWorkflowData,
+  fetchBranchStaff,
+  startWorkflowStage,
+  runWorkflowStageAction,
+  reassignWorkflowStage,
+  updateWorkflowStageDueDate,
+  cycleWorkflowTaskStatus,
+  addWorkflowTask,
+  addWorkflowStageComment,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { checkStageReadiness } from '@/shared/lib/utils/workflow-rules';
@@ -41,15 +52,37 @@ interface ShipmentWorkflowPanelProps {
 
 export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: ShipmentWorkflowPanelProps) {
   const { profile, hasRole } = useAuth();
-  const [stages, setStages] = useState<ShipmentStage[]>([]);
-  const [staff, setStaff] = useState<Profile[]>([]);
-  const [tasksByStage, setTasksByStage] = useState<Record<string, ShipmentTask[]>>({});
-  const [commentsByStage, setCommentsByStage] = useState<Record<string, ShipmentStageComment[]>>({});
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [busyStageId, setBusyStageId] = useState<string | null>(null);
   const [blockersByStage, setBlockersByStage] = useState<Record<string, string[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [newTaskTitle, setNewTaskTitle] = useState<Record<string, string>>({});
+
+  const workflowQueryKey = ['shipment-workflow', shipmentId];
+  const invalidateWorkflow = () => queryClient.invalidateQueries({ queryKey: workflowQueryKey });
+
+  const { data: workflowData, isLoading: loading } = useQuery({
+    queryKey: workflowQueryKey,
+    queryFn: () => fetchShipmentWorkflowData(shipmentId),
+  });
+
+  const stages = workflowData?.stages ?? [];
+
+  const tasksByStage = (workflowData?.tasks ?? []).reduce<Record<string, ShipmentTask[]>>((acc, t) => {
+    if (!t.stage_id) return acc;
+    (acc[t.stage_id] ??= []).push(t);
+    return acc;
+  }, {});
+
+  const commentsByStage = (workflowData?.comments ?? []).reduce<Record<string, ShipmentStageComment[]>>((acc, c) => {
+    (acc[c.stage_id] ??= []).push(c);
+    return acc;
+  }, {});
+
+  const { data: staff = [] } = useQuery({
+    queryKey: ['branch-staff', branchId],
+    queryFn: () => fetchBranchStaff(branchId),
+  });
 
   const canActOnStage = useCallback(
     (stage: ShipmentStage) => hasRole('admin') || hasRole('branch_manager') || hasRole(stage.assigned_department),
@@ -70,134 +103,32 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
     [stages]
   );
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [{ data: stageRows, error: stageError }, { data: taskRows }, { data: commentRows }] = await Promise.all([
-        supabase
-          .from('shipment_stages')
-          .select('*, assigned_user:profiles!shipment_stages_assigned_to_fkey(id, full_name)')
-          .eq('shipment_id', shipmentId)
-          .order('sequence', { ascending: true }),
-        supabase
-          .from('shipment_tasks')
-          .select('*, assigned_user:profiles!shipment_tasks_assigned_to_fkey(id, full_name)')
-          .eq('shipment_id', shipmentId)
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('shipment_stage_comments')
-          .select('*, created_by_user:profiles!shipment_stage_comments_created_by_fkey(id, full_name)')
-          .eq('shipment_id', shipmentId)
-          .order('created_at', { ascending: false }),
-      ]);
+  const startMutation = useMutation({
+    mutationFn: (stage: ShipmentStage) => {
+      if (!profile) throw new Error('Not ready');
+      return startWorkflowStage({ shipmentId, branchId, stage, updatedBy: profile.id });
+    },
+    onSuccess: (_data, stage) => {
+      invalidateWorkflow();
+      toast.success(`${stage.label} started`);
+      onChanged();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to start stage'));
+    },
+    onSettled: () => {
+      setBusyStageId(null);
+    },
+  });
 
-      if (stageError) throw stageError;
-
-      setStages((stageRows as unknown as ShipmentStage[]) ?? []);
-
-      const tasksGrouped: Record<string, ShipmentTask[]> = {};
-      ((taskRows as unknown as ShipmentTask[]) ?? []).forEach((t) => {
-        if (!t.stage_id) return;
-        (tasksGrouped[t.stage_id] ??= []).push(t);
-      });
-      setTasksByStage(tasksGrouped);
-
-      const commentsGrouped: Record<string, ShipmentStageComment[]> = {};
-      ((commentRows as unknown as ShipmentStageComment[]) ?? []).forEach((c) => {
-        (commentsGrouped[c.stage_id] ??= []).push(c);
-      });
-      setCommentsByStage(commentsGrouped);
-    } catch (err) {
-      console.error('Error loading workflow data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [shipmentId]);
-
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
-
-  useEffect(() => {
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('branch_id', branchId)
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('full_name', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) return console.error('Error loading staff:', error);
-        setStaff((data as Profile[]) ?? []);
-      });
-  }, [branchId]);
-
-  const logActivity = async (action: string, description: string, stage: ShipmentStage) => {
-    if (!profile) return;
-    await supabase.from('activities').insert({
-      user_id: profile.id,
-      branch_id: branchId,
-      action,
-      entity_type: 'shipment_stage',
-      entity_id: stage.id,
-      description,
-      metadata: { shipment_id: shipmentId, stage_key: stage.stage_key },
-    });
-  };
-
-  const handleStart = async (stage: ShipmentStage) => {
-    if (!profile) return;
+  const handleStart = (stage: ShipmentStage) => {
     const blocker = getBlockingPriorStage(stage);
     if (blocker) {
       toast.error(`Complete or skip "${blocker.label}" first — stages can't be started out of order.`);
       return;
     }
     setBusyStageId(stage.id);
-    try {
-      const { error } = await supabase
-        .from('shipment_stages')
-        .update({ status: 'in_progress', started_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', stage.id);
-      if (error) throw error;
-
-      const { count } = await supabase
-        .from('shipment_tasks')
-        .select('id', { count: 'exact', head: true })
-        .eq('stage_id', stage.id);
-
-      if (!count) {
-        const { data: templates } = await supabase
-          .from('stage_task_templates')
-          .select('*')
-          .eq('stage_key', stage.stage_key)
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
-
-        if (templates && templates.length > 0) {
-          await supabase.from('shipment_tasks').insert(
-            templates.map((t) => ({
-              shipment_id: shipmentId,
-              stage_id: stage.id,
-              template_id: t.id,
-              branch_id: branchId,
-              title: t.title,
-              assigned_department: t.default_department ?? stage.assigned_department,
-              priority: t.default_priority,
-              created_by: profile.id,
-            }))
-          );
-        }
-      }
-
-      await logActivity('workflow_stage.started', `Started "${stage.label}" for this shipment`, stage);
-      toast.success(`${stage.label} started`);
-      await loadAll();
-      onChanged();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to start stage'));
-    } finally {
-      setBusyStageId(null);
-    }
+    startMutation.mutate(stage);
   };
 
   /**
@@ -209,30 +140,31 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
    * by design). It also re-checks the department/sequence rules
    * server-side, so the client-side checks below are UX-only.
    */
-  const runStageAction = async (stage: ShipmentStage, action: 'complete' | 'skip') => {
-    if (!profile) return;
-    setBusyStageId(stage.id);
-    try {
-      const { data, error } = await supabase.rpc('complete_shipment_stage', {
-        p_stage_id: stage.id,
-        p_action: action,
-      });
-      if (error) throw error;
-
-      const result = data as { new_status: string | null };
+  const stageActionMutation = useMutation({
+    mutationFn: (params: { stage: ShipmentStage; action: 'complete' | 'skip' }) =>
+      runWorkflowStageAction({ stageId: params.stage.id, action: params.action }),
+    onSuccess: (result, params) => {
+      const { stage, action } = params;
       toast.success(
         action === 'complete'
           ? `${stage.label} completed${result.new_status ? ` — shipment moved to ${result.new_status}` : ''}`
           : `${stage.label} skipped${result.new_status ? ` — shipment moved to ${result.new_status}` : ''}`
       );
       setBlockersByStage((prev) => ({ ...prev, [stage.id]: [] }));
-      await loadAll();
+      invalidateWorkflow();
       onChanged();
-    } catch (err) {
-      toast.error(getErrorMessage(err, `Failed to ${action} stage`));
-    } finally {
+    },
+    onError: (err, params) => {
+      toast.error(getErrorMessage(err, `Failed to ${params.action} stage`));
+    },
+    onSettled: () => {
       setBusyStageId(null);
-    }
+    },
+  });
+
+  const runStageAction = (stage: ShipmentStage, action: 'complete' | 'skip') => {
+    setBusyStageId(stage.id);
+    stageActionMutation.mutate({ stage, action });
   };
 
   const handleSkip = (stage: ShipmentStage) => runStageAction(stage, 'skip');
@@ -243,89 +175,79 @@ export function ShipmentWorkflowPanel({ shipmentId, branchId, onChanged }: Shipm
       setBlockersByStage((prev) => ({ ...prev, [stage.id]: readiness.blockers }));
       return;
     }
-    await runStageAction(stage, 'complete');
+    runStageAction(stage, 'complete');
   };
 
-  const handleReassign = async (stage: ShipmentStage, userId: string) => {
-    const { error } = await supabase
-      .from('shipment_stages')
-      .update({ assigned_to: userId || null, updated_by: profile?.id })
-      .eq('id', stage.id);
-    if (error) {
-      toast.error('Failed to reassign stage');
-      return;
-    }
-    loadAll();
+  const reassignMutation = useMutation({
+    mutationFn: (params: { stage: ShipmentStage; userId: string }) =>
+      reassignWorkflowStage({ stageId: params.stage.id, userId: params.userId, updatedBy: profile?.id }),
+    onSuccess: () => invalidateWorkflow(),
+    onError: () => toast.error('Failed to reassign stage'),
+  });
+  const handleReassign = (stage: ShipmentStage, userId: string) => {
+    reassignMutation.mutate({ stage, userId });
   };
 
-  const handleDueDateChange = async (stage: ShipmentStage, date: string) => {
-    const { error } = await supabase
-      .from('shipment_stages')
-      .update({ due_date: date || null, updated_by: profile?.id })
-      .eq('id', stage.id);
-    if (error) {
-      toast.error('Failed to update due date');
-      return;
-    }
-    loadAll();
+  const dueDateMutation = useMutation({
+    mutationFn: (params: { stage: ShipmentStage; date: string }) =>
+      updateWorkflowStageDueDate({ stageId: params.stage.id, date: params.date, updatedBy: profile?.id }),
+    onSuccess: () => invalidateWorkflow(),
+    onError: () => toast.error('Failed to update due date'),
+  });
+  const handleDueDateChange = (stage: ShipmentStage, date: string) => {
+    dueDateMutation.mutate({ stage, date });
   };
 
-  const cycleTaskStatus = async (task: ShipmentTask) => {
+  const cycleTaskMutation = useMutation({
+    mutationFn: (params: { task: ShipmentTask; nextStatus: PlanTaskStatus }) =>
+      cycleWorkflowTaskStatus({ taskId: params.task.id, nextStatus: params.nextStatus }),
+    onSuccess: () => invalidateWorkflow(),
+    onError: () => toast.error('Failed to update task'),
+  });
+  const cycleTaskStatus = (task: ShipmentTask) => {
     const next: Record<PlanTaskStatus, PlanTaskStatus> = {
       pending: 'in_progress',
       in_progress: 'done',
       done: 'pending',
       cancelled: 'pending',
     };
-    const { error } = await supabase
-      .from('shipment_tasks')
-      .update({
-        status: next[task.status],
-        completed_at: next[task.status] === 'done' ? new Date().toISOString() : null,
-      })
-      .eq('id', task.id);
-    if (error) {
-      toast.error('Failed to update task');
-      return;
-    }
-    loadAll();
+    cycleTaskMutation.mutate({ task, nextStatus: next[task.status] });
   };
 
-  const handleAddTask = async (stage: ShipmentStage) => {
+  const addTaskMutation = useMutation({
+    mutationFn: (stage: ShipmentStage) => {
+      if (!profile) throw new Error('Not ready');
+      const title = (newTaskTitle[stage.id] ?? '').trim();
+      return addWorkflowTask({ shipmentId, branchId, stage, title, createdBy: profile.id });
+    },
+    onSuccess: (_data, stage) => {
+      setNewTaskTitle((prev) => ({ ...prev, [stage.id]: '' }));
+      invalidateWorkflow();
+    },
+    onError: () => toast.error('Failed to add task'),
+  });
+  const handleAddTask = (stage: ShipmentStage) => {
     const title = (newTaskTitle[stage.id] ?? '').trim();
     if (!title || !profile) return;
-    const { error } = await supabase.from('shipment_tasks').insert({
-      shipment_id: shipmentId,
-      stage_id: stage.id,
-      branch_id: branchId,
-      title,
-      assigned_department: stage.assigned_department,
-      created_by: profile.id,
-    });
-    if (error) {
-      toast.error('Failed to add task');
-      return;
-    }
-    setNewTaskTitle((prev) => ({ ...prev, [stage.id]: '' }));
-    loadAll();
+    addTaskMutation.mutate(stage);
   };
 
-  const handleAddComment = async (stage: ShipmentStage) => {
+  const addCommentMutation = useMutation({
+    mutationFn: (stage: ShipmentStage) => {
+      if (!profile) throw new Error('Not ready');
+      const comment = (newComment[stage.id] ?? '').trim();
+      return addWorkflowStageComment({ shipmentId, branchId, stageId: stage.id, comment, createdBy: profile.id });
+    },
+    onSuccess: (_data, stage) => {
+      setNewComment((prev) => ({ ...prev, [stage.id]: '' }));
+      invalidateWorkflow();
+    },
+    onError: () => toast.error('Failed to add comment'),
+  });
+  const handleAddComment = (stage: ShipmentStage) => {
     const comment = (newComment[stage.id] ?? '').trim();
     if (!comment || !profile) return;
-    const { error } = await supabase.from('shipment_stage_comments').insert({
-      stage_id: stage.id,
-      shipment_id: shipmentId,
-      branch_id: branchId,
-      comment,
-      created_by: profile.id,
-    });
-    if (error) {
-      toast.error('Failed to add comment');
-      return;
-    }
-    setNewComment((prev) => ({ ...prev, [stage.id]: '' }));
-    loadAll();
+    addCommentMutation.mutate(stage);
   };
 
   if (loading) {

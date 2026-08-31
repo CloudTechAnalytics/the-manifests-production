@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, ShieldAlert } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { saveCargoClaim } from '@/features/shipments/services/shipments.service';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate, formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -153,6 +154,7 @@ function CargoClaimFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [claimType, setClaimType] = useState<CargoClaimType>('damage');
   const [claimedAgainst, setClaimedAgainst] = useState<CargoClaimAgainst>('carrier');
   const [claimedAgainstName, setClaimedAgainstName] = useState('');
@@ -165,7 +167,29 @@ function CargoClaimFormDialog({
   const [resolvedDate, setResolvedDate] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof saveCargoClaim>[0]['payload']) => {
+      if (!profile) throw new Error('Not ready');
+      return saveCargoClaim({
+        shipmentId,
+        branchId,
+        existingId: existing?.id ?? null,
+        payload,
+        updatedBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(existing ? 'Claim updated' : 'Claim filed');
+      onOpenChange(false);
+      onSaved();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save claim'));
+    },
+  });
+  const submitting = saveMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -183,45 +207,21 @@ function CargoClaimFormDialog({
     setNotes(existing?.notes ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
-      const payload = {
-        claim_type: claimType,
-        claimed_against: claimedAgainst,
-        claimed_against_name: claimedAgainstName.trim() || null,
-        insurance_policy_id: insurancePolicyId || null,
-        status,
-        amount_claimed: amountClaimed ? Number(amountClaimed) : null,
-        amount_settled: amountSettled ? Number(amountSettled) : null,
-        currency: currency.trim() || 'NGN',
-        filed_date: filedDate || new Date().toISOString().slice(0, 10),
-        resolved_date: resolvedDate || null,
-        description: description.trim() || null,
-        notes: notes.trim() || null,
-        updated_by: profile.id,
-      };
-
-      if (existing) {
-        const { error } = await supabase.from('cargo_claims').update(payload).eq('id', existing.id);
-        if (error) throw error;
-        toast.success('Claim updated');
-      } else {
-        const { error } = await supabase
-          .from('cargo_claims')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id });
-        if (error) throw error;
-        toast.success('Claim filed');
-      }
-
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save claim'));
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSubmit = () => {
+    saveMutation.mutate({
+      claim_type: claimType,
+      claimed_against: claimedAgainst,
+      claimed_against_name: claimedAgainstName.trim() || null,
+      insurance_policy_id: insurancePolicyId || null,
+      status,
+      amount_claimed: amountClaimed ? Number(amountClaimed) : null,
+      amount_settled: amountSettled ? Number(amountSettled) : null,
+      currency: currency.trim() || 'NGN',
+      filed_date: filedDate || new Date().toISOString().slice(0, 10),
+      resolved_date: resolvedDate || null,
+      description: description.trim() || null,
+      notes: notes.trim() || null,
+    });
   };
 
   return (

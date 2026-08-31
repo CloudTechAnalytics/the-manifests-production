@@ -1,12 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2, Camera, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/shared/contexts/theme-context';
 import { useAuth } from '@/shared/contexts/auth-context';
-import { supabase } from '@/shared/lib/supabase/client';
 import { cn, getErrorMessage } from '@/shared/lib/utils';
+import {
+  uploadProfileAvatar,
+  updateOwnProfile,
+  fetchPlatformSettings,
+  updatePlatformSettings,
+} from '@/features/platform/services/settings.service';
+import { fetchAllPlans } from '@/features/platform/services/plans.service';
 import {
   Card,
   CardContent,
@@ -22,7 +29,7 @@ import { Button } from '@/shared/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/shared/components/ui/select';
-import type { UserPreferences, PlatformSettings, Plan } from '@/shared/types';
+import type { UserPreferences } from '@/shared/types';
 
 // --- Profile card ------------------------------------------------------
 
@@ -32,8 +39,6 @@ function ProfileCard() {
   const [fullName, setFullName] = useState('');
   const [title, setTitle] = useState('');
   const [phone, setPhone] = useState('');
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -53,7 +58,19 @@ function ProfileCard() {
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 
-  const handleAvatarFile = async (file: File | undefined) => {
+  const avatarMutation = useMutation({
+    mutationFn: (file: File) => uploadProfileAvatar({ userId: profile.id, file }),
+    onSuccess: async () => {
+      await refreshProfile();
+      toast.success('Photo updated');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to upload photo'));
+    },
+  });
+  const uploadingAvatar = avatarMutation.isPending;
+
+  const handleAvatarFile = (file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Please choose an image file (PNG, JPG or WEBP)');
@@ -63,60 +80,29 @@ function ProfileCard() {
       toast.error('Photo must be 2 MB or smaller');
       return;
     }
-    setUploadingAvatar(true);
-    try {
-      const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-      // One object per user, overwritten on replace — same pattern as
-      // org-logos, so a changed photo never leaves an orphaned file behind.
-      const path = `${profile.id}/avatar.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('avatars')
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-
-      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-      const url = `${pub.publicUrl}?v=${Date.now()}`;
-
-      const { error: updErr } = await supabase
-        .from('profiles')
-        .update({ avatar_url: url })
-        .eq('id', profile.id);
-      if (updErr) throw updErr;
-
-      await refreshProfile();
-      toast.success('Photo updated');
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to upload photo'));
-    } finally {
-      setUploadingAvatar(false);
-    }
+    avatarMutation.mutate(file);
   };
 
-  const handleSave = async () => {
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      updateOwnProfile({ userId: profile.id, fullName, title, phone }),
+    onSuccess: async () => {
+      await refreshProfile();
+      setDirty(false);
+      toast.success('Profile updated');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update profile'));
+    },
+  });
+  const saving = saveMutation.isPending;
+
+  const handleSave = () => {
     if (!fullName.trim()) {
       toast.error('Full name is required');
       return;
     }
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName.trim(),
-          title: title.trim() || null,
-          phone: phone.trim() || null,
-        })
-        .eq('id', profile.id);
-      if (error) throw error;
-
-      await refreshProfile();
-      setDirty(false);
-      toast.success('Profile updated');
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update profile'));
-    } finally {
-      setSaving(false);
-    }
+    saveMutation.mutate();
   };
 
   return (
@@ -224,77 +210,62 @@ function ProfileCard() {
 
 function PlatformConfigurationCard() {
   const { profile } = useAuth();
-  const [settings, setSettings] = useState<PlatformSettings | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const queryClient = useQueryClient();
   const [trialDays, setTrialDays] = useState('30');
   const [defaultPlanId, setDefaultPlanId] = useState('');
   const [selfRegEnabled, setSelfRegEnabled] = useState(true);
   const [termsVersion, setTermsVersion] = useState('v1');
   const [privacyVersion, setPrivacyVersion] = useState('v1');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [{ data: s }, { data: p }] = await Promise.all([
-        supabase.from('platform_settings').select('*').eq('id', true).maybeSingle(),
-        supabase.from('plans').select('*').is('deleted_at', null).order('sort_order', { ascending: true }),
-      ]);
-      if (s) {
-        setSettings(s as PlatformSettings);
-        setTrialDays(String(s.trial_duration_days));
-        setDefaultPlanId(s.default_trial_plan_id ?? '');
-        setSelfRegEnabled(s.self_registration_enabled);
-        setTermsVersion(s.terms_version);
-        setPrivacyVersion(s.privacy_version);
-      }
-      setPlans((p ?? []) as Plan[]);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load platform configuration'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: settings, isLoading: settingsLoading } = useQuery({
+    queryKey: ['platform-settings'],
+    queryFn: fetchPlatformSettings,
+  });
+  const { data: plans = [], isLoading: plansLoading } = useQuery({
+    queryKey: ['platform-settings-plans'],
+    queryFn: fetchAllPlans,
+  });
+  const loading = settingsLoading || plansLoading;
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!settings) return;
+    setTrialDays(String(settings.trial_duration_days));
+    setDefaultPlanId(settings.default_trial_plan_id ?? '');
+    setSelfRegEnabled(settings.self_registration_enabled);
+    setTermsVersion(settings.terms_version);
+    setPrivacyVersion(settings.privacy_version);
+  }, [settings]);
 
-  const handleSave = async () => {
+  const saveMutation = useMutation({
+    mutationFn: (days: number) => {
+      if (!profile) throw new Error('Not ready');
+      return updatePlatformSettings({
+        trialDays: days,
+        defaultTrialPlanId: defaultPlanId || null,
+        selfRegistrationEnabled: selfRegEnabled,
+        termsVersion: termsVersion.trim() || 'v1',
+        privacyVersion: privacyVersion.trim() || 'v1',
+        updatedBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-settings'] });
+      toast.success('Platform configuration saved');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save platform configuration'));
+    },
+  });
+  const saving = saveMutation.isPending;
+
+  const handleSave = () => {
     if (!profile) return;
     const days = parseInt(trialDays, 10);
     if (!Number.isFinite(days) || days <= 0) {
       toast.error('Trial duration must be a positive number of days');
       return;
     }
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('platform_settings')
-        .update({
-          trial_duration_days: days,
-          default_trial_plan_id: defaultPlanId || null,
-          self_registration_enabled: selfRegEnabled,
-          terms_version: termsVersion.trim() || 'v1',
-          privacy_version: privacyVersion.trim() || 'v1',
-          updated_by: profile.id,
-        })
-        .eq('id', true);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        action: 'platform_settings.updated',
-        entity_type: 'platform_settings',
-        description: `Updated platform settings: trial=${days}d, self-registration=${selfRegEnabled ? 'on' : 'off'}`,
-      });
-
-      toast.success('Platform configuration saved');
-      load();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save platform configuration'));
-    } finally {
-      setSaving(false);
-    }
+    saveMutation.mutate(days);
   };
 
   if (loading) return <Skeleton className="h-64 w-full" />;

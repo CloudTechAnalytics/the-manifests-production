@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { updateShipmentParties } from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Button } from '@/shared/components/ui/button';
@@ -35,13 +36,13 @@ export function ShipmentPartiesDialog({
   onSaved,
 }: ShipmentPartiesDialogProps) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [shipperName, setShipperName] = useState('');
   const [shipperAddress, setShipperAddress] = useState('');
   const [consigneeName, setConsigneeName] = useState('');
   const [consigneeAddress, setConsigneeAddress] = useState('');
   const [notifyPartyName, setNotifyPartyName] = useState('');
   const [notifyPartyAddress, setNotifyPartyAddress] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -53,40 +54,38 @@ export function ShipmentPartiesDialog({
     setNotifyPartyAddress(shipment.notify_party_address ?? '');
   }, [open, shipment]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
-      const payload = {
-        shipper_name: shipperName.trim() || null,
-        shipper_address: shipperAddress.trim() || null,
-        consignee_name: consigneeName.trim() || null,
-        consignee_address: consigneeAddress.trim() || null,
-        notify_party_name: notifyPartyName.trim() || null,
-        notify_party_address: notifyPartyAddress.trim() || null,
-        updated_by: profile.id,
-      };
-
-      const { error } = await supabase.from('shipments').update(payload).eq('id', shipment.id);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: shipment.branch_id,
-        action: 'shipment.parties_updated',
-        entity_type: 'shipment',
-        entity_id: shipment.id,
-        description: `Updated cargo parties for shipment ${shipment.reference_number ?? ''}`,
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!profile) throw new Error('Not ready');
+      return updateShipmentParties({
+        shipmentId: shipment.id,
+        branchId: shipment.branch_id,
+        referenceNumber: shipment.reference_number,
+        payload: {
+          shipper_name: shipperName.trim() || null,
+          shipper_address: shipperAddress.trim() || null,
+          consignee_name: consigneeName.trim() || null,
+          consignee_address: consigneeAddress.trim() || null,
+          notify_party_name: notifyPartyName.trim() || null,
+          notify_party_address: notifyPartyAddress.trim() || null,
+        },
+        updatedBy: profile.id,
       });
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipment.id] });
       toast.success('Cargo parties updated');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save cargo parties'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+  const submitting = saveMutation.isPending;
+
+  const handleSubmit = () => {
+    saveMutation.mutate();
   };
 
   return (

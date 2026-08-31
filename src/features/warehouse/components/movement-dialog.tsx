@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
+import { recordStockMovement } from '@/features/warehouse/services/warehouse.service';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -66,7 +67,6 @@ export function MovementDialog({
   const [movementDate, setMovementDate] = useState(new Date().toISOString().split('T')[0]);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -99,49 +99,41 @@ export function MovementDialog({
     !exceedsStock &&
     (mode !== 'transfer' || (toWarehouseId && toWarehouseId !== warehouseId));
 
-  const handleSubmit = async () => {
-    if (!profile?.id || !canSubmit) return;
-    const item = items.find((i) => i.id === itemId);
-    const warehouse = warehouses.find((w) => w.id === warehouseId);
-    if (!item || !warehouse) return;
-
-    const movementType =
-      mode === 'inbound'
-        ? 'inbound'
-        : mode === 'outbound'
-          ? 'outbound'
-          : mode === 'transfer'
-            ? 'transfer'
-            : direction === 'increase'
-              ? 'adjustment_increase'
-              : 'adjustment_decrease';
-
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.from('stock_movements').insert({
-        item_id: itemId,
-        warehouse_id: warehouseId,
-        to_warehouse_id: mode === 'transfer' ? toWarehouseId : null,
-        branch_id: item.branch_id,
-        movement_type: movementType,
-        quantity: qtyNum,
-        movement_date: movementDate,
-        reference: reference || null,
-        notes: notes || null,
-        created_by: profile.id,
-      });
-      if (error) throw error;
-
+  const movementMutation = useMutation({
+    mutationFn: async () => {
+      const item = items.find((i) => i.id === itemId);
+      if (!item) throw new Error('Item not found');
+      await recordStockMovement(
+        {
+          mode,
+          itemId,
+          itemBranchId: item.branch_id,
+          warehouseId,
+          toWarehouseId,
+          direction,
+          quantity: qtyNum,
+          movementDate,
+          reference,
+          notes,
+        },
+        { id: profile!.id }
+      );
+    },
+    onSuccess: () => {
       toast.success(`${MODE_META[mode].title} recorded successfully`);
       onOpenChange(false);
       onSuccess();
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to record movement');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to record movement'));
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!profile?.id || !canSubmit) return;
+    movementMutation.mutate();
   };
+  const submitting = movementMutation.isPending;
 
   const meta = MODE_META[mode];
 

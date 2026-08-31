@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Plus, FileClock, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  createDeliveryOrder,
+  markDeliveryOrderExited,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -63,6 +67,7 @@ function hoursLeftLabel(order: DeliveryOrder): string {
 
 export function DeliveryOrdersPanel({ shipmentId, branchId, orders, onReload }: DeliveryOrdersPanelProps) {
   const { hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const canManage = hasRole('admin') || hasRole('branch_manager') || hasRole('operations') || hasRole('terminal');
   const [issueOpen, setIssueOpen] = useState(false);
   const [regenerateTarget, setRegenerateTarget] = useState<DeliveryOrder | null>(null);
@@ -71,21 +76,24 @@ export function DeliveryOrdersPanel({ shipmentId, branchId, orders, onReload }: 
   const sorted = [...orders].sort((a, b) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime());
   const activeOrder = orders.find((o) => !o.superseded_by && !o.exited_at);
 
-  const markExited = async (order: DeliveryOrder) => {
-    setExitingId(order.id);
-    try {
-      const { error } = await supabase
-        .from('delivery_orders')
-        .update({ exited_at: new Date().toISOString() })
-        .eq('id', order.id);
-      if (error) throw error;
+  const markExitedMutation = useMutation({
+    mutationFn: (orderId: string) => markDeliveryOrderExited(orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
       toast.success('Cargo exit recorded');
       onReload();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to record exit'));
-    } finally {
+    },
+    onSettled: () => {
       setExitingId(null);
-    }
+    },
+  });
+
+  const markExited = (order: DeliveryOrder) => {
+    setExitingId(order.id);
+    markExitedMutation.mutate(order.id);
   };
 
   return (
@@ -212,78 +220,42 @@ function DeliveryOrderFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [doNumber, setDoNumber] = useState('');
   const [validityHours, setValidityHours] = useState('24');
   const [regenerationFee, setRegenerationFee] = useState('');
   const [logAsExpense, setLogAsExpense] = useState(true);
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
-      const hours = Number(validityHours) || 24;
-      const issuedAt = new Date();
-      const expiresAt = new Date(issuedAt.getTime() + hours * 60 * 60 * 1000);
-      const fee = regenerationFee ? Number(regenerationFee) : null;
-
-      let expenseId: string | null = null;
-      // Only a regenerated DO (replacing an expired one) has a fee to log —
-      // the very first DO issued for a shipment never costs extra.
-      if (predecessor && fee && logAsExpense) {
-        const { data: expense, error: expenseError } = await supabase
-          .from('expenses')
-          .insert({
-            description: `Delivery order regeneration — ${doNumber || 'new DO'}`,
-            category: 'delivery_order_regeneration',
-            shipment_id: shipmentId,
-            branch_id: branchId,
-            amount: fee,
-            currency: 'NGN',
-            status: 'pending',
-            created_by: profile.id,
-          })
-          .select('id')
-          .single();
-        if (expenseError) throw expenseError;
-        expenseId = expense.id;
-      }
-
-      const { data: newOrder, error } = await supabase
-        .from('delivery_orders')
-        .insert({
-          shipment_id: shipmentId,
-          branch_id: branchId,
-          do_number: doNumber.trim() || null,
-          issued_at: issuedAt.toISOString(),
-          validity_hours: hours,
-          expires_at: expiresAt.toISOString(),
-          regeneration_fee: predecessor ? fee : null,
-          expense_id: expenseId,
-          notes: notes.trim() || null,
-          created_by: profile.id,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      if (predecessor) {
-        const { error: supersedeError } = await supabase
-          .from('delivery_orders')
-          .update({ superseded_by: newOrder.id })
-          .eq('id', predecessor.id);
-        if (supersedeError) throw supersedeError;
-      }
-
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!profile) throw new Error('Not ready');
+      return createDeliveryOrder({
+        shipmentId,
+        branchId,
+        doNumber,
+        validityHours,
+        regenerationFee,
+        logAsExpense,
+        notes,
+        predecessorId: predecessor?.id ?? null,
+        createdBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
       toast.success(predecessor ? 'New delivery order issued' : 'Delivery order issued');
       onOpenChange(false);
       onSaved();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to save delivery order'));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+  const submitting = saveMutation.isPending;
+
+  const handleSubmit = () => {
+    saveMutation.mutate();
   };
 
   return (

@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Boxes, Loader2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import {
@@ -30,7 +30,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/components/ui/breadcrumb';
-import type { StockItem } from '@/shared/types';
+import { fetchStockItemForEdit, updateStockItem } from '@/features/warehouse/services/warehouse.service';
 
 const itemSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
@@ -48,13 +48,8 @@ export default function EditStockItemPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const itemId = params.id!;
-
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [notFound, setNotFound] = useState(false);
-  const [itemName, setItemName] = useState<string | null>(null);
-  const [itemBranchId, setItemBranchId] = useState<string | null>(null);
 
   const {
     control,
@@ -74,82 +69,61 @@ export default function EditStockItemPage() {
     },
   });
 
-  const loadItem = useCallback(async () => {
-    if (!itemId) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('stock_items')
-        .select('*')
-        .eq('id', itemId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (error || !data) {
-        setNotFound(true);
-        return;
-      }
-
-      const item = data as StockItem;
-      setItemName(item.name);
-      setItemBranchId(item.branch_id);
-      reset({
-        sku: item.sku,
-        name: item.name,
-        category: item.category ?? '',
-        unit: item.unit,
-        unit_cost: Number(item.unit_cost),
-        reorder_point: Number(item.reorder_point),
-        notes: item.notes ?? '',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [itemId, reset]);
+  const { data: item, isLoading: loading, isFetched } = useQuery({
+    queryKey: ['stock-item-edit', itemId],
+    queryFn: () => fetchStockItemForEdit(itemId),
+    enabled: !!itemId,
+  });
+  const notFound = isFetched && !item;
 
   useEffect(() => {
-    loadItem();
-  }, [loadItem]);
+    if (!item) return;
+    reset({
+      sku: item.sku,
+      name: item.name,
+      category: item.category ?? '',
+      unit: item.unit,
+      unit_cost: Number(item.unit_cost),
+      reorder_point: Number(item.reorder_point),
+      notes: item.notes ?? '',
+    });
+  }, [item, reset]);
 
-  const onSubmit = async (values: ItemFormValues) => {
-    if (!profile?.id) return;
-    setSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('stock_items')
-        .update({
-          sku: values.sku.trim(),
-          name: values.name.trim(),
-          category: values.category?.trim() || null,
-          unit: values.unit.trim(),
+  const itemName = item?.name ?? null;
+
+  const updateMutation = useMutation({
+    mutationFn: (values: ItemFormValues) =>
+      updateStockItem(
+        itemId,
+        {
+          sku: values.sku,
+          name: values.name,
+          category: values.category,
+          unit: values.unit,
           unit_cost: values.unit_cost,
           reorder_point: values.reorder_point,
-          notes: values.notes || null,
-          updated_by: profile.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', itemId);
-
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: itemBranchId,
-        action: 'stock_item.updated',
-        entity_type: 'stock_item',
-        entity_id: itemId,
-        description: `Updated item "${values.name.trim()}"`,
-      });
-
+          notes: values.notes,
+        },
+        item?.branch_id ?? null,
+        { id: profile!.id }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stock-item-edit', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['stock-item-detail', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['stock-items'] });
       toast.success('Item updated successfully');
       navigate(`/warehouse/items/${itemId}`);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to update item');
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to update item'));
+    },
+  });
+
+  const onSubmit = (values: ItemFormValues) => {
+    if (!profile?.id) return;
+    updateMutation.mutate(values);
   };
+  const submitting = updateMutation.isPending;
 
   if (loading) {
     return (

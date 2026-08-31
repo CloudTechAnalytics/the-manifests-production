@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Radar,
   Search,
@@ -15,7 +16,6 @@ import {
   Check,
   ExternalLink,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
@@ -37,23 +37,12 @@ import {
   formatDate,
   formatDateTime,
 } from '@/shared/lib/utils/status';
-import type {
-  Shipment,
-  ShipmentStatus,
-  ShipmentTimelineEntry,
-  ShipmentType,
-  Branch,
-} from '@/shared/types';
-
-type ShipmentRow = Shipment & {
-  customer?: { id: string; company_name: string } | null;
-  assigned_user?: { id: string; full_name: string } | null;
-  branch?: { id: string; name: string } | null;
-};
-
-type TimelineEntry = ShipmentTimelineEntry & {
-  user: { id: string; full_name: string } | null;
-};
+import {
+  fetchBranchesForTracking,
+  fetchShipmentTimeline,
+  fetchTrackingShipments,
+} from '@/features/tracking/services/tracking.service';
+import type { ShipmentStatus, ShipmentType } from '@/shared/types';
 
 type StatusTab = 'all' | 'at_origin' | 'in_transit' | 'at_destination' | 'delivered';
 
@@ -92,17 +81,11 @@ export default function TrackingPage() {
   const isAdmin = profile?.role === 'admin';
   const userBranchId = profile?.branch_id ?? null;
 
-  const [shipments, setShipments] = useState<ShipmentRow[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | ShipmentType>('all');
   const [branchIdFilter, setBranchIdFilter] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(false);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -111,64 +94,31 @@ export default function TrackingPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    supabase
-      .from('branches')
-      .select('*')
-      .is('deleted_at', null)
-      .order('name', { ascending: true })
-      .then(({ data }) => setBranches((data as Branch[]) ?? []));
-  }, [isAdmin]);
+  const { data: branches = [] } = useQuery({
+    queryKey: ['tracking-branches'],
+    queryFn: fetchBranchesForTracking,
+    enabled: isAdmin,
+  });
 
-  const loadShipments = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('shipments')
-        .select(
-          '*, customer:customers(id, company_name), assigned_user:profiles!shipments_assigned_to_fkey(id, full_name), branch:branches(id, name)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!isAdmin && userBranchId) {
-        query = query.eq('branch_id', userBranchId);
-      }
-      if (isAdmin && branchIdFilter !== 'all') {
-        query = query.eq('branch_id', branchIdFilter);
-      }
-      if (typeFilter !== 'all') {
-        query = query.eq('shipment_type', typeFilter);
-      }
-      if (debouncedSearch) {
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        query = query.or(
-          `reference_number.ilike.%${sanitized}%,tracking_number.ilike.%${sanitized}%,container_number.ilike.%${sanitized}%`
-        );
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.error('Error loading shipments:', error);
-        setShipments([]);
-        return;
-      }
-      const rows = (data as ShipmentRow[]) ?? [];
-      setShipments(rows);
-      setSelectedId((current) => {
-        if (current && rows.some((r) => r.id === current)) return current;
-        return rows[0]?.id ?? null;
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, branchIdFilter, typeFilter, debouncedSearch]);
+  const { data: shipments = [], isLoading: loading } = useQuery({
+    queryKey: ['tracking-shipments', isAdmin, userBranchId, branchIdFilter, typeFilter, debouncedSearch],
+    queryFn: () =>
+      fetchTrackingShipments({
+        isAdmin,
+        userBranchId,
+        branchIdFilter,
+        typeFilter,
+        search: debouncedSearch,
+      }),
+    enabled: !!profile,
+  });
 
   useEffect(() => {
-    loadShipments();
-  }, [loadShipments]);
+    setSelectedId((current) => {
+      if (current && shipments.some((r) => r.id === current)) return current;
+      return shipments[0]?.id ?? null;
+    });
+  }, [shipments]);
 
   const visibleShipments = useMemo(() => {
     if (statusTab === 'all') return shipments;
@@ -201,32 +151,11 @@ export default function TrackingPage() {
     : null;
 
   // Load timeline for the selected shipment
-  useEffect(() => {
-    if (!selectedId) {
-      setTimeline([]);
-      return;
-    }
-    let cancelled = false;
-    setTimelineLoading(true);
-    supabase
-      .from('shipment_timeline')
-      .select('*, user:profiles!shipment_timeline_created_by_fkey(id, full_name)')
-      .eq('shipment_id', selectedId)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error('Error loading timeline:', error);
-          setTimeline([]);
-        } else {
-          setTimeline((data as TimelineEntry[]) ?? []);
-        }
-        setTimelineLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
+  const { data: timeline = [], isLoading: timelineLoading } = useQuery({
+    queryKey: ['shipment-timeline', selectedId],
+    queryFn: () => fetchShipmentTimeline(selectedId!),
+    enabled: !!selectedId,
+  });
 
   const isCancelled = selected?.status === 'cancelled';
   const currentStep = selected ? (isCancelled ? -1 : selectedStatusMeta!.step) : -1;

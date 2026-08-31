@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import {
+  deleteShipmentContainer,
+  saveShipmentContainer,
+} from '@/features/shipments/services/shipments.service';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -47,26 +51,32 @@ export function ShipmentContainersPanel({
   onReload,
 }: ShipmentContainersPanelProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const canManage = hasRole('admin') || hasRole('branch_manager') || hasRole('operations');
   const [dialog, setDialog] = useState<{ existing: ShipmentContainer | null } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = async (id: string) => {
-    if (!profile) return;
-    setDeletingId(id);
-    try {
-      const { error } = await supabase
-        .from('shipment_containers')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', id);
-      if (error) throw error;
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => {
+      if (!profile) throw new Error('Not ready');
+      return deleteShipmentContainer({ containerId: id, updatedBy: profile.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
       toast.success('Container removed');
       onReload();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to remove container'));
-    } finally {
+    },
+    onSettled: () => {
       setDeletingId(null);
-    }
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    setDeletingId(id);
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -184,6 +194,7 @@ function ContainerFormDialog({
   onSaved: () => void;
 }) {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [blNumber, setBlNumber] = useState('');
   const [containerNumber, setContainerNumber] = useState('');
   const [sealNumber, setSealNumber] = useState('');
@@ -199,7 +210,29 @@ function ContainerFormDialog({
   const [expectedStuffingDate, setExpectedStuffingDate] = useState('');
   const [expectedGateInDate, setExpectedGateInDate] = useState('');
   const [expectedLoadingDate, setExpectedLoadingDate] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof saveShipmentContainer>[0]['payload']) => {
+      if (!profile) throw new Error('Not ready');
+      return saveShipmentContainer({
+        shipmentId,
+        branchId,
+        existingId: existing?.id ?? null,
+        payload,
+        updatedBy: profile.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(existing ? 'Container updated' : 'Container added');
+      onOpenChange(false);
+      onSaved();
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to save container'));
+    },
+  });
+  const submitting = saveMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -220,51 +253,24 @@ function ContainerFormDialog({
     setExpectedLoadingDate(existing?.expected_loading_date ?? '');
   }, [open, existing]);
 
-  const handleSubmit = async () => {
-    if (!profile) return;
-    setSubmitting(true);
-    try {
-      const payload = {
-        bl_number: blNumber.trim() || null,
-        container_number: containerNumber.trim() || null,
-        seal_number: sealNumber.trim() || null,
-        container_type: containerType.trim() || null,
-        tare_weight: tareWeight ? Number(tareWeight) : null,
-        gross_weight: grossWeight ? Number(grossWeight) : null,
-        status: status.trim() || null,
-        is_dangerous_goods: isDangerousGoods,
-        un_number: isDangerousGoods ? unNumber.trim() || null : null,
-        imdg_class: isDangerousGoods ? imdgClass.trim() || null : null,
-        packing_group: isDangerousGoods ? packingGroup || null : null,
-        expected_empty_pickup_date: expectedEmptyPickupDate || null,
-        expected_stuffing_date: expectedStuffingDate || null,
-        expected_gate_in_date: expectedGateInDate || null,
-        expected_loading_date: expectedLoadingDate || null,
-        updated_by: profile.id,
-      };
-
-      if (existing) {
-        const { error } = await supabase
-          .from('shipment_containers')
-          .update(payload)
-          .eq('id', existing.id);
-        if (error) throw error;
-        toast.success('Container updated');
-      } else {
-        const { error } = await supabase
-          .from('shipment_containers')
-          .insert({ ...payload, shipment_id: shipmentId, branch_id: branchId, created_by: profile.id });
-        if (error) throw error;
-        toast.success('Container added');
-      }
-
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save container'));
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSubmit = () => {
+    saveMutation.mutate({
+      bl_number: blNumber.trim() || null,
+      container_number: containerNumber.trim() || null,
+      seal_number: sealNumber.trim() || null,
+      container_type: containerType.trim() || null,
+      tare_weight: tareWeight ? Number(tareWeight) : null,
+      gross_weight: grossWeight ? Number(grossWeight) : null,
+      status: status.trim() || null,
+      is_dangerous_goods: isDangerousGoods,
+      un_number: isDangerousGoods ? unNumber.trim() || null : null,
+      imdg_class: isDangerousGoods ? imdgClass.trim() || null : null,
+      packing_group: isDangerousGoods ? (packingGroup || null) : null,
+      expected_empty_pickup_date: expectedEmptyPickupDate || null,
+      expected_stuffing_date: expectedStuffingDate || null,
+      expected_gate_in_date: expectedGateInDate || null,
+      expected_loading_date: expectedLoadingDate || null,
+    });
   };
 
   return (

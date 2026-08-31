@@ -1,16 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, DollarSign, CreditCard, Users, AlertTriangle, LineChart } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/shared/lib/supabase/client';
-import { getErrorMessage } from '@/shared/lib/utils';
 import { formatCurrency, isTrialExpired } from '@/shared/lib/utils/status';
 import { KpiCard } from '@/shared/components/dashboard/kpi-card';
 import { MrrTrendChart, type MrrTrendPoint } from '@/features/platform/components/mrr-trend-chart';
+import {
+  fetchRevenueSubscriptions,
+  type RevenueSubRow as SubRow,
+} from '@/features/platform/services/subscriptions.service';
 import type { Plan, OrgSubscription } from '@/shared/types';
-
-type SubRow = OrgSubscription & { plan: Plan };
 
 function monthlyEquivalent(sub: OrgSubscription & { plan: Plan }): number {
   return sub.billing_cycle === 'annual'
@@ -31,25 +30,10 @@ function lastSixMonthEnds(): { label: string; end: Date }[] {
 }
 
 export default function RevenueAnalyticsPage() {
-  const [subs, setSubs] = useState<SubRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.from('org_subscriptions').select('*, plan:plans(*)');
-      if (error) throw error;
-      setSubs((data as unknown as SubRow[]) ?? []);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load revenue data'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: subs = [], isLoading: loading } = useQuery({
+    queryKey: ['revenue-subscriptions'],
+    queryFn: fetchRevenueSubscriptions,
+  });
 
   const active = subs.filter((s) => s.status === 'active');
   const trials = subs.filter((s) => s.status === 'trial');

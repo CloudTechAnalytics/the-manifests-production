@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Boxes,
   DollarSign,
@@ -13,7 +14,6 @@ import {
   Plus,
   Settings2,
 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { useWarehouseData } from '@/shared/hooks/use-warehouse-data';
 import { Button } from '@/shared/components/ui/button';
@@ -26,6 +26,7 @@ import { WarehouseInventoryTabs } from '@/features/warehouse/components/warehous
 import { MovementDialog, type MovementMode } from '@/features/warehouse/components/movement-dialog';
 import { formatCurrency } from '@/shared/lib/utils/status';
 import { ExportButton } from '@/shared/components/ui/export-button';
+import { fetchStockItems } from '@/features/warehouse/services/warehouse.service';
 import type { ExportColumn } from '@/shared/lib/export';
 import type { StockItem } from '@/shared/types';
 
@@ -42,9 +43,9 @@ const STOCK_EXPORT_COLUMNS: ExportColumn<StockItem>[] = [
 
 export default function WarehousePage() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const data = useWarehouseData();
 
-  const [items, setItems] = useState<StockItem[]>([]);
   const [movementOpen, setMovementOpen] = useState(false);
   const [movementMode, setMovementMode] = useState<MovementMode>('inbound');
   const [presetItemId, setPresetItemId] = useState<string | undefined>(undefined);
@@ -52,19 +53,16 @@ export default function WarehousePage() {
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('stock_items')
-      .select('*, branch:branches(name)')
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-    query.then(({ data: rows, error }) => {
-      if (error) return console.error('Error loading stock items:', error);
-      setItems((rows as StockItem[]) ?? []);
-    });
-  }, [profile, isAdmin, branchId, data.stockRows.length]);
+  const { data: items = [] } = useQuery({
+    queryKey: ['stock-items', isAdmin, branchId],
+    queryFn: () => fetchStockItems({ isAdmin, branchId }),
+    enabled: !!profile,
+  });
+
+  const handleMovementSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['stock-items'] });
+    data.refetch();
+  };
 
   const openMovement = (mode: MovementMode, itemId?: string) => {
     setMovementMode(mode);
@@ -205,7 +203,7 @@ export default function WarehousePage() {
         warehouses={data.warehouses}
         stockRows={data.stockRows}
         presetItemId={presetItemId}
-        onSuccess={data.refetch}
+        onSuccess={handleMovementSuccess}
       />
     </div>
   );

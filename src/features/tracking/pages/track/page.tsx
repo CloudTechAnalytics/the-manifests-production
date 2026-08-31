@@ -2,42 +2,37 @@
 
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 import { Ship, Search, Loader2, Package, CheckCircle2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { SHIPMENT_STATUS_META, SHIPMENT_STATUS_FLOW, formatDate } from '@/shared/lib/utils/status';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
-import type { PublicTrackedShipment } from '@/shared/types';
+import { publicTrackShipment } from '@/features/tracking/services/tracking.service';
 
 function TrackShipmentForm() {
   const [searchParams] = useSearchParams();
   const [reference, setReference] = useState(searchParams.get('ref') ?? '');
-  const [result, setResult] = useState<PublicTrackedShipment | null>(null);
   const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const trackMutation = useMutation({
+    mutationFn: (ref: string) => publicTrackShipment(ref),
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reference.trim()) return;
-    setLoading(true);
-    setError('');
     setSearched(true);
-    try {
-      const { data, error: rpcError } = await supabase.rpc('public_track_shipment', {
-        p_reference: reference.trim(),
-      });
-      if (rpcError) throw rpcError;
-      const row = Array.isArray(data) ? data[0] : data;
-      setResult(row ?? null);
-      if (!row) setError('No shipment found for that reference number.');
-    } catch {
-      setResult(null);
-      setError('Something went wrong looking up that shipment. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    trackMutation.mutate(reference.trim());
   };
+
+  const result = trackMutation.data ?? null;
+  const loading = trackMutation.isPending;
+  const error =
+    trackMutation.isError
+      ? 'Something went wrong looking up that shipment. Please try again.'
+      : trackMutation.isSuccess && !result
+        ? 'No shipment found for that reference number.'
+        : '';
 
   const meta = result
     ? SHIPMENT_STATUS_META[result.status] ?? {

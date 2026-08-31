@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ClipboardList, Search, Loader2, ArrowRight } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -23,15 +23,8 @@ import {
 } from '@/shared/components/ui/table';
 import { PRIORITY_META } from '@/shared/lib/utils/status';
 import { ExportButton } from '@/shared/components/ui/export-button';
+import { fetchPlanningRows, startPlanning, type PlanningRow } from '@/features/planning/services/planning.service';
 import type { ExportColumn } from '@/shared/lib/export';
-import type { Shipment, ShipmentPlan } from '@/shared/types';
-
-type PlanningRow = {
-  shipment: Pick<Shipment, 'id' | 'reference_number' | 'origin' | 'destination' | 'branch_id'> & {
-    customer: { company_name: string } | null;
-  };
-  plan: Pick<ShipmentPlan, 'id' | 'priority'> | null;
-};
 
 const EXPORT_COLUMNS: ExportColumn<PlanningRow>[] = [
   { header: 'Shipment', value: (r) => r.shipment.reference_number ?? '' },
@@ -45,9 +38,8 @@ const EXPORT_COLUMNS: ExportColumn<PlanningRow>[] = [
 export default function PlanningPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [rows, setRows] = useState<PlanningRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [startingShipmentId, setStartingShipmentId] = useState<string | null>(null);
 
@@ -60,107 +52,28 @@ export default function PlanningPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const loadRows = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      // Work-queue pattern, same as Customs/Terminal/Transportation: the
-      // shipment's own status is the source of truth for "is this in
-      // Planning", not whether a shipment_plans row happens to exist yet
-      // — every shipment currently in the planning stage shows up here,
-      // even one from before shipment_plans auto-creation existed.
-      let shipQuery = supabase
-        .from('shipments')
-        .select('id, reference_number, origin, destination, branch_id, customer:customers(company_name)')
-        .eq('status', 'planning')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      if (!isAdmin && userBranchId) shipQuery = shipQuery.eq('branch_id', userBranchId);
-      if (debouncedSearch) {
-        const sanitized = debouncedSearch.replace(/[%_(),.\\]/g, ' ');
-        shipQuery = shipQuery.or(
-          `reference_number.ilike.%${sanitized}%,customer.company_name.ilike.%${sanitized}%`
-        );
-      }
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ['planning-rows', isAdmin, userBranchId, debouncedSearch],
+    queryFn: () => fetchPlanningRows({ isAdmin, branchId: userBranchId, search: debouncedSearch }),
+    enabled: !!profile,
+  });
 
-      const { data: shipmentRows, error: shipError } = await shipQuery;
-      if (shipError) {
-        console.error('Error loading shipments in planning:', shipError);
-        setRows([]);
-        return;
-      }
-      const shipments = (shipmentRows as unknown as PlanningRow['shipment'][]) ?? [];
-      if (shipments.length === 0) {
-        setRows([]);
-        return;
-      }
+  const startPlanningMutation = useMutation({
+    mutationFn: (row: PlanningRow) => startPlanning(row, { id: profile!.id }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['planning-rows'] });
+      navigate(`/planning/${created.id}`);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to start planning'));
+    },
+    onSettled: () => setStartingShipmentId(null),
+  });
 
-      const { data: planRows } = await supabase
-        .from('shipment_plans')
-        .select('id, shipment_id, priority')
-        .in(
-          'shipment_id',
-          shipments.map((s) => s.id)
-        )
-        .is('deleted_at', null);
-      const planByShipmentId = new Map((planRows ?? []).map((p) => [p.shipment_id, p]));
-
-      setRows(
-        shipments.map((s) => ({
-          shipment: s,
-          plan: (planByShipmentId.get(s.id) as PlanningRow['plan']) ?? null,
-        }))
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, isAdmin, userBranchId, debouncedSearch]);
-
-  useEffect(() => {
-    loadRows();
-  }, [loadRows]);
-
-  const handleStartPlanning = async (row: PlanningRow) => {
+  const handleStartPlanning = (row: PlanningRow) => {
     if (!profile) return;
     setStartingShipmentId(row.shipment.id);
-    try {
-      // Customer is required on shipment_plans — look it up from the
-      // shipment rather than asking the user to pick it again.
-      const { data: fullShipment, error: shipmentError } = await supabase
-        .from('shipments')
-        .select('customer_id')
-        .eq('id', row.shipment.id)
-        .single();
-      if (shipmentError || !fullShipment) throw new Error('Could not load shipment details');
-
-      const { data: created, error } = await supabase
-        .from('shipment_plans')
-        .insert({
-          shipment_id: row.shipment.id,
-          customer_id: fullShipment.customer_id,
-          branch_id: row.shipment.branch_id,
-          created_by: profile.id,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: row.shipment.branch_id,
-        action: 'plan.created',
-        entity_type: 'shipment_plan',
-        entity_id: created.id,
-        description: `Started planning for shipment ${row.shipment.reference_number ?? ''}`,
-        metadata: { shipment_id: row.shipment.id },
-      });
-
-      navigate(`/planning/${created.id}`);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to start planning'));
-    } finally {
-      setStartingShipmentId(null);
-    }
+    startPlanningMutation.mutate(row);
   };
 
   return (

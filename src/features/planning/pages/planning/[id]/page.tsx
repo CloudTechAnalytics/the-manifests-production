@@ -1,15 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, ClipboardList, Loader2, Trash2 } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { canDeleteOwnRecord } from '@/shared/lib/utils/ownership';
 import { checkStageReadiness } from '@/shared/lib/utils/workflow-rules';
-import { getDocumentChecklist } from '@/shared/lib/utils/document-templates';
-import { checkPlanningReadiness, computePlanningMilestones, computePlanningRisks } from '@/shared/lib/utils/planning';
+import { computePlanningMilestones, computePlanningRisks } from '@/shared/lib/utils/planning';
 import { getPlanningSuggestions } from '@/shared/lib/utils/planning-suggestions';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -54,17 +53,13 @@ import { PlanningTimelineTab } from '@/features/planning/components/planning-tim
 import { FinancialPlanningTab } from '@/features/planning/components/financial-planning-tab';
 import { ShipmentContainersPanel } from '@/features/shipments/components/shipment-containers-panel';
 import { formatDate } from '@/shared/lib/utils/status';
-import type {
-  ShipmentPlan,
-  Shipment,
-  ShipmentContainer,
-  ShipmentCustoms,
-  TerminalOperation,
-  ShipmentTransportation,
-  ShipmentWarehouseRecord,
-  ShipmentStage,
-  Profile,
-} from '@/shared/types';
+import {
+  completePlanning,
+  deletePlan,
+  fetchPlanDetail,
+  fetchPlanningStaff,
+  savePlanNotes,
+} from '@/features/planning/services/planning.service';
 
 type TabKey =
   | 'execution'
@@ -91,182 +86,99 @@ export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const planId = params.id!;
   const isAdmin = profile?.role === 'admin';
   const branchId = profile?.branch_id ?? null;
 
-  const [plan, setPlan] = useState<ShipmentPlan | null>(null);
-  const [shipment, setShipment] = useState<Shipment | null>(null);
-  const [containers, setContainers] = useState<ShipmentContainer[]>([]);
-  const [customs, setCustoms] = useState<ShipmentCustoms | null>(null);
-  const [terminal, setTerminal] = useState<TerminalOperation | null>(null);
-  const [transportation, setTransportation] = useState<ShipmentTransportation[]>([]);
-  const [warehouseRecord, setWarehouseRecord] = useState<ShipmentWarehouseRecord | null>(null);
-  const [stages, setStages] = useState<ShipmentStage[]>([]);
-  const [documentsAllSatisfied, setDocumentsAllSatisfied] = useState(false);
-  const [staff, setStaff] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('execution');
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const canDelete = !!plan && canDeleteOwnRecord({ hasRole });
 
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
 
   const [completeBlockers, setCompleteBlockers] = useState<string[]>([]);
   const [checkingComplete, setCheckingComplete] = useState(false);
-  const [completing, setCompleting] = useState(false);
-  const [completionPercent, setCompletionPercent] = useState<number | null>(null);
 
-  const loadPlan = useCallback(async () => {
-    if (!planId) return;
-    setLoading(true);
-    try {
-      const { data: planRow, error: planError } = await supabase
-        .from('shipment_plans')
-        .select(
-          '*, quotation:quotations(*), planned_by_user:profiles!shipment_plans_planned_by_fkey(id, full_name), finance_officer_user:profiles!shipment_plans_finance_officer_id_fkey(id, full_name), supervisor_user:profiles!shipment_plans_supervisor_id_fkey(id, full_name)'
-        )
-        .eq('id', planId)
-        .is('deleted_at', null)
-        .maybeSingle();
+  const { data: detail, isLoading: loading } = useQuery({
+    queryKey: ['plan-detail', planId],
+    queryFn: () => fetchPlanDetail(planId),
+    enabled: !!planId,
+  });
+  const plan = detail?.plan ?? null;
+  const shipment = detail?.shipment ?? null;
+  const containers = detail?.containers ?? [];
+  const customs = detail?.customs ?? null;
+  const terminal = detail?.terminal ?? null;
+  const transportation = detail?.transportation ?? [];
+  const warehouseRecord = detail?.warehouseRecord ?? null;
+  const stages = detail?.stages ?? [];
+  const documentsAllSatisfied = detail?.documentsAllSatisfied ?? false;
+  const completionPercent = detail?.completionPercent ?? null;
 
-      if (planError || !planRow) {
-        setPlan(null);
-        return;
-      }
-      const p = planRow as unknown as ShipmentPlan;
-      setPlan(p);
+  const canDelete = !!plan && canDeleteOwnRecord({ hasRole });
 
-      if (!p.shipment_id) {
-        // Legacy plan predating the Planning Centre redesign — no linked
-        // shipment to load operational data from.
-        return;
-      }
+  const loadPlan = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+  }, [queryClient, planId]);
 
-      const [
-        { data: shipRow },
-        { data: containerRows },
-        { data: customsRow },
-        { data: terminalRow },
-        { data: transportRows },
-        { data: warehouseRow },
-        { data: stageRows },
-      ] = await Promise.all([
-        supabase
-          .from('shipments')
-          .select('*, customer:customers(*), branch:branches(*)')
-          .eq('id', p.shipment_id)
-          .maybeSingle(),
-        supabase
-          .from('shipment_containers')
-          .select('*')
-          .eq('shipment_id', p.shipment_id)
-          .is('deleted_at', null),
-        supabase.from('shipment_customs').select('*').eq('shipment_id', p.shipment_id).maybeSingle(),
-        supabase.from('terminal_operations').select('*').eq('shipment_id', p.shipment_id).maybeSingle(),
-        supabase
-          .from('shipment_transportation')
-          .select('*')
-          .eq('shipment_id', p.shipment_id)
-          .is('deleted_at', null),
-        supabase
-          .from('shipment_warehouse_records')
-          .select('*, warehouse:warehouses(id, name)')
-          .eq('shipment_id', p.shipment_id)
-          .maybeSingle(),
-        supabase.from('shipment_stages').select('*, assigned_user:profiles!shipment_stages_assigned_to_fkey(id, full_name)').eq('shipment_id', p.shipment_id),
-      ]);
+  const { data: staff = [] } = useQuery({
+    queryKey: ['planning-staff', isAdmin, branchId],
+    queryFn: () => fetchPlanningStaff({ isAdmin, branchId }),
+    enabled: !!profile,
+  });
 
-      setShipment((shipRow as Shipment) ?? null);
-      setContainers((containerRows as ShipmentContainer[]) ?? []);
-      setCustoms((customsRow as ShipmentCustoms) ?? null);
-      setTerminal((terminalRow as TerminalOperation) ?? null);
-      setTransportation((transportRows as ShipmentTransportation[]) ?? []);
-      setWarehouseRecord((warehouseRow as ShipmentWarehouseRecord) ?? null);
-      setStages((stageRows as ShipmentStage[]) ?? []);
-
-      const checklist = await getDocumentChecklist(p.shipment_id, 'documentation');
-      setDocumentsAllSatisfied(checklist.every((item) => item.satisfied));
-
-      const readiness = await checkPlanningReadiness(p.shipment_id);
-      setCompletionPercent(readiness.completionPercent);
-    } finally {
-      setLoading(false);
-    }
-  }, [planId]);
-
-  useEffect(() => {
-    loadPlan();
-  }, [loadPlan]);
-
-  useEffect(() => {
-    if (!profile) return;
-    let query = supabase
-      .from('profiles')
-      .select('*')
-      .is('deleted_at', null)
-      .eq('is_active', true)
-      .order('full_name', { ascending: true });
-    if (!isAdmin && branchId) query = query.eq('branch_id', branchId);
-    query.then(({ data, error }) => {
-      if (error) return console.error('Error loading staff:', error);
-      setStaff((data as Profile[]) ?? []);
-    });
-  }, [profile, isAdmin, branchId]);
-
-  const handleSaveNotes = async () => {
-    if (!plan || !profile?.id) return;
-    setSavingNotes(true);
-    try {
-      const { error } = await supabase
-        .from('shipment_plans')
-        .update({ notes: notesDraft || null, updated_by: profile.id, updated_at: new Date().toISOString() })
-        .eq('id', planId);
-      if (error) throw error;
+  const saveNotesMutation = useMutation({
+    mutationFn: () => savePlanNotes(planId, notesDraft, { id: profile!.id }),
+    onSuccess: () => {
       toast.success('Notes updated');
       setEditingNotes(false);
       loadPlan();
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update notes'));
-    } finally {
-      setSavingNotes(false);
-    }
+    },
+  });
+
+  const handleSaveNotes = () => {
+    if (!plan || !profile?.id) return;
+    saveNotesMutation.mutate();
   };
+  const savingNotes = saveNotesMutation.isPending;
 
-  const handleDelete = async () => {
-    if (!plan || !profile) return;
-    setDeleting(true);
-    try {
-      const { error } = await supabase
-        .from('shipment_plans')
-        .update({ deleted_at: new Date().toISOString(), updated_by: profile.id })
-        .eq('id', planId);
-      if (error) throw error;
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: plan.branch_id,
-        action: 'plan.deleted',
-        entity_type: 'shipment_plan',
-        entity_id: planId,
-        description: `Deleted plan ${plan.plan_number ?? ''}`,
-        metadata: { shipment_id: plan.shipment_id },
-      });
-
+  const deleteMutation = useMutation({
+    mutationFn: () => deletePlan(plan!, planId, { id: profile!.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['planning-rows'] });
       toast.success('Plan deleted');
       navigate('/planning');
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to delete plan'));
-    } finally {
-      setDeleting(false);
-      setDeleteOpen(false);
-    }
+    },
+    onSettled: () => setDeleteOpen(false),
+  });
+
+  const handleDelete = () => {
+    if (!plan || !profile) return;
+    deleteMutation.mutate();
   };
+  const deleting = deleteMutation.isPending;
 
   const planningStage = stages.find((s) => s.stage_key === 'planning');
+
+  const completeMutation = useMutation({
+    mutationFn: () => completePlanning(shipment!, plan!, planningStage!, { id: profile!.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      queryClient.invalidateQueries({ queryKey: ['planning-rows'] });
+      toast.success('Planning complete — shipment moved to Documentation');
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to complete planning'));
+    },
+  });
+  const completing = completeMutation.isPending;
 
   const handleCompletePlanning = async () => {
     if (!shipment || !plan || !profile || !planningStage) return;
@@ -278,78 +190,11 @@ export default function PlanDetailPage() {
         setCompleteBlockers(readiness.blockers);
         return;
       }
-
-      setCompleting(true);
-      const { error } = await supabase.rpc('complete_shipment_stage', {
-        p_stage_id: planningStage.id,
-        p_action: 'complete',
-      });
-      if (error) throw error;
-
-      await supabase
-        .from('shipment_plans')
-        .update({ status: 'completed', updated_by: profile.id })
-        .eq('id', plan.id);
-
-      await supabase.from('activities').insert({
-        user_id: profile.id,
-        branch_id: plan.branch_id,
-        action: 'plan.completed',
-        entity_type: 'shipment_plan',
-        entity_id: plan.id,
-        description: 'Planning completed — status changed to Documentation',
-        metadata: { shipment_id: shipment.id },
-      });
-
-      // Workflow Automation (§14) — complete_shipment_stage() only flips
-      // the next stage to in_progress server-side, it doesn't seed tasks.
-      // Mirror shipment-workflow-panel.tsx's handleStart() seeding here so
-      // Documentation isn't waiting on someone to open the Workflow tab.
-      const { data: docStage } = await supabase
-        .from('shipment_stages')
-        .select('id, stage_key, assigned_department')
-        .eq('shipment_id', shipment.id)
-        .eq('stage_key', 'documentation')
-        .maybeSingle();
-
-      if (docStage) {
-        const { count } = await supabase
-          .from('shipment_tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('stage_id', docStage.id);
-
-        if (!count) {
-          const { data: templates } = await supabase
-            .from('stage_task_templates')
-            .select('*')
-            .eq('stage_key', 'documentation')
-            .eq('is_active', true)
-            .order('sort_order', { ascending: true });
-
-          if (templates && templates.length > 0) {
-            await supabase.from('shipment_tasks').insert(
-              templates.map((t) => ({
-                shipment_id: shipment.id,
-                stage_id: docStage.id,
-                template_id: t.id,
-                branch_id: shipment.branch_id,
-                title: t.title,
-                assigned_department: t.default_department ?? docStage.assigned_department,
-                priority: t.default_priority,
-                created_by: profile.id,
-              }))
-            );
-          }
-        }
-      }
-
-      toast.success('Planning complete — shipment moved to Documentation');
-      loadPlan();
+      completeMutation.mutate();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to complete planning'));
     } finally {
       setCheckingComplete(false);
-      setCompleting(false);
     }
   };
 

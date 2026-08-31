@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, FileText, History, Loader2, Plus, XCircle } from 'lucide-react';
-import { supabase } from '@/shared/lib/supabase/client';
+import { verifyShipmentDocument } from '@/features/shipments/services/shipments.service';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { getDocumentChecklist, resolveRequiredTemplates, type DocumentChecklistItem } from '@/shared/lib/utils/document-templates';
 import { DOCUMENT_STATUS_META, isDocumentExpired, formatDate } from '@/shared/lib/utils/status';
@@ -32,6 +33,7 @@ interface ShipmentDocumentsPanelProps {
 
 export function ShipmentDocumentsPanel({ shipmentId, branchId, documents, onReload }: ShipmentDocumentsPanelProps) {
   const { profile, hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const canVerify = hasRole('admin') || hasRole('branch_manager') || hasRole('documentation');
 
   const [checklist, setChecklist] = useState<DocumentChecklistItem[]>([]);
@@ -67,27 +69,31 @@ export function ShipmentDocumentsPanel({ shipmentId, branchId, documents, onRelo
     setUploadOpen(true);
   };
 
-  const handleVerify = async (doc: DocumentRecord, status: 'verified' | 'rejected') => {
-    if (!profile) return;
-    setBusyDocId(doc.id);
-    try {
-      const { error } = await supabase
-        .from('documents')
-        .update({
-          status,
-          verified_by: profile.id,
-          verified_at: new Date().toISOString(),
-          updated_by: profile.id,
-        })
-        .eq('id', doc.id);
-      if (error) throw error;
-      toast.success(status === 'verified' ? 'Document verified' : 'Document rejected');
+  const verifyMutation = useMutation({
+    mutationFn: (params: { documentId: string; status: 'verified' | 'rejected' }) => {
+      if (!profile) throw new Error('Not ready');
+      return verifyShipmentDocument({
+        documentId: params.documentId,
+        status: params.status,
+        verifiedBy: profile.id,
+      });
+    },
+    onSuccess: (_data, params) => {
+      queryClient.invalidateQueries({ queryKey: ['shipment', shipmentId] });
+      toast.success(params.status === 'verified' ? 'Document verified' : 'Document rejected');
       onReload();
-    } catch {
+    },
+    onError: () => {
       toast.error('Failed to update document');
-    } finally {
+    },
+    onSettled: () => {
       setBusyDocId(null);
-    }
+    },
+  });
+
+  const handleVerify = (doc: DocumentRecord, status: 'verified' | 'rejected') => {
+    setBusyDocId(doc.id);
+    verifyMutation.mutate({ documentId: doc.id, status });
   };
 
   return (
