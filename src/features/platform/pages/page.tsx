@@ -25,7 +25,7 @@ import { KpiCard } from '@/shared/components/dashboard/kpi-card';
 import { RecentActivity } from '@/shared/components/dashboard/recent-activity';
 import { SystemHealthCard } from '@/features/platform/components/system-health-card';
 import { cn } from '@/shared/lib/utils';
-import { formatCompactCurrency } from '@/shared/lib/utils/status';
+import { formatCurrency } from '@/shared/lib/utils/status';
 
 // recharts is a large dependency — code-split so it only loads for
 // visitors who actually reach this page, not bundled into every route
@@ -70,23 +70,23 @@ export default function PlatformDashboardPage() {
       caption: 'Paused firms',
     },
     {
-      // Compact notation ("NGN 50K", "NGN 2.5M") so the figure always
-      // fits the tile; the exact amount lives on Subscriptions, one
-      // click away.
+      // Full comma-grouped figure ("NGN 150,000"), matching Revenue
+      // Analytics' and Billing's own MRR/ARR tiles exactly - not the
+      // abbreviated "150K" notation. Rendered with the same serif/
+      // text-3xl style as every other KPI here - no isCurrency font
+      // override.
       label: 'MRR',
-      value: formatCompactCurrency(stats.mrr),
+      value: formatCurrency(stats.mrr),
       icon: TrendingUp,
       href: '/platform/subscriptions',
       caption: 'Monthly recurring',
-      isCurrency: true,
     },
     {
       label: 'ARR',
-      value: formatCompactCurrency(stats.arr),
+      value: formatCurrency(stats.arr),
       icon: DollarSign,
       href: '/platform/subscriptions',
       caption: 'Annual recurring',
-      isCurrency: true,
     },
   ];
 
