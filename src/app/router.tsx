@@ -44,7 +44,6 @@ import PlatformLayout from '@/features/platform/pages/layout';
 import PlatformDashboardPage from '@/features/platform/pages/page';
 import OrganizationsPage from '@/features/platform/pages/organizations/page';
 import OrganizationDetailPage from '@/features/platform/pages/organizations/[id]/page';
-import OrganizationsTrashPage from '@/features/platform/pages/organizations/trash/page';
 import OrganizationUsersPage from '@/features/platform/pages/organization-users/page';
 import PlatformUsersPage from '@/features/platform/pages/platform-users/page';
 import SubscriptionsPage from '@/features/platform/pages/subscriptions/page';
@@ -155,7 +154,6 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <PlatformDashboardPage /> },
           { path: 'organizations', element: <OrganizationsPage /> },
-          { path: 'organizations/trash', element: <OrganizationsTrashPage /> },
           { path: 'organizations/:id', element: <OrganizationDetailPage /> },
           { path: 'organization-users', element: <OrganizationUsersPage /> },
           { path: 'platform-users', element: <PlatformUsersPage /> },

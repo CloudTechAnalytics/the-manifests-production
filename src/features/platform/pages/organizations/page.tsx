@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,6 +12,9 @@ import {
   Pencil,
   Power,
   Trash2,
+  ArchiveRestore,
+  AlertTriangle,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -19,10 +22,13 @@ import { getErrorMessage, cn } from '@/shared/lib/utils';
 import { formatDate, formatCurrency, ORGANIZATION_STATUS_META } from '@/shared/lib/utils/status';
 import {
   fetchOrganizationsListData,
+  fetchTrashedOrganizations,
   createOrganization,
   editOrganization,
   toggleOrganizationActive,
   softDeleteOrganization,
+  restoreOrganization,
+  permanentlyDeleteOrganization,
   type OrgFormValues,
 } from '@/features/platform/services/organizations.service';
 import { Button } from '@/shared/components/ui/button';
@@ -90,13 +96,23 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+function initials(name: string): string {
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function PlatformOrganizationsPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
 
+  const [trash, setTrash] = useState(false);
+  const [search, setSearch] = useState('');
+
+  // --- Active organizations (also loads plans/trial settings for the
+  // Create dialog, and per-org owner/subscription/user-count maps) ---
   const { data, isLoading: loading } = useQuery({
     queryKey: ['organizations', 'admin-list'],
     queryFn: fetchOrganizationsListData,
+    enabled: !trash,
   });
 
   const orgs = data?.orgs ?? [];
@@ -107,6 +123,33 @@ export default function PlatformOrganizationsPage() {
   const subsByOrg = data?.subsByOrg ?? new Map();
   const ownerByOrg = data?.ownerByOrg ?? new Map();
   const userCountByOrg = data?.userCountByOrg ?? new Map();
+
+  // --- Trashed organizations ---
+  const { data: trashedOrgs, isLoading: trashLoading } = useQuery({
+    queryKey: ['organizations', 'trash'],
+    queryFn: fetchTrashedOrganizations,
+    enabled: trash,
+  });
+
+  const filteredActive = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orgs;
+    return orgs.filter((org) => {
+      const owner = ownerByOrg.get(org.id);
+      return (
+        org.name.toLowerCase().includes(q) ||
+        org.slug.toLowerCase().includes(q) ||
+        (owner?.email ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [orgs, search, ownerByOrg]);
+
+  const filteredTrash = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = trashedOrgs ?? [];
+    if (!q) return list;
+    return list.filter((org) => org.name.toLowerCase().includes(q) || org.slug.toLowerCase().includes(q));
+  }, [trashedOrgs, search]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
@@ -125,9 +168,10 @@ export default function PlatformOrganizationsPage() {
   const [editErrors, setEditErrors] = useState<Partial<Record<keyof OrgForm, string>>>({});
 
   const [toggleTarget, setToggleTarget] = useState<Organization | null>(null);
-
   const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [restoreTarget, setRestoreTarget] = useState<Organization | null>(null);
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Organization | null>(null);
 
   const invalidateOrganizations = () => {
     queryClient.invalidateQueries({ queryKey: ['organizations'] });
@@ -249,8 +293,6 @@ export default function PlatformOrganizationsPage() {
     },
   });
 
-  const handleToggleActive = () => toggleMutation.mutate();
-
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!deleteTarget || !profile) throw new Error('Not ready');
@@ -268,165 +310,419 @@ export default function PlatformOrganizationsPage() {
     },
   });
 
-  const handleDelete = () => deleteMutation.mutate();
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!restoreTarget || !profile) throw new Error('Not ready');
+      await restoreOrganization({ orgId: restoreTarget.id, orgName: restoreTarget.name, restoredBy: profile.id });
+    },
+    onSuccess: () => {
+      invalidateOrganizations();
+      if (restoreTarget) queryClient.invalidateQueries({ queryKey: ['organization', restoreTarget.id] });
+      toast.success(`${restoreTarget?.name} restored`);
+      setRestoreTarget(null);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to restore organization'));
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!hardDeleteTarget) throw new Error('Not ready');
+      return permanentlyDeleteOrganization(hardDeleteTarget.id);
+    },
+    onSuccess: (result) => {
+      invalidateOrganizations();
+      toast.success(
+        result.membersRemoved > 0
+          ? `${hardDeleteTarget?.name} and ${result.membersRemoved} member account${result.membersRemoved === 1 ? '' : 's'} permanently deleted`
+          : `${hardDeleteTarget?.name} permanently deleted`
+      );
+      setHardDeleteTarget(null);
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, 'Failed to permanently delete organization'));
+    },
+  });
 
   const creating = createMutation.isPending;
   const editing = editMutation.isPending;
   const toggling = toggleMutation.isPending;
   const deleting = deleteMutation.isPending;
+  const restoring = restoreMutation.isPending;
+  const hardDeleting = hardDeleteMutation.isPending;
+
+  const isLoading = trash ? trashLoading : loading;
+  const isEmpty = trash ? filteredTrash.length === 0 : filteredActive.length === 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="page-title">Organizations</h1>
+          <h1 className="page-title">{trash ? 'Trash' : 'Organizations'}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every tenant on The Manifest platform.
+            {trash
+              ? 'Deleted organizations, kept until you restore or permanently delete them.'
+              : 'Every tenant on The Manifest platform.'}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link to="/platform/organizations/trash">
-              <Trash2 className="mr-1.5 h-4 w-4" />
-              Trash{trashedCount > 0 ? ` (${trashedCount})` : ''}
-            </Link>
+          <Button variant={trash ? 'default' : 'outline'} onClick={() => setTrash((t) => !t)}>
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            {trash ? 'Back to active' : `Trash${trashedCount > 0 ? ` (${trashedCount})` : ''}`}
           </Button>
-          <Button
-            onClick={() => {
-              // Default to the free trial, matching the dropdown's first item.
-              setCreatePlanId(TRIAL_ONLY);
-              setCreateCycle('monthly');
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Create Organization
-          </Button>
+          {!trash && (
+            <Button
+              onClick={() => {
+                // Default to the free trial, matching the dropdown's first item.
+                setCreatePlanId(TRIAL_ONLY);
+                setCreateCycle('monthly');
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Create Organization
+            </Button>
+          )}
         </div>
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, slug or owner email…"
+          className="pl-9"
+        />
       </div>
 
       <Card>
         <CardContent className="p-0">
-          {loading ? (
+          {isLoading ? (
             <div className="space-y-3 p-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : orgs.length === 0 ? (
+          ) : isEmpty ? (
             <div className="flex flex-col items-center gap-2 py-16 text-center">
-              <Building2 className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm font-medium">No organizations yet</p>
+              {trash ? (
+                <Trash2 className="h-10 w-10 text-muted-foreground/40" />
+              ) : (
+                <Building2 className="h-10 w-10 text-muted-foreground/40" />
+              )}
+              <p className="text-sm font-medium">
+                {search.trim()
+                  ? 'No matches'
+                  : trash
+                    ? 'Trash is empty'
+                    : 'No organizations yet'}
+              </p>
               <p className="text-sm text-muted-foreground">
-                Create the first organization to get started.
+                {search.trim()
+                  ? 'No organization matches that name, slug or owner email.'
+                  : trash
+                    ? 'Deleted organizations will appear here.'
+                    : 'Create the first organization to get started.'}
               </p>
             </div>
+          ) : trash ? (
+            <>
+              {/* Desktop table (xl+) */}
+              <div className="hidden xl:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Organization</TableHead>
+                      <TableHead>Deleted</TableHead>
+                      <TableHead className="w-56" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTrash.map((org) => (
+                      <TableRow key={org.id}>
+                        <TableCell>
+                          <p className="font-medium">{org.name}</p>
+                          <p className="text-xs text-muted-foreground">/{org.slug}</p>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {org.deleted_at ? formatDate(org.deleted_at) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setRestoreTarget(org)}>
+                              <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                              Restore
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => setHardDeleteTarget(org)}>
+                              <Trash2 className="mr-1.5 h-4 w-4" />
+                              Delete Permanently
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile/tablet: stacked cards */}
+              <ul className="divide-y divide-border xl:hidden">
+                {filteredTrash.map((org) => (
+                  <li key={org.id} className="space-y-3 p-4">
+                    <div>
+                      <p className="text-sm font-medium">{org.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        /{org.slug} · Deleted {org.deleted_at ? formatDate(org.deleted_at) : '—'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setRestoreTarget(org)}>
+                        <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                        Restore
+                      </Button>
+                      <Button variant="destructive" size="sm" className="flex-1" onClick={() => setHardDeleteTarget(org)}>
+                        <Trash2 className="mr-1.5 h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Storage</TableHead>
-                  <TableHead>Renewal</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-10">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orgs.map((org) => {
+            <>
+              {/* Desktop table (xl+, ~1280px). Below xl, the card list further
+                 down replaces the table entirely so nothing is cut off or
+                 needs horizontal scroll on phone/tablet. */}
+              <div className="hidden xl:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Organization</TableHead>
+                      <TableHead>Owner</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Users</TableHead>
+                      <TableHead>Storage</TableHead>
+                      <TableHead>Renewal</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="w-10">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActive.map((org) => {
+                      const sub = subsByOrg.get(org.id);
+                      const owner = ownerByOrg.get(org.id);
+                      const userCount = userCountByOrg.get(org.id) ?? 0;
+                      const renewalDate = sub?.current_period_end ?? sub?.trial_ends_at ?? null;
+                      return (
+                        <TableRow key={org.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/12 text-xs font-semibold text-primary">
+                                {org.logo_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={org.logo_url} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  initials(org.name)
+                                )}
+                              </span>
+                              <div className="min-w-0">
+                                <Link
+                                  to={`/platform/organizations/${org.id}`}
+                                  className="truncate text-sm font-medium hover:text-primary hover:underline"
+                                >
+                                  {org.name}
+                                </Link>
+                                <p className="truncate text-xs text-muted-foreground">/{org.slug}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {owner ? (
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{owner.full_name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{owner.email}</p>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {sub?.plan ? (
+                              <Badge variant="outline">{sub.plan.name}</Badge>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
+                              {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{userCount}</TableCell>
+                          <TableCell
+                            className="text-sm text-muted-foreground"
+                            title="Per-organization storage usage isn't tracked yet"
+                          >
+                            —
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {renewalDate ? formatDate(renewalDate) : '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(org.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" aria-label="Organization actions">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel className="max-w-[200px] truncate">{org.name}</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link to={`/platform/organizations/${org.id}`}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEdit(org)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setToggleTarget(org)}>
+                                  <Power className="mr-2 h-4 w-4" />
+                                  {org.is_active ? 'Suspend' : 'Activate'}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link to="/platform/subscriptions">
+                                    <Building2 className="mr-2 h-4 w-4" />
+                                    View subscription
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/platform/audit-logs">
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Open audit logs
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setDeleteTarget(org)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete organization
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile/tablet: stacked cards, same data/actions vertically. */}
+              <ul className="divide-y divide-border xl:hidden">
+                {filteredActive.map((org) => {
                   const sub = subsByOrg.get(org.id);
                   const owner = ownerByOrg.get(org.id);
                   const userCount = userCountByOrg.get(org.id) ?? 0;
                   const renewalDate = sub?.current_period_end ?? sub?.trial_ends_at ?? null;
                   return (
-                  <TableRow key={org.id}>
-                    <TableCell>
-                      <Link
-                        to={`/platform/organizations/${org.id}`}
-                        className="font-medium hover:text-primary hover:underline"
-                      >
-                        {org.name}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">/{org.slug}</p>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {owner ? (
-                        <>
-                          <p className="font-medium">{owner.full_name}</p>
-                          <p className="text-xs text-muted-foreground">{owner.email}</p>
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {sub?.plan ? (
-                        <Badge variant="outline">{sub.plan.name}</Badge>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
-                        {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{userCount}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground" title="Per-organization storage usage isn't tracked yet">
-                      —
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {renewalDate ? formatDate(renewalDate) : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(org.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label="Organization actions">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel className="max-w-[200px] truncate">
-                            {org.name}
-                          </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem asChild>
-                            <Link to={`/platform/organizations/${org.id}`}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
+                    <li key={org.id} className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/12 text-xs font-semibold text-primary">
+                            {org.logo_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={org.logo_url} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              initials(org.name)
+                            )}
+                          </span>
+                          <div className="min-w-0">
+                            <Link to={`/platform/organizations/${org.id}`} className="truncate text-sm font-medium">
+                              {org.name}
                             </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(org)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setToggleTarget(org)}>
-                            <Power className="mr-2 h-4 w-4" />
-                            {org.is_active ? 'Suspend' : 'Activate'}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setDeleteTarget(org)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete organization
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                            <p className="truncate text-xs text-muted-foreground">/{org.slug}</p>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" aria-label="Organization actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel className="max-w-[200px] truncate">{org.name}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <Link to={`/platform/organizations/${org.id}`}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(org)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setToggleTarget(org)}>
+                              <Power className="mr-2 h-4 w-4" />
+                              {org.is_active ? 'Suspend' : 'Activate'}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setDeleteTarget(org)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete organization
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <Badge className={cn(ORGANIZATION_STATUS_META[org.status]?.color)}>
+                          {ORGANIZATION_STATUS_META[org.status]?.label ?? org.status}
+                        </Badge>
+                        {sub?.plan && <Badge variant="outline">{sub.plan.name}</Badge>}
+                      </div>
+
+                      {owner && (
+                        <p className="mt-2 truncate text-xs text-muted-foreground">
+                          {owner.full_name} · {owner.email}
+                        </p>
+                      )}
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <p className="text-muted-foreground">Users</p>
+                          <p className="mt-0.5 font-medium">{userCount}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Renewal</p>
+                          <p className="mt-0.5 font-medium">{renewalDate ? formatDate(renewalDate) : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Created</p>
+                          <p className="mt-0.5 font-medium">{formatDate(org.created_at)}</p>
+                        </div>
+                      </div>
+                    </li>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>
@@ -709,7 +1005,7 @@ export default function PlatformOrganizationsPage() {
             <Button variant="outline" onClick={() => setToggleTarget(null)} disabled={toggling}>
               Cancel
             </Button>
-            <Button onClick={handleToggleActive} disabled={toggling}>
+            <Button onClick={() => toggleMutation.mutate()} disabled={toggling}>
               {toggling && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               {toggleTarget?.is_active ? 'Suspend' : 'Activate'}
             </Button>
@@ -751,20 +1047,70 @@ export default function PlatformOrganizationsPage() {
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteTarget(null)}
-              disabled={deleting}
-            >
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={() => deleteMutation.mutate()}
               disabled={deleting || deleteConfirmText !== DELETE_CONFIRM_PHRASE}
             >
               {deleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Move to Trash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restore Dialog */}
+      <Dialog open={!!restoreTarget} onOpenChange={(open) => !open && setRestoreTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArchiveRestore className="h-5 w-5 text-emerald-600" />
+              Restore organization?
+            </DialogTitle>
+            <DialogDescription>
+              {restoreTarget?.name} will reappear in Organizations and its staff
+              will regain access, if the organization was active before deletion.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoreTarget(null)} disabled={restoring}>
+              Cancel
+            </Button>
+            <Button onClick={() => restoreMutation.mutate()} disabled={restoring}>
+              {restoring && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Restore
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permanently Delete Dialog */}
+      <Dialog open={!!hardDeleteTarget} onOpenChange={(open) => !open && setHardDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Permanently delete organization?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Every branch, shipment, customer,
+              quotation, invoice, payment, expense, warehouse record, and
+              document under <strong>{hardDeleteTarget?.name}</strong> will be
+              destroyed, along with every member&apos;s login. There is no
+              recovery after this — restoring from Trash will no longer be
+              possible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteTarget(null)} disabled={hardDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => hardDeleteMutation.mutate()} disabled={hardDeleting}>
+              {hardDeleting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Delete Permanently
             </Button>
           </DialogFooter>
         </DialogContent>
