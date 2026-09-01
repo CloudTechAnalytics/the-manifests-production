@@ -10,6 +10,9 @@ type CheckStatus = 'checking' | 'operational' | 'down';
 interface HealthCheck {
   name: string;
   status: CheckStatus;
+  /** Round-trip time in ms for the last check, null while still checking
+   *  or if the endpoint never responded at all. */
+  latencyMs: number | null;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -20,15 +23,17 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
  * not decorative placeholders. Each check is a real network round trip;
  * "Operational" only shows when the endpoint actually answered.
  */
-async function checkEndpoint(url: string, init?: RequestInit): Promise<boolean> {
+async function checkEndpoint(url: string, init?: RequestInit): Promise<{ ok: boolean; latencyMs: number | null }> {
+  const start = performance.now();
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, { ...init, signal: controller.signal });
     clearTimeout(timeout);
-    return res.ok || res.status === 401 || res.status === 404;
+    const latencyMs = Math.round(performance.now() - start);
+    return { ok: res.ok || res.status === 401 || res.status === 404, latencyMs };
   } catch {
-    return false;
+    return { ok: false, latencyMs: null };
   }
 }
 
@@ -52,19 +57,19 @@ async function runHealthChecks(): Promise<HealthCheck[]> {
   );
 
   return [
-    { name: 'Database', status: database ? 'operational' : 'down' },
-    { name: 'Authentication', status: auth ? 'operational' : 'down' },
-    { name: 'Storage', status: storage ? 'operational' : 'down' },
-    { name: 'Edge Functions', status: edgeFunctions ? 'operational' : 'down' },
+    { name: 'Database', status: database.ok ? 'operational' : 'down', latencyMs: database.latencyMs },
+    { name: 'Authentication', status: auth.ok ? 'operational' : 'down', latencyMs: auth.latencyMs },
+    { name: 'Storage', status: storage.ok ? 'operational' : 'down', latencyMs: storage.latencyMs },
+    { name: 'Edge Functions', status: edgeFunctions.ok ? 'operational' : 'down', latencyMs: edgeFunctions.latencyMs },
   ];
 }
 
 export function useSystemHealth() {
   const [checks, setChecks] = useState<HealthCheck[]>([
-    { name: 'Database', status: 'checking' },
-    { name: 'Authentication', status: 'checking' },
-    { name: 'Storage', status: 'checking' },
-    { name: 'Edge Functions', status: 'checking' },
+    { name: 'Database', status: 'checking', latencyMs: null },
+    { name: 'Authentication', status: 'checking', latencyMs: null },
+    { name: 'Storage', status: 'checking', latencyMs: null },
+    { name: 'Edge Functions', status: 'checking', latencyMs: null },
   ]);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [checking, setChecking] = useState(false);

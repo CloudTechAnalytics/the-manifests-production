@@ -87,6 +87,17 @@ export default function SystemHealthPage() {
                 <Badge className="shrink-0 bg-red-50 text-red-700">Down</Badge>
               )}
             </div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {c.latencyMs != null ? (
+                <>
+                  Round-trip <span className="font-medium text-foreground">{c.latencyMs}ms</span>
+                </>
+              ) : c.status === 'checking' ? (
+                'Checking…'
+              ) : (
+                'No response'
+              )}
+            </p>
           </Card>
         ))}
       </div>
