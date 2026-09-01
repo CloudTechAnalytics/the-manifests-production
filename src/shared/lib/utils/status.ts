@@ -431,36 +431,43 @@ export function formatDateTime(date: string | null): string {
  * exactly (used there for every currency figure, including invoice
  * line items and receipts, not just KPI tiles). Kobo-level precision
  * is never shown in this app's UI.
+ *
+ * Deliberately NOT using Intl.NumberFormat's `style: 'currency'` +
+ * `currencyDisplay: 'code'` (an earlier version of this function did) —
+ * that combination is supposed to print "NGN 150,000" instead of
+ * "₦150,000", but it only works if the browser's own ICU/CLDR data
+ * actually honors `currencyDisplay: 'code'` for this currency. Node and
+ * Playwright's bundled Chromium do, which is exactly why that version
+ * passed every automated check — but real-world browsers aren't
+ * guaranteed to, and it silently fell back to the raw ₦ glyph on at
+ * least one real device, which is the actual rendering bug this was
+ * meant to kill. This version leaves the browser zero room to make that
+ * call: the number is formatted as a plain, uncurried decimal (no
+ * currency styling at all, so there's no symbol-vs-code decision for
+ * any ICU implementation to get wrong), and "NGN " is prepended as
+ * literal text this code controls outright.
  */
 export function formatCurrency(amount: number, currency = 'NGN'): string {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    // Code, not symbol — "NGN 150,000" instead of "₦150,000". The Naira
-    // sign's actual Unicode glyph is an "N" with two horizontal strokes
-    // through it in every font that has it correctly (Inter, Noto Sans,
-    // system fonts — verified across all of them); no font swap changes
-    // that shape, because it isn't a rendering bug, it's the character
-    // itself. Rather than keep asking a font to look like something it
-    // structurally can't, this drops the symbol glyph entirely.
-    currencyDisplay: 'code',
+  const number = new Intl.NumberFormat('en-NG', {
     maximumFractionDigits: 0,
   }).format(amount);
+  return `${currency} ${number}`;
 }
 
 /**
  * Compact currency for KPI tiles — "NGN 50K", "NGN 2.5M" — where the full
  * 2-decimal figure would overflow a narrow card. Exact amounts belong on
- * the page the tile links to, not the tile itself.
+ * the page the tile links to, not the tile itself. Same reasoning as
+ * formatCurrency above: plain decimal formatting, currency code
+ * prepended as literal text, no currency-symbol decision left to the
+ * browser.
  */
 export function formatCompactCurrency(amount: number, currency = 'NGN'): string {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'code',
+  const number = new Intl.NumberFormat('en-NG', {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(amount);
+  return `${currency} ${number}`;
 }
 
 /**

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Upload } from 'lucide-react';
 import { getErrorMessage } from '@/shared/lib/utils';
 import { uploadDocumentFile } from '@/shared/lib/utils/document-upload';
-import { DUTY_STATUS_META } from '@/shared/lib/utils/status';
+import { DUTY_STATUS_META, formatCurrency } from '@/shared/lib/utils/status';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -248,7 +248,7 @@ export function DutyAssessmentDialog({
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
             <span className="text-sm font-medium text-muted-foreground">Total Duty</span>
             <span className="text-lg font-bold">
-              {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalDuty)}
+              {formatCurrency(totalDuty)}
             </span>
           </div>
 
