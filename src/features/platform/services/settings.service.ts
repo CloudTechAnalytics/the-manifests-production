@@ -62,6 +62,8 @@ export async function updatePlatformSettings(params: {
   globalNotice: string | null;
   maintenanceMode: boolean;
   maintenanceMessage: string | null;
+  dbCapMb: number;
+  storageCapMb: number;
   updatedBy: string;
 }): Promise<void> {
   const {
@@ -76,6 +78,8 @@ export async function updatePlatformSettings(params: {
     globalNotice,
     maintenanceMode,
     maintenanceMessage,
+    dbCapMb,
+    storageCapMb,
     updatedBy,
   } = params;
 
@@ -93,15 +97,35 @@ export async function updatePlatformSettings(params: {
       global_notice: globalNotice,
       maintenance_mode: maintenanceMode,
       maintenance_message: maintenanceMessage,
+      db_cap_mb: dbCapMb,
+      storage_cap_mb: storageCapMb,
       updated_by: updatedBy,
     })
     .eq('id', true);
   if (error) throw error;
+  // No manual activity-log insert here on purpose - migration 094 added a
+  // database trigger that logs every platform_settings write (diffed
+  // column-by-column) regardless of which call site made it, so this
+  // service function doesn't need to remember to log itself.
+}
 
-  await supabase.from('activities').insert({
-    user_id: updatedBy,
-    action: 'platform_settings.updated',
-    entity_type: 'platform_settings',
-    description: `Updated platform settings: trial=${trialDays}d, self-registration=${selfRegistrationEnabled ? 'on' : 'off'}, maintenance=${maintenanceMode ? 'on' : 'off'}`,
-  });
+// --- System Health: on-demand Supabase plan usage ---------------------
+
+export interface ResourceUsage {
+  db_bytes: number;
+  storage_bytes: number;
+  db_cap_bytes: number;
+  storage_cap_bytes: number;
+  db_pct: number;
+  storage_pct: number;
+}
+
+/** Real DB/storage usage against the Free-tier caps stored on
+ *  platform_settings (migration 095) - admin-gated at the database level
+ *  (platform_resource_usage() raises if the caller isn't a platform
+ *  admin), not just hidden behind a UI check. */
+export async function fetchResourceUsage(): Promise<ResourceUsage> {
+  const { data, error } = await supabase.rpc('platform_resource_usage').single();
+  if (error) throw error;
+  return data as ResourceUsage;
 }

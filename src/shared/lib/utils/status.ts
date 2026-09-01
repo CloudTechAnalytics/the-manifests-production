@@ -499,3 +499,10 @@ export function formatRelativeTime(date: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return formatDate(date);
 }
+
+/** "14.7 MB", "1.2 GB" — for the System Health resource-usage card. */
+export function formatStorage(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}

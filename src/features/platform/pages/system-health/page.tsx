@@ -1,13 +1,24 @@
 'use client';
 
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Building2, Users, Activity } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Building2, Users, Activity, Database, HardDrive } from 'lucide-react';
 import { useSystemHealth } from '@/features/platform/components/system-health-card';
 import { usePlatformDashboardData } from '@/shared/hooks/use-platform-dashboard-data';
+import { fetchResourceUsage } from '@/features/platform/services/settings.service';
 import { Card } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { KpiCard } from '@/shared/components/dashboard/kpi-card';
+import { formatStorage } from '@/shared/lib/utils/status';
 import { cn } from '@/shared/lib/utils';
+
+/** Green under 70%, amber 70-90%, red above - matches the 70/85/95 bands
+ *  the reference's alert-email thresholds use, without the email part. */
+function usagePctClass(pct: number): string {
+  if (pct >= 90) return 'text-red-600';
+  if (pct >= 70) return 'text-amber-600';
+  return 'text-emerald-600';
+}
 
 const CHECK_DESCRIPTIONS: Record<string, string> = {
   Database: 'PostgREST — every table read and write goes through this.',
@@ -19,6 +30,15 @@ const CHECK_DESCRIPTIONS: Record<string, string> = {
 export default function SystemHealthPage() {
   const { checks, checkedAt, checking, refetch } = useSystemHealth();
   const { stats, loading: statsLoading } = usePlatformDashboardData();
+  const {
+    data: usage,
+    isLoading: usageLoading,
+    isFetching: usageFetching,
+    refetch: refetchUsage,
+  } = useQuery({
+    queryKey: ['platform-resource-usage'],
+    queryFn: fetchResourceUsage,
+  });
 
   const anyDown = checks.some((c) => c.status === 'down');
   const allOperational = checks.every((c) => c.status === 'operational');
@@ -100,6 +120,82 @@ export default function SystemHealthPage() {
             </p>
           </Card>
         ))}
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-serif text-lg font-semibold">Supabase plan usage</h2>
+          <Button variant="ghost" size="sm" onClick={() => refetchUsage()} disabled={usageFetching}>
+            {usageFetching ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Refresh
+          </Button>
+        </div>
+        {usageLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="h-24 animate-pulse rounded-lg bg-muted" />
+            <div className="h-24 animate-pulse rounded-lg bg-muted" />
+          </div>
+        ) : usage ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                  <p className="font-medium">Database</p>
+                </div>
+                <p className={cn('text-sm font-semibold', usagePctClass(usage.db_pct))}>
+                  {usage.db_pct}%
+                </p>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {formatStorage(usage.db_bytes)} of {formatStorage(usage.db_cap_bytes)}
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-full rounded-full',
+                    usage.db_pct >= 90 ? 'bg-red-500' : usage.db_pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                  )}
+                  style={{ width: `${Math.min(100, usage.db_pct)}%` }}
+                />
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="h-4 w-4 text-muted-foreground" />
+                  <p className="font-medium">Storage</p>
+                </div>
+                <p className={cn('text-sm font-semibold', usagePctClass(usage.storage_pct))}>
+                  {usage.storage_pct}%
+                </p>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {formatStorage(usage.storage_bytes)} of {formatStorage(usage.storage_cap_bytes)}
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-full rounded-full',
+                    usage.storage_pct >= 90 ? 'bg-red-500' : usage.storage_pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                  )}
+                  style={{ width: `${Math.min(100, usage.storage_pct)}%` }}
+                />
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Couldn&apos;t load resource usage.</p>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          Caps default to Supabase&apos;s Free-tier limits (500 MB database, 1 GB storage) — update
+          them in Platform Settings the day this project moves to a paid tier, and every
+          percentage above adjusts automatically.
+        </p>
       </div>
 
       <div>

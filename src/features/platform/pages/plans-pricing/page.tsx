@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -104,6 +104,13 @@ export default function PlansPricingPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<PlanWithUsage | null>(null);
 
+  // Annual auto-follows monthly (2 months free — 10x, not 12x) until the
+  // admin edits it directly, matching the reference's exact "auto-follow
+  // until manually touched" convention — an existing plan's already-stored
+  // annual price counts as "already edited" so opening this dialog to
+  // tweak monthly never silently overwrites a deliberately-set annual price.
+  const annualEdited = useRef(false);
+
   const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: ['plans'] });
 
   const openCreate = () => {
@@ -111,6 +118,7 @@ export default function PlansPricingPage() {
     setForm(EMPTY_FORM);
     setSlugTouched(false);
     setErrors({});
+    annualEdited.current = false;
     setDialogOpen(true);
   };
 
@@ -130,7 +138,17 @@ export default function PlansPricingPage() {
     });
     setSlugTouched(true);
     setErrors({});
+    annualEdited.current = plan.annual_price != null;
     setDialogOpen(true);
+  };
+
+  const onMonthlyChange = (value: string) => {
+    const n = Number(value);
+    setForm((f) => ({
+      ...f,
+      monthly_price: value,
+      annual_price: !annualEdited.current && value && n ? String(n * 10) : f.annual_price,
+    }));
   };
 
   const toggleFeature = (label: string) => {
@@ -443,7 +461,7 @@ export default function PlansPricingPage() {
                   type="number"
                   min="0"
                   value={form.monthly_price}
-                  onChange={(e) => setForm((f) => ({ ...f, monthly_price: e.target.value }))}
+                  onChange={(e) => onMonthlyChange(e.target.value)}
                 />
                 {errors.monthly_price && (
                   <p className="text-xs text-destructive">{errors.monthly_price}</p>
@@ -456,13 +474,20 @@ export default function PlansPricingPage() {
                   type="number"
                   min="0"
                   value={form.annual_price}
-                  onChange={(e) => setForm((f) => ({ ...f, annual_price: e.target.value }))}
+                  onChange={(e) => {
+                    annualEdited.current = true;
+                    setForm((f) => ({ ...f, annual_price: e.target.value }));
+                  }}
+                  placeholder={form.monthly_price ? String(Number(form.monthly_price) * 10) : ''}
                 />
                 {errors.annual_price && (
                   <p className="text-xs text-destructive">{errors.annual_price}</p>
                 )}
               </div>
             </div>
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Yearly auto-fills from monthly (2 months free) until you edit it directly.
+            </p>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

@@ -544,6 +544,8 @@ export interface PlatformSettings {
   global_notice: string | null;
   maintenance_mode: boolean;
   maintenance_message: string | null;
+  db_cap_mb: number;
+  storage_cap_mb: number;
   updated_by: string | null;
   created_at: string;
   updated_at: string;

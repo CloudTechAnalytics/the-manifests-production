@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2, Camera, UserRound, Wrench } from 'lucide-react';
+import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2, Camera, UserRound, Wrench, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/shared/contexts/theme-context';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -223,6 +223,8 @@ function PlatformConfigurationCard() {
   const [globalNotice, setGlobalNotice] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [dbCapMb, setDbCapMb] = useState('500');
+  const [storageCapMb, setStorageCapMb] = useState('1024');
 
   const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ['platform-settings'],
@@ -247,6 +249,8 @@ function PlatformConfigurationCard() {
     setGlobalNotice(settings.global_notice ?? '');
     setMaintenanceMode(settings.maintenance_mode);
     setMaintenanceMessage(settings.maintenance_message ?? '');
+    setDbCapMb(String(settings.db_cap_mb));
+    setStorageCapMb(String(settings.storage_cap_mb));
   }, [settings]);
 
   const saveMutation = useMutation({
@@ -264,6 +268,8 @@ function PlatformConfigurationCard() {
         globalNotice: globalNotice.trim() || null,
         maintenanceMode,
         maintenanceMessage: maintenanceMessage.trim() || null,
+        dbCapMb: parseInt(dbCapMb, 10) || 500,
+        storageCapMb: parseInt(storageCapMb, 10) || 1024,
         updatedBy: profile.id,
       });
     },
@@ -424,6 +430,33 @@ function PlatformConfigurationCard() {
               onChange={(e) => setMaintenanceMessage(e.target.value)}
               placeholder="We're performing scheduled maintenance and will be back shortly."
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-400">
+              <Database className="h-5 w-5" />
+            </div>
+            Resource caps
+          </CardTitle>
+          <CardDescription>
+            Drives the usage percentages on System Health — update these the day this project
+            moves off Supabase&apos;s Free tier.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="db-cap">Database cap (MB)</Label>
+              <Input id="db-cap" type="number" min={1} value={dbCapMb} onChange={(e) => setDbCapMb(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="storage-cap">Storage cap (MB)</Label>
+              <Input id="storage-cap" type="number" min={1} value={storageCapMb} onChange={(e) => setStorageCapMb(e.target.value)} />
+            </div>
           </div>
         </CardContent>
       </Card>
