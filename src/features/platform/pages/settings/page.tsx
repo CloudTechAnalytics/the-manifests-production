@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2, Camera, UserRound } from 'lucide-react';
+import { Bell, Palette, Sun, Moon, Monitor, CheckCircle2, Info, Settings2, Loader2, Camera, UserRound, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/shared/contexts/theme-context';
 import { useAuth } from '@/shared/contexts/auth-context';
@@ -25,6 +25,7 @@ import { Switch } from '@/shared/components/ui/switch';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { Label } from '@/shared/components/ui/label';
 import { Input } from '@/shared/components/ui/input';
+import { Textarea } from '@/shared/components/ui/textarea';
 import { Button } from '@/shared/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -216,6 +217,12 @@ function PlatformConfigurationCard() {
   const [selfRegEnabled, setSelfRegEnabled] = useState(true);
   const [termsVersion, setTermsVersion] = useState('v1');
   const [privacyVersion, setPrivacyVersion] = useState('v1');
+  const [productName, setProductName] = useState('The Manifest');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#B38A3E');
+  const [globalNotice, setGlobalNotice] = useState('');
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
 
   const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ['platform-settings'],
@@ -234,6 +241,12 @@ function PlatformConfigurationCard() {
     setSelfRegEnabled(settings.self_registration_enabled);
     setTermsVersion(settings.terms_version);
     setPrivacyVersion(settings.privacy_version);
+    setProductName(settings.product_name);
+    setSupportEmail(settings.support_email ?? '');
+    setPrimaryColor(settings.primary_color);
+    setGlobalNotice(settings.global_notice ?? '');
+    setMaintenanceMode(settings.maintenance_mode);
+    setMaintenanceMessage(settings.maintenance_message ?? '');
   }, [settings]);
 
   const saveMutation = useMutation({
@@ -245,6 +258,12 @@ function PlatformConfigurationCard() {
         selfRegistrationEnabled: selfRegEnabled,
         termsVersion: termsVersion.trim() || 'v1',
         privacyVersion: privacyVersion.trim() || 'v1',
+        productName: productName.trim() || 'The Manifest',
+        supportEmail: supportEmail.trim() || null,
+        primaryColor: primaryColor.trim() || '#B38A3E',
+        globalNotice: globalNotice.trim() || null,
+        maintenanceMode,
+        maintenanceMessage: maintenanceMessage.trim() || null,
         updatedBy: profile.id,
       });
     },
@@ -271,59 +290,149 @@ function PlatformConfigurationCard() {
   if (loading) return <Skeleton className="h-64 w-full" />;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
-            <Settings2 className="h-5 w-5" />
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
+              <Palette className="h-5 w-5" />
+            </div>
+            Branding
+          </CardTitle>
+          <CardDescription>
+            Shown across the console and in system emails.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="product-name">Product name</Label>
+              <Input id="product-name" value={productName} onChange={(e) => setProductName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="support-email">Support email</Label>
+              <Input
+                id="support-email"
+                type="email"
+                value={supportEmail}
+                onChange={(e) => setSupportEmail(e.target.value)}
+                placeholder="support@themanifest.example"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="primary-color">Primary color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  className="h-9 w-12 cursor-pointer rounded border border-input bg-transparent"
+                />
+                <Input id="primary-color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+              </div>
+            </div>
           </div>
-          Platform Configuration
-        </CardTitle>
-        <CardDescription>
-          Applies to every new self-service registration — nothing here is hardcoded in the app.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-          <div>
-            <p className="text-sm font-medium">Self-service registration</p>
-            <p className="text-xs text-muted-foreground">
-              Turn off to temporarily stop new organizations registering at /register.
-            </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="global-notice">Global notice (shown to every signed-in user)</Label>
+            <Input
+              id="global-notice"
+              value={globalNotice}
+              onChange={(e) => setGlobalNotice(e.target.value)}
+              placeholder="e.g. Scheduled maintenance Sunday 02:00 UTC"
+            />
           </div>
-          <Switch checked={selfRegEnabled} onCheckedChange={setSelfRegEnabled} disabled={saving} />
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="trial-days">Trial duration (days)</Label>
-            <Input id="trial-days" type="number" min={1} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+              <Settings2 className="h-5 w-5" />
+            </div>
+            Platform Configuration
+          </CardTitle>
+          <CardDescription>
+            Applies to every new self-service registration — nothing here is hardcoded in the app.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+            <div>
+              <p className="text-sm font-medium">Self-service registration</p>
+              <p className="text-xs text-muted-foreground">
+                Turn off to temporarily stop new organizations registering at /register.
+              </p>
+            </div>
+            <Switch checked={selfRegEnabled} onCheckedChange={setSelfRegEnabled} disabled={saving} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Default trial plan</Label>
-            <Select value={defaultPlanId || undefined} onValueChange={setDefaultPlanId}>
-              <SelectTrigger><SelectValue placeholder="Select a plan" /></SelectTrigger>
-              <SelectContent>
-                {plans.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="terms-version">Terms of Service version</Label>
-            <Input id="terms-version" value={termsVersion} onChange={(e) => setTermsVersion(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="privacy-version">Privacy Policy version</Label>
-            <Input id="privacy-version" value={privacyVersion} onChange={(e) => setPrivacyVersion(e.target.value)} />
-          </div>
-        </div>
 
-        <Button onClick={handleSave} disabled={saving}>
-          {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-          Save platform configuration
-        </Button>
-      </CardContent>
-    </Card>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trial-days">Trial duration (days)</Label>
+              <Input id="trial-days" type="number" min={1} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default trial plan</Label>
+              <Select value={defaultPlanId || undefined} onValueChange={setDefaultPlanId}>
+                <SelectTrigger><SelectValue placeholder="Select a plan" /></SelectTrigger>
+                <SelectContent>
+                  {plans.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="terms-version">Terms of Service version</Label>
+              <Input id="terms-version" value={termsVersion} onChange={(e) => setTermsVersion(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="privacy-version">Privacy Policy version</Label>
+              <Input id="privacy-version" value={privacyVersion} onChange={(e) => setPrivacyVersion(e.target.value)} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400">
+              <Wrench className="h-5 w-5" />
+            </div>
+            Maintenance
+          </CardTitle>
+          <CardDescription>
+            Show a maintenance notice to everyone signed in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+            <div>
+              <p className="text-sm font-medium">Maintenance mode</p>
+              <p className="text-xs text-muted-foreground">
+                Shows the message below to every signed-in user across every organization.
+              </p>
+            </div>
+            <Switch checked={maintenanceMode} onCheckedChange={setMaintenanceMode} disabled={saving} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="maintenance-message">Maintenance message</Label>
+            <Textarea
+              id="maintenance-message"
+              rows={2}
+              value={maintenanceMessage}
+              onChange={(e) => setMaintenanceMessage(e.target.value)}
+              placeholder="We're performing scheduled maintenance and will be back shortly."
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={handleSave} disabled={saving}>
+        {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+        Save platform configuration
+      </Button>
+    </div>
   );
 }
 

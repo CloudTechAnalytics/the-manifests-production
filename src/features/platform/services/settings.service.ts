@@ -56,9 +56,28 @@ export async function updatePlatformSettings(params: {
   selfRegistrationEnabled: boolean;
   termsVersion: string;
   privacyVersion: string;
+  productName: string;
+  supportEmail: string | null;
+  primaryColor: string;
+  globalNotice: string | null;
+  maintenanceMode: boolean;
+  maintenanceMessage: string | null;
   updatedBy: string;
 }): Promise<void> {
-  const { trialDays, defaultTrialPlanId, selfRegistrationEnabled, termsVersion, privacyVersion, updatedBy } = params;
+  const {
+    trialDays,
+    defaultTrialPlanId,
+    selfRegistrationEnabled,
+    termsVersion,
+    privacyVersion,
+    productName,
+    supportEmail,
+    primaryColor,
+    globalNotice,
+    maintenanceMode,
+    maintenanceMessage,
+    updatedBy,
+  } = params;
 
   const { error } = await supabase
     .from('platform_settings')
@@ -68,6 +87,12 @@ export async function updatePlatformSettings(params: {
       self_registration_enabled: selfRegistrationEnabled,
       terms_version: termsVersion,
       privacy_version: privacyVersion,
+      product_name: productName,
+      support_email: supportEmail,
+      primary_color: primaryColor,
+      global_notice: globalNotice,
+      maintenance_mode: maintenanceMode,
+      maintenance_message: maintenanceMessage,
       updated_by: updatedBy,
     })
     .eq('id', true);
@@ -77,6 +102,6 @@ export async function updatePlatformSettings(params: {
     user_id: updatedBy,
     action: 'platform_settings.updated',
     entity_type: 'platform_settings',
-    description: `Updated platform settings: trial=${trialDays}d, self-registration=${selfRegistrationEnabled ? 'on' : 'off'}`,
+    description: `Updated platform settings: trial=${trialDays}d, self-registration=${selfRegistrationEnabled ? 'on' : 'off'}, maintenance=${maintenanceMode ? 'on' : 'off'}`,
   });
 }

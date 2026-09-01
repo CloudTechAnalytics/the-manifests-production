@@ -538,6 +538,12 @@ export interface PlatformSettings {
   self_registration_enabled: boolean;
   terms_version: string;
   privacy_version: string;
+  product_name: string;
+  support_email: string | null;
+  primary_color: string;
+  global_notice: string | null;
+  maintenance_mode: boolean;
+  maintenance_message: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;

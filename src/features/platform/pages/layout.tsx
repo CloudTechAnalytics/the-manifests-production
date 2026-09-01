@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Ship,
@@ -24,9 +25,12 @@ import {
   BarChart3,
   LifeBuoy,
   RefreshCw,
+  Wrench,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/auth-context';
 import { usePlatformNotifications } from '@/shared/hooks/use-platform-notifications';
+import { fetchPlatformSettings } from '@/features/platform/services/settings.service';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -103,6 +107,44 @@ function PlatformNotificationsBell() {
   );
 }
 import type { Profile } from '@/shared/types';
+
+/**
+ * The one place platform_settings' maintenance_mode / global_notice
+ * (Settings → Maintenance / Branding) actually shows up — otherwise
+ * saving those fields would be pure decoration with no visible effect
+ * anywhere. Renders nothing when neither is set. Only surfaced in the
+ * platform console for now, not the tenant shell (src/shared/
+ * components/layout/app-layout.tsx) — a wider rollout to every
+ * organization's own workspace is a separate, larger change.
+ */
+function GlobalNoticeBanner() {
+  const { data: settings } = useQuery({
+    queryKey: ['platform-settings'],
+    queryFn: fetchPlatformSettings,
+  });
+
+  if (!settings) return null;
+
+  if (settings.maintenance_mode) {
+    return (
+      <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 lg:px-6 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <Wrench className="h-4 w-4 shrink-0" />
+        <span>{settings.maintenance_message || 'The platform is currently in maintenance mode.'}</span>
+      </div>
+    );
+  }
+
+  if (settings.global_notice) {
+    return (
+      <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/5 px-4 py-2 text-sm text-foreground lg:px-6">
+        <Megaphone className="h-4 w-4 shrink-0 text-primary" />
+        <span>{settings.global_notice}</span>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 type NavItem = { href: string; label: string; icon: typeof Building2 };
 
@@ -435,6 +477,7 @@ export default function PlatformLayout() {
             <UserMenu profile={profile} onSignOut={signOut} />
           </div>
         </header>
+        <GlobalNoticeBanner />
         <main className="flex-1 overflow-y-auto scrollbar-thin p-6 lg:p-8"><Outlet /></main>
       </div>
     </div>
